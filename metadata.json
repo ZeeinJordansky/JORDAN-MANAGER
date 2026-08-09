@@ -1,0 +1,6 @@
+{
+  "name": "VK Bot Dashboard",
+  "description": "A VK chatbot with a management dashboard to view community messages and bot status.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

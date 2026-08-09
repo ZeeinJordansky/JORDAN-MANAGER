@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == 'sirotininoleg5@gmail.com';
+    }
+
+    function isValidMessage(data) {
+      return data.text is string && data.text.size() <= 10000 &&
+             data.userId is int &&
+             data.timestamp is int &&
+             data.fromBot is bool;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Messages collection
+    match /messages/{messageId} {
+      allow read: if isAdmin();
+      // The server will use Admin SDK to write messages from the webhook, 
+      // but the dashboard (client) might need to send messages (write them to Firestore first, or just call an API).
+      // Actually, it's safer to let the server handle all writes to Firestore to avoid exposing rules.
+      // But if we want real-time updates on the client, the client can write to a collection that the server listens to, 
+      // OR the server writes to Firestore and the client listens.
+      // I'll allow the admin to write as well for flexibility (e.g. marking as read).
+      allow create, update: if isAdmin() && isValidMessage(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "Message": {
+      "title": "Message",
+      "description": "A message sent or received by the VK bot.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "userId": { "type": "integer" },
+        "peerId": { "type": "integer" },
+        "timestamp": { "type": "integer" },
+        "fromBot": { "type": "boolean" },
+        "userName": { "type": "string" }
+      },
+      "required": ["text", "userId", "timestamp", "fromBot"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile with roles and stats.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "integer" },
+        "role": { "type": "integer" },
+        "nick": { "type": "string" },
+        "mpoints": { "type": "integer" },
+        "warnings": { "type": "integer" },
+        "messagesToday": { "type": "integer" },
+        "messagesTotal": { "type": "integer" },
+        "lastMessageAt": { "type": "integer" },
+        "status": { "type": "string" }
+      },
+      "required": ["userId", "role"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "Chat configuration.",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "integer" },
+        "type": { "type": "string" },
+        "rules": { "type": "string" },
+        "welcomeText": { "type": "string" },
+        "welcomeEnabled": { "type": "boolean" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["chatId"]
+    }
+  },
+  "firestore": {
+    "/messages/{messageId}": { "schema": "Message", "description": "Collection of all messages processed by the bot." },
+    "/users/{userId}": { "schema": "User", "description": "User data." },
+    "/chats/{chatId}": { "schema": "Chat", "description": "Chat configuration." }
+  }
+}

@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --color-vk-blue: #0077ff;
+  --color-bg-main: #0b0e14;
+  --color-bg-card: #161b22;
+  --color-border-dim: rgba(255, 255, 255, 0.08);
+  --color-text-muted: #8b949e;
+  --color-text-main: #c9d1d9;
+}
+
+@layer base {
+  body {
+    @apply bg-bg-main text-text-main font-sans;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .mono {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Roboto Mono', monospace;
+  }
+}
