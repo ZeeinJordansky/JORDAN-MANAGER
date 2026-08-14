@@ -271,7 +271,7 @@ export default function Dashboard({ secret, onLogout }: DashboardProps) {
                     </div>
                     <div className="grid gap-1">
                       <label className="text-[10px] text-text-muted uppercase font-bold">Код подтверждения (Confirmation String)</label>
-                      <div className="mono text-xs bg-blue-900/10 border border-blue-500/20 p-2.5 rounded-lg text-blue-400 font-semibold">0bffd2d1</div>
+                      <div className="mono text-xs bg-blue-900/10 border border-blue-500/20 p-2.5 rounded-lg text-blue-400 font-semibold">74bdc85e</div>
                     </div>
                     <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 p-3 rounded-xl mt-2">
                       <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#10b981] animate-pulse" />

@@ -30,19 +30,20 @@ export async function sendVkMessage(vkToken: string, peerId: number, text: strin
   }
 }
 
-export async function editVkMessage(vkToken: string, peerId: number, conversationMessageId: number, text: string, extraParams: any = {}) {
+export async function editVkMessage(vkToken: string, peerId: number, conversationMessageId: number, text?: string, extraParams: any = {}) {
   try {
-    const res = await vkApi.get("messages.edit", {
-      params: {
-        peer_id: peerId,
-        conversation_message_id: conversationMessageId,
-        message: text,
-        access_token: vkToken,
-        v: "5.131",
-        disable_mentions: 1,
-        ...extraParams
-      }
-    });
+    const params: any = {
+      peer_id: peerId,
+      conversation_message_id: conversationMessageId,
+      access_token: vkToken,
+      v: "5.199",
+      disable_mentions: 1,
+      ...extraParams
+    };
+    if (text !== undefined && text !== null && text !== "") {
+      params.message = text;
+    }
+    const res = await vkApi.get("messages.edit", { params });
     return res.data;
   } catch (e: any) {
     console.error("editVkMessage error:", e.message);
@@ -67,17 +68,22 @@ export async function sendVkToast(vkToken: string, eventId: string, userId: numb
   }
 }
 
-export async function answerVkEvent(vkToken: string, eventId: string, userId: number, peerId: number) {
+export async function answerVkEvent(vkToken: string, eventId: string, userId: number, peerId: number, eventData?: any) {
   try {
-    await vkApi.get("messages.sendMessageEventAnswer", {
-      params: {
-        event_id: eventId,
-        user_id: userId,
-        peer_id: peerId,
-        access_token: vkToken,
-        v: "5.131"
+    const params: any = {
+      event_id: eventId,
+      user_id: userId,
+      peer_id: peerId,
+      access_token: vkToken,
+      v: "5.131"
+    };
+    if (eventData) {
+      if (typeof eventData === "object" && eventData.text && !eventData.type) {
+        eventData = { type: "show_snackbar", text: eventData.text };
       }
-    });
+      params.event_data = typeof eventData === "string" ? eventData : JSON.stringify(eventData);
+    }
+    await vkApi.get("messages.sendMessageEventAnswer", { params });
   } catch (e: any) {
     console.error("answerVkEvent error:", e.message);
   }
