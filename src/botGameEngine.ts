@@ -3,7 +3,14 @@ import https from "https";
 
 const vkApi = axios.create({
   baseURL: "https://api.vk.com/method/",
-  httpsAgent: new https.Agent({ keepAlive: true }),
+  timeout: 10000,
+  httpsAgent: new https.Agent({ 
+    keepAlive: true,
+    keepAliveMsecs: 10000,
+    maxSockets: 50,
+    maxFreeSockets: 10,
+    timeout: 10000
+  }),
 });
 
 export const CROCODILE_WORDS = [
@@ -15,35 +22,70 @@ export async function sendVkMessage(vkToken: string, peerId: number, text: strin
     const params: any = {
       peer_id: peerId,
       message: text,
-      random_id: Math.floor(Math.random() * 1000000),
-      access_token: vkToken,
-      v: "5.131",
-      disable_mentions: 1,
-      ...extraParams
-    };
-
-    const res = await vkApi.get("messages.send", { params });
-    return res.data;
-  } catch (e: any) {
-    console.error("sendVkMessage error:", e.message);
-    return null;
-  }
-}
-
-export async function editVkMessage(vkToken: string, peerId: number, conversationMessageId: number, text?: string, extraParams: any = {}) {
-  try {
-    const params: any = {
-      peer_id: peerId,
-      conversation_message_id: conversationMessageId,
+      random_id: Math.floor(Math.random() * 1000000000),
       access_token: vkToken,
       v: "5.199",
       disable_mentions: 1,
       ...extraParams
     };
+
+    const searchParams = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null) {
+        searchParams.append(k, typeof v === "object" ? JSON.stringify(v) : String(v));
+      }
+    }
+
+    const res = await vkApi.post("messages.send", searchParams);
+    if (res.data?.error) {
+      console.error(`[VK API ERROR] messages.send for peer ${peerId}:`, res.data.error);
+    }
+    return res.data;
+  } catch (e: any) {
+    console.error("sendVkMessage network/request error:", e.message);
+    return null;
+  }
+}
+
+export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: number, text?: string, extraParams: any = {}) {
+  try {
+    const params: any = {
+      peer_id: peerId,
+      access_token: vkToken,
+      v: "5.199",
+      disable_mentions: 1,
+      ...extraParams
+    };
+    if (extraParams.conversation_message_id) {
+      params.conversation_message_id = extraParams.conversation_message_id;
+      delete params.message_id;
+    } else if (extraParams.message_id) {
+      params.message_id = extraParams.message_id;
+      delete params.conversation_message_id;
+    } else if (idOrCmId) {
+      if (peerId >= 2000000000) {
+        params.conversation_message_id = idOrCmId;
+        delete params.message_id;
+      } else {
+        params.message_id = idOrCmId;
+        delete params.conversation_message_id;
+      }
+    }
     if (text !== undefined && text !== null && text !== "") {
       params.message = text;
     }
-    const res = await vkApi.get("messages.edit", { params });
+
+    const searchParams = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null) {
+        searchParams.append(k, typeof v === "object" ? JSON.stringify(v) : String(v));
+      }
+    }
+
+    const res = await vkApi.post("messages.edit", searchParams);
+    if (res.data?.error) {
+      console.error(`[VK API ERROR] messages.edit for peer ${peerId}:`, res.data.error);
+    }
     return res.data;
   } catch (e: any) {
     console.error("editVkMessage error:", e.message);
