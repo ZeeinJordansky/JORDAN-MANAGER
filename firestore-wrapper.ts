@@ -5,7 +5,7 @@ import axios from "axios";
 import { uploadFiles } from "@huggingface/hub";
 import sqlite3 from "sqlite3";
 
-// Promisified SQLite client
+// Промисифицированный SQLite клиент
 class SqlitePromiseDb {
   db: sqlite3.Database;
   constructor(filename: string) {
@@ -90,10 +90,23 @@ function applyFieldValue(targetValue: any, operation: any): any {
 }
 
 function processObjectWithFieldValues(currentObj: any, updates: any): any {
-  const result = { ...currentObj };
+  const result = { ...(currentObj || {}) };
   for (const key of Object.keys(updates)) {
     const val = updates[key];
-    if (val instanceof FieldValue) {
+    if (key.includes('.')) {
+      const parts = key.split('.');
+      let cur = result;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!cur[parts[i]] || typeof cur[parts[i]] !== 'object' || Array.isArray(cur[parts[i]])) {
+          cur[parts[i]] = {};
+        } else {
+          cur[parts[i]] = { ...cur[parts[i]] };
+        }
+        cur = cur[parts[i]];
+      }
+      const lastKey = parts[parts.length - 1];
+      cur[lastKey] = (val instanceof FieldValue) ? applyFieldValue(cur[lastKey], val) : val;
+    } else if (val instanceof FieldValue) {
       result[key] = applyFieldValue(result[key], val);
     } else if (val && typeof val === 'object' && !Array.isArray(val)) {
       result[key] = processObjectWithFieldValues(result[key] || {}, val);
@@ -118,33 +131,46 @@ function getNestedValue(obj: any, pathStr: string): any {
   return current;
 }
 
-// Global SQLite state
+// Глобальное состояние SQLite
 let sqliteDb: SqlitePromiseDb | null = null;
 const docStore = new Map<string, Map<string, any>>();
 let readyPromise: Promise<void> | null = null;
 let isReady = false;
 
 let isDirty = false;
-let syncTimeout: any = null;
 let isSyncing = false;
+let hfRateLimitedUntil = 0;
 
 function scheduleSync() {
   isDirty = true;
-  if (isSyncing) return;
-  if (syncTimeout) clearTimeout(syncTimeout);
-  syncTimeout = setTimeout(async () => {
-    await performHFSync();
-  }, 10000); // 10s debounce for fast background sync
 }
+
+// Фоновый интервал отправки в HuggingFace раз в 15 минут (макс. 4 коммита в час при лимите HF 128/час)
+setInterval(() => {
+  if (isDirty && !isSyncing) {
+    performHFSync().catch(() => {});
+  }
+}, 15 * 60 * 1000);
 
 async function performHFSync() {
   if (!isDirty || isSyncing) return;
+  
+  const now = Date.now();
+  if (now < hfRateLimitedUntil) {
+    // Еще действует таймаут ограничения скорости от Hugging Face
+    return;
+  }
+
   isSyncing = true;
-  isDirty = false;
 
   try {
-    console.log(">>> [HuggingFace Sync] Committing bot_database.db to Hugging Face...");
     const dbPath = path.join(process.cwd(), "bot_database.db");
+    if (!fs.existsSync(dbPath)) {
+      isSyncing = false;
+      return;
+    }
+
+    console.log(">>> [HuggingFace Sync] Отправка bot_database.db в Hugging Face...");
     const fileContent = fs.readFileSync(dbPath);
     const blob = new Blob([fileContent]);
 
@@ -161,26 +187,29 @@ async function performHFSync() {
         },
       ],
     });
-    console.log(">>> [HuggingFace Sync] Successfully committed bot_database.db to Hugging Face!");
+    console.log(">>> [HuggingFace Sync] Файл bot_database.db успешно сохранен в Hugging Face!");
+    isDirty = false; // Успешно выгружено
   } catch (err: any) {
-    console.error(">>> [HuggingFace Sync] Error committing to Hugging Face:", err.message);
-    isDirty = true; // Mark as dirty to retry
+    const msg = err?.message || String(err);
+    if (msg.includes("rate limit") || msg.includes("128 per hour") || msg.includes("429")) {
+      hfRateLimitedUntil = Date.now() + 30 * 60 * 1000; // Пауза на 30 минут
+      console.warn(">>> [HuggingFace Sync] Превышен лимит коммитов Hugging Face (128/час). Пауза синхронизации на 30 минут.");
+    } else {
+      console.error(">>> [HuggingFace Sync] Ошибка отправки в Hugging Face:", msg);
+    }
   } finally {
     isSyncing = false;
-    if (isDirty) {
-      scheduleSync();
-    }
   }
 }
 
-// Graceful termination sync
+// Синхронизация при мягком завершении процесса
 process.on("SIGTERM", async () => {
-  console.log(">>> Received SIGTERM, performing final HF Sync...");
+  console.log(">>> Получен сигнал SIGTERM, выполняем финальную синхронизацию с Hugging Face...");
   await performHFSync();
   process.exit(0);
 });
 process.on("SIGINT", async () => {
-  console.log(">>> Received SIGINT, performing final HF Sync...");
+  console.log(">>> Получен сигнал SIGINT, выполняем финальную синхронизацию с Hugging Face...");
   await performHFSync();
   process.exit(0);
 });
@@ -196,9 +225,9 @@ async function ensureReady() {
 async function initDatabase() {
   const dbPath = path.join(process.cwd(), "bot_database.db");
   
-  // 1. Download database from HF
+  // 1. Скачивание базы данных из HF
   try {
-    console.log(">>> [Database] Downloading bot_database.db from Hugging Face...");
+    console.log(">>> [Database] Загрузка bot_database.db из Hugging Face...");
     const url = "https://huggingface.co/datasets/RomanJordansky/BOT_JORDANS-storage/resolve/main/bot_data/bot_database.db";
     const res = await axios.get(url, {
       headers: {
@@ -207,15 +236,15 @@ async function initDatabase() {
       responseType: "arraybuffer",
     });
     fs.writeFileSync(dbPath, Buffer.from(res.data));
-    console.log(">>> [Database] Successfully downloaded bot_database.db!");
+    console.log(">>> [Database] Успешно загружен bot_database.db!");
   } catch (err: any) {
-    console.warn(">>> [Database] Warning: Could not download database from Hugging Face (will check or create local file):", err.message);
+    console.warn(">>> [Database] Предупреждение: Не удалось загрузить базу данных из Hugging Face (проверяем или создаем локальный файл):", err.message);
   }
 
-  // 2. Open Sqlite
+  // 2. Открытие базы данных Sqlite
   sqliteDb = new SqlitePromiseDb(dbPath);
 
-  // 3. Create table if not exists
+  // 3. Создание таблицы, если она не существует
   await sqliteDb.run(`
     CREATE TABLE IF NOT EXISTS firestore_collections (
       collection TEXT,
@@ -225,10 +254,10 @@ async function initDatabase() {
     )
   `);
 
-  // 4. One-time Migration check
+  // 4. Одноразовая проверка миграции
   const countRow = await sqliteDb.get("SELECT count(*) as count FROM firestore_collections");
   if (!countRow || countRow.count === 0) {
-    console.log(">>> [Database] SQLite firestore_collections table is empty. Running migration from Firestore...");
+    console.log(">>> [Database] Таблица SQLite firestore_collections пуста. Запускаем миграцию из Firestore...");
     try {
       const { initializeApp: fbInit } = await import("firebase/app");
       const { getFirestore: fbGet, collection: fbCol, getDocs: fbGetDocs } = await import("firebase/firestore");
@@ -239,7 +268,7 @@ async function initDatabase() {
 
       const collectionsToMigrate = ["users", "chats", "clans", "settings", "bot_settings", "networks"];
       for (const colName of collectionsToMigrate) {
-        console.log(`>>> [Migration] Fetching and migrating "${colName}" from Firestore...`);
+        console.log(`>>> [Migration] Извлечение и миграция "${colName}" из Firestore...`);
         try {
           const snap = await fbGetDocs(fbCol(fbDatabase, colName));
           let colCount = 0;
@@ -252,14 +281,14 @@ async function initDatabase() {
             );
             colCount++;
           }
-          console.log(`>>> [Migration] Migrated ${colCount} docs for "${colName}"`);
+          console.log(`>>> [Migration] Мигрировано документов для "${colName}": ${colCount}`);
         } catch (colErr: any) {
-          console.error(`>>> [Migration] Failed to migrate "${colName}":`, colErr.message);
+          console.error(`>>> [Migration] Не удалось мигрировать "${colName}":`, colErr.message);
         }
       }
       
-      // Upload migrated database immediately
-      console.log(">>> [Migration] Uploading migrated database to Hugging Face...");
+      // Немедленная выгрузка мигрированной базы данных
+      console.log(">>> [Migration] Отправка мигрированной базы данных в Hugging Face...");
       const fileContent = fs.readFileSync(dbPath);
       const blob = new Blob([fileContent]);
       await uploadFiles({
@@ -275,13 +304,13 @@ async function initDatabase() {
           },
         ],
       });
-      console.log(">>> [Migration] Successfully uploaded migrated database to Hugging Face!");
+      console.log(">>> [Migration] Мигрированная база данных успешно сохранена в Hugging Face!");
     } catch (migErr: any) {
-      console.error(">>> [Migration] One-time Firestore migration failed or skipped:", migErr.message);
+      console.error(">>> [Migration] Одноразовая миграция из Firestore не удалась или была пропущена:", migErr.message);
     }
   }
 
-  // 5. Load data from SQLite to in-memory docStore
+  // 5. Загрузка данных из SQLite в кэш-память docStore
   const rows = await sqliteDb.all("SELECT collection, id, data FROM firestore_collections");
   for (const row of rows) {
     if (!docStore.has(row.collection)) {
@@ -289,7 +318,7 @@ async function initDatabase() {
     }
     docStore.get(row.collection)!.set(row.id, JSON.parse(row.data));
   }
-  console.log(`>>> [Database] Loaded ${rows.length} total cached documents from SQLite.`);
+  console.log(`>>> [Database] Загружено документов из SQLite: ${rows.length}`);
   
   isReady = true;
 }
@@ -393,13 +422,13 @@ class CollectionReferenceWrapper {
     await ensureReady();
     const colMap = docStore.get(this.path) || new Map<string, any>();
     
-    // Transform map to array format expected by query wrappers
+    // Преобразование мапы в формат массива, ожидаемый обертками запросов
     let results: Array<{ id: string; data: any }> = [];
     colMap.forEach((val, key) => {
       results.push({ id: key, data: val });
     });
 
-    // Apply all query stages (filters, sorting, limits)
+    // Применение всех стадий запроса (фильтры, сортировка, лимиты)
     for (const qFn of this.queries) {
       results = qFn(results);
     }
@@ -438,6 +467,17 @@ class DocumentReferenceWrapper {
     return new DocumentSnapshot(this.id, current);
   }
 
+  async create(data: any) {
+    await ensureReady();
+    const current = docStore.get(this.collectionName)?.get(this.id);
+    if (current !== undefined && current !== null) {
+      const err: any = new Error(`Документ уже существует по пути ${this.collectionName}/${this.id}`);
+      err.code = 6;
+      throw err;
+    }
+    await this.set(data);
+  }
+
   async set(data: any, options?: { merge?: boolean }) {
     await ensureReady();
     let current = docStore.get(this.collectionName)?.get(this.id);
@@ -448,13 +488,13 @@ class DocumentReferenceWrapper {
       updated = processObjectWithFieldValues({}, data);
     }
 
-    // Save in-memory
+    // Сохранение во внутренней памяти
     if (!docStore.has(this.collectionName)) {
       docStore.set(this.collectionName, new Map());
     }
     docStore.get(this.collectionName)!.set(this.id, updated);
 
-    // Save locally in SQLite
+    // Сохранение локально в SQLite
     if (sqliteDb) {
       await sqliteDb.run(
         "INSERT OR REPLACE INTO firestore_collections (collection, id, data) VALUES (?, ?, ?)",
@@ -462,7 +502,7 @@ class DocumentReferenceWrapper {
       );
     }
 
-    // Schedule background Hugging Face sync
+    // Запуск фоновой синхронизации с Hugging Face
     scheduleSync();
   }
 
@@ -470,14 +510,14 @@ class DocumentReferenceWrapper {
     await ensureReady();
     let current = docStore.get(this.collectionName)?.get(this.id);
     if (!current) {
-      throw new Error(`Document ${this.collectionName}/${this.id} does not exist to update.`);
+      throw new Error(`Документ ${this.collectionName}/${this.id} не существует для обновления.`);
     }
     const updated = processObjectWithFieldValues(current, data);
 
-    // Save in-memory
+    // Сохранение во внутренней памяти
     docStore.get(this.collectionName)!.set(this.id, updated);
 
-    // Save locally in SQLite
+    // Сохранение локально в SQLite
     if (sqliteDb) {
       await sqliteDb.run(
         "INSERT OR REPLACE INTO firestore_collections (collection, id, data) VALUES (?, ?, ?)",
@@ -485,7 +525,7 @@ class DocumentReferenceWrapper {
       );
     }
 
-    // Schedule background Hugging Face sync
+    // Запуск фоновой синхронизации с Hugging Face
     scheduleSync();
   }
 
@@ -495,7 +535,7 @@ class DocumentReferenceWrapper {
       docStore.get(this.collectionName)!.delete(this.id);
     }
 
-    // Delete locally in SQLite
+    // Удаление локально в SQLite
     if (sqliteDb) {
       await sqliteDb.run(
         "DELETE FROM firestore_collections WHERE collection = ? AND id = ?",
@@ -503,7 +543,7 @@ class DocumentReferenceWrapper {
       );
     }
 
-    // Schedule background Hugging Face sync
+    // Запуск фоновой синхронизации с Hugging Face
     scheduleSync();
   }
 }
