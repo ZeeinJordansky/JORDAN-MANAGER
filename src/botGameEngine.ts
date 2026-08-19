@@ -210,3 +210,81 @@ export function formatTimeRemaining(ms: number) {
 
   return parts.join(" ");
 }
+
+export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrObj: any) {
+  if (!msgIdOrObj) return false;
+
+  const tryDelete = async (params: any) => {
+    try {
+      const res = await vkApi.get("messages.delete", { params });
+      return res.data?.response === 1;
+    } catch (e: any) {
+      return false;
+    }
+  };
+
+  const baseParams = { peer_id: peerId, delete_for_all: 1, access_token: vkToken, v: "5.199" };
+
+  if (typeof msgIdOrObj === "number" || typeof msgIdOrObj === "string") {
+    const num = Number(msgIdOrObj);
+    if (!isNaN(num) && num > 0) {
+      let success = await tryDelete({ ...baseParams, message_ids: String(num) });
+      if (!success && peerId >= 2000000000) {
+        // Fallback: lookup cmid
+        try {
+          const getRes = await vkApi.get("messages.getById", { params: { access_token: vkToken, v: "5.199", message_ids: String(num) } });
+          const fetchedCmId = getRes.data?.response?.items?.[0]?.conversation_message_id;
+          if (fetchedCmId) {
+            success = await tryDelete({ ...baseParams, cmids: String(fetchedCmId), conversation_message_ids: String(fetchedCmId) });
+            if (success) return true;
+          }
+        } catch (e) {}
+        success = await tryDelete({ ...baseParams, cmids: String(num), conversation_message_ids: String(num) });
+      }
+      return success;
+    }
+  }
+
+  let cmId: number | undefined;
+  let msgId: number | undefined;
+
+  if (typeof msgIdOrObj === "object") {
+    const resp = msgIdOrObj.response !== undefined ? msgIdOrObj.response : msgIdOrObj;
+    if (Array.isArray(resp) && resp.length > 0) {
+      const first = resp[0];
+      if (typeof first === "object" && first !== null) {
+        cmId = Number(first.conversation_message_id) || undefined;
+        msgId = Number(first.message_id) || undefined;
+      } else if (typeof first === "number" && first > 0) {
+        if (peerId >= 2000000000) cmId = first;
+        else msgId = first;
+      }
+    } else if (typeof resp === "object" && resp !== null) {
+      cmId = Number(resp.conversation_message_id) || undefined;
+      msgId = Number(resp.message_id) || undefined;
+    } else if (typeof resp === "number" && resp > 0) {
+      if (peerId >= 2000000000) cmId = resp;
+      else msgId = resp;
+    }
+  }
+
+  if (msgId && msgId > 0) {
+      let success = await tryDelete({ ...baseParams, message_ids: String(msgId) });
+      if (!success && peerId >= 2000000000) {
+        try {
+          const getRes = await vkApi.get("messages.getById", { params: { access_token: vkToken, v: "5.199", message_ids: String(msgId) } });
+          const fetchedCmId = getRes.data?.response?.items?.[0]?.conversation_message_id;
+          if (fetchedCmId) {
+            success = await tryDelete({ ...baseParams, cmids: String(fetchedCmId), conversation_message_ids: String(fetchedCmId) });
+          }
+        } catch (e) {}
+      }
+      if (success) return true;
+  }
+  if (cmId && cmId > 0 && peerId >= 2000000000) {
+      return await tryDelete({ ...baseParams, cmids: String(cmId), conversation_message_ids: String(cmId) });
+  }
+
+  return false;
+}
+

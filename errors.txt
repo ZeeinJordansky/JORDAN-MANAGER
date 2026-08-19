@@ -1,0 +1,34 @@
+firestore-wrapper.ts(1,8): error TS1192: Module '"fs"' has no default export.
+firestore-wrapper.ts(2,8): error TS1259: Module '"path"' can only be default-imported using the 'esModuleInterop' flag
+firestore-wrapper.ts(3,8): error TS1192: Module '"crypto"' has no default export.
+firestore-wrapper.ts(6,8): error TS2613: Module '"/app/applet/node_modules/sqlite3/lib/sqlite3"' has no default export. Did you mean to use 'import { sqlite3 } from "/app/applet/node_modules/sqlite3/lib/sqlite3"' instead?
+node_modules/@google/genai/dist/genai.d.ts(1,29): error TS2307: Cannot find module '@modelcontextprotocol/sdk/client/index.js' or its corresponding type declarations.
+node_modules/@huggingface/hub/dist/src/utils/XetBlob.d.ts(131,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/gaxios/build/cjs/src/gaxios.d.ts(16,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/google-auth-library/build/src/auth/awsclient.d.ts(83,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/google-auth-library/build/src/auth/baseexternalclient.d.ts(173,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/google-auth-library/build/src/auth/googleauth.d.ts(160,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/google-auth-library/build/src/auth/oauth2common.d.ts(50,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/google-auth-library/build/src/auth/stscredentials.d.ts(99,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/google-auth-library/build/src/util.d.ts(125,5): error TS18028: Private identifiers are only available when targeting ECMAScript 2015 and higher.
+node_modules/vite/dist/node/index.d.ts(5,41): error TS2307: Cannot find module 'rollup/parseAst' or its corresponding type declarations.
+  There are types at '/app/applet/node_modules/rollup/dist/parseAst.d.ts', but this result could not be resolved under your current 'moduleResolution' setting. Consider updating to 'node16', 'nodenext', or 'bundler'.
+server.ts(1,8): error TS1259: Module '"/app/applet/node_modules/@types/express/index"' can only be default-imported using the 'esModuleInterop' flag
+server.ts(2,8): error TS1259: Module '"path"' can only be default-imported using the 'esModuleInterop' flag
+server.ts(5,8): error TS1192: Module '"https"' has no default export.
+server.ts(6,8): error TS1192: Module '"http"' has no default export.
+server.ts(7,8): error TS1192: Module '"os"' has no default export.
+server.ts(42,8): error TS1192: Module '"/app/applet/node_modules/dotenv/lib/main"' has no default export.
+server.ts(43,8): error TS1192: Module '"fs"' has no default export.
+server.ts(44,8): error TS1259: Module '"/app/applet/node_modules/form-data/index"' can only be default-imported using the 'esModuleInterop' flag
+server.ts(880,26): error TS2802: Type 'MapIterator<[string, number]>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server.ts(1571,21): error TS2802: Type 'MapIterator<ChatNetwork>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server.ts(3163,29): error TS2802: Type 'MapIterator<[number, number]>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server.ts(7020,28): error TS2802: Type 'MapIterator<[string, number]>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server.ts(7851,14): error TS2802: Type 'Set<string>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server.ts(10514,30): error TS2820: Type '"unmute"' is not assignable to type '"mute" | "warn" | "adm" | "ban" | "kick" | "game" | "general"'. Did you mean '"mute"'?
+server.ts(14336,31): error TS2802: Type 'Map<number, CrocLobby>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server.ts(14339,31): error TS2802: Type 'Map<number, MafiaLobby>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server.ts(14928,31): error TS2802: Type 'MapIterator<[string, { token: string; vkId: number; fullName: string; role: number; isSpecial: boolean; loginTime: number; lastActive: number; }]>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server.ts(15237,32): error TS2802: Type 'MapIterator<[number, any]>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+src/botGameEngine.ts(2,8): error TS1192: Module '"https"' has no default export.

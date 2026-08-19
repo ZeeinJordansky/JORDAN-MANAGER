@@ -1452,7 +1452,7 @@ async function getOrCreateChat(peerId: number) {
 
   if (chatDoc && chatDoc.exists) {
     const data = chatDoc.data() || {};
-    if ((!data.title || data.title.startsWith("Беседа №")) && peerId > 2000000000) {
+    if (!data.title && peerId > 2000000000) {
       try {
         const convRes = await axios.get("https://api.vk.com/method/messages.getConversationsById", {
           params: { access_token: VK_TOKEN, v: "5.199", peer_ids: peerId }
@@ -1766,7 +1766,7 @@ const checkFlood = (peerId, userId, chatData) => {
       times = times.filter(t => now - t < 5000); // 5 messages in 5 seconds
       times.push(now);
       userAntiFlood.set(key, times);
-      return times.length >= 5;
+      return times.length > 5;
     };
 
 const formatDurationBanTerm = (expiresAt?: number, startDate?: number): string => {
@@ -4181,10 +4181,6 @@ async function getVkRegDate(targetId: number): Promise<string | null> {
 async function parseTargetUser(message: any, textArgs: string[]): Promise<{ targetId: number | null; targetName: string }> {
   if (message.reply_message) {
     const tid = message.reply_message.from_id;
-    if (tid < 0) {
-      const isOurBot = tid === -Math.abs(parseInt(String(VK_GROUP_ID)));
-      return { targetId: tid, targetName: isOurBot ? "чат-менеджер" : `Сообщество ${tid}` };
-    }
     const cached = userCache.get(tid);
     if (cached && cached.nick && !cached.nick.startsWith("User")) {
       return { targetId: tid, targetName: cached.nick };
@@ -4205,10 +4201,6 @@ async function parseTargetUser(message: any, textArgs: string[]): Promise<{ targ
 
   if (message.fwd_messages && message.fwd_messages.length > 0) {
     const tid = message.fwd_messages[0].from_id;
-    if (tid < 0) {
-      const isOurBot = tid === -Math.abs(parseInt(String(VK_GROUP_ID)));
-      return { targetId: tid, targetName: isOurBot ? "чат-менеджер" : `Сообщество ${tid}` };
-    }
     const cached = userCache.get(tid);
     if (cached && cached.nick && !cached.nick.startsWith("User")) {
       return { targetId: tid, targetName: cached.nick };
@@ -5740,7 +5732,7 @@ async function handleVkEvent(payload: any) {
              targetU.mutePeerId = 0;
              userCache.set(tId, targetU);
              await executeVkUnmute(peerId, tId);
-             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|Модератор] снял(-а) блокировку чата с [id${tId}|пользователя]`);
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${modName}] снял(-а) блокировку чата с [id${tId}|${tName}]`);
              await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
              return;
           }
@@ -5759,7 +5751,7 @@ async function handleVkEvent(payload: any) {
                });
              } catch (e) {}
              const fullName = clickingUser.fullName || clickingUser.nick || `User${userId}`;
-             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|Модератор] снял(-а) блокировку с [id${tId}|пользователя]`);
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${fullName}] снял(-а) блокировку с [id${tId}|пользователя]`);
              await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
              return;
           }
@@ -5790,7 +5782,7 @@ async function handleVkEvent(payload: any) {
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Предупреждение снято." });
              const newW = Math.max(0, (targetU.warnings || 0) - 1);
              await updateUser(tId, { warnings: newW });
-             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|Модератор] снял(-а) предупреждение с [id${tId}|пользователя]`);
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${modName}] снял(-а) предупреждение с [id${tId}|${tName}]`);
              await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
              return;
           }
@@ -5893,7 +5885,7 @@ async function handleVkEvent(payload: any) {
       if (cmd === "cmd_help_main") {
         text = `...::Помощь по командам бота::...\n\nКоманды пользователей:\n/help - Помощь по командам.\n/gamehelp - Помощь по игровым командам.\n/stats - Узнать статистику пользователя.\n/ping - Узнать пинг бота.\n/infobot - Информация о боте.\n/q - Покинуть беседу.`;
       } else if (cmd === "help_moder") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Модератора:\n/mute - Выдать блокировку чата пользователю.\n/unmute - Снять блокировку чата пользователю.\n/warn - Выдать предупреждение пользователю.\n/unwarn - Снять предупреждение пользователю.\n/warns - Посмотреть предупреждения пользователя.\n/kick - Исключить пользователя из беседы.\n/clear - Очистить сообщения пользователя.\n/mclear - Очистить несколько сообщений.\n/staff - Список руководства беседы.\n/mutelist - Список заблокированных в чате.\n/warnlist - Список предупреждений в беседе.\n/smute - Тихо выдать блокировку чата пользователю.\n/skick - Тихо исключить пользователя из беседы.\n/sclear - Тихо очистить сообщение от пользователя.\n/smclear - Тихо очистить сообщения от пользователя.`;
+        text = `...::Помощь по командам бота::...\n\nКоманды Модератора:\n/mute - Выдать блокировку чата пользователю.\n/unmute - Снять блокировку чата пользователю.\n/warn - Выдать предупреждение пользователю.\n/unwarn - Снять предупреждение пользователю.\n/warns - Посмотреть предупреждения пользователя.\n/kick - Исключить пользователя из беседы.\n/clear - Очистить сообщения пользователя.\n/mclear - Очистить несколько сообщений.\n/mutelist - Список заблокированных в чате.\n/warnlist - Список предупреждений в беседе.\n/smute - Тихо выдать блокировку чата пользователю.\n/skick - Тихо исключить пользователя из беседы.\n/sclear - Тихо очистить сообщение от пользователя.\n/smclear - Тихо очистить сообщения от пользователя.`;
       } else if (cmd === "help_smoder") {
         text = `...::Помощь по командам бота::...\n\nКоманды Старшего Модератора:\n/ban - Заблокировать пользователя в беседе.\n/unban - Разблокировать пользователя в беседе.\n/banlist - Список заблокированных в беседе.\n/addmoder - Выдать права модератора.\n/removerole - Снять права у пользователя.\n/zov - Созвать участников беседы.\n/olist - Список участников онлайн.\n/offlinelist - Список участников оффлайн.\n/sban - Тихо заблокировать пользователя в беседе.\n/sunban - Тихо разблокировать пользователя в беседе.`;
       } else if (cmd === "cmd_help_admin_bot") {
@@ -5905,7 +5897,7 @@ async function handleVkEvent(payload: any) {
       } else if (cmd === "help_sa") {
         text = `...::Помощь по командам бота::...\n\nКоманды Специального Администратора:\n/settings - Настройки чат-менеджер в беседе.\n/addzsa - Выдать права зам. спец. администратора.`;
       } else if (cmd === "help_owner") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Владельца беседы:\n/start - Активировать чат-менеджер в беседе.\n/type - Изменить тип беседы.\n/sync - Синхронизировать структуру беседы.\n/games - Включить/выключить игры в беседе.\n/giveowner - Передать права владельца беседы.\n/addsa - Выдать права спец. администратора.\n/welcometext - Настроить приветствие.\n/leave - Вкл/выкл кик при выходе.\n/invite - Вкл/выкл инвайт только модераторами.\n/af - Вкл/выкл анти-флуд.\n/antisliv - Вкл/выкл анти-слив.\n/raid - Вкл/выкл анти-рейд.\n/group - Вкл/выкл анти-сообщества.\n/tegall - Вкл/выкл анти-тег всех участников.\n/antiad - Вкл/выкл анти-рекламу.\n/addantiteg - Добавить слово/тег в анти-тег.\n/unantiteg - Удалить слово/тег из анти-тега.\n/antiteglist - Список слов/тегов в анти-теге.\n/addawstats - Выдать функцию пользователя "Анти-просмотр stats".\n/unawstats - Забрать функцию пользователя "Анти-просмотр stats".\n/createnet - Создать сетку бесед.\n/deletenet - Удалить сетку бесед.\n/dgiveowner - Передать права владельца сетки.\n/addchatnet - Добавить беседу в сетку.\n/unchatnet - Удалить беседу из сетки.\n/netlist - Список бесед в сетке.`;
+        text = `...::Помощь по командам бота::...\n\nКоманды Владельца беседы:\n/start - Активировать чат-менеджер в беседе.\n/type - Изменить тип беседы.\n/sync - Синхронизировать структуру беседы.\n/games - Включить/выключить игры в беседе.\n/staff - Список руководства беседы.\n/giveowner - Передать права владельца беседы.\n/addsa - Выдать права спец. администратора.\n/welcometext - Настроить приветствие.\n/leave - Вкл/выкл кик при выходе.\n/invite - Вкл/выкл инвайт только модераторами.\n/af - Вкл/выкл анти-флуд.\n/antisliv - Вкл/выкл анти-слив.\n/raid - Вкл/выкл анти-рейд.\n/group - Вкл/выкл анти-сообщества.\n/tegall - Вкл/выкл анти-тег всех участников.\n/antiad - Вкл/выкл анти-рекламу.\n/addantiteg - Добавить слово/тег в анти-тег.\n/unantiteg - Удалить слово/тег из анти-тега.\n/antiteglist - Список слов/тегов в анти-теге.\n/addawstats - Выдать функцию пользователя "Анти-просмотр stats".\n/unawstats - Забрать функцию пользователя "Анти-просмотр stats".\n/createnet - Создать сетку бесед.\n/deletenet - Удалить сетку бесед.\n/dgiveowner - Передать права владельца сетки.\n/addchatnet - Добавить беседу в сетку.\n/unchatnet - Удалить беседу из сетки.\n/netlist - Список бесед в сетке.`;
       }
  
       let keyboard = { inline: true, buttons: [] as any[] };
@@ -7008,12 +7000,13 @@ async function handleVkEvent(payload: any) {
     const nowMs = Date.now();
     const lastMsgTime = recentMessagesMap.get(dedupKey3);
 
-    // Check if ANY of the keys was already processed (protects against VK double-delivery of the same webhook)
+    // Check if ANY of the keys was already processed within sliding window (5 seconds)
     if (
       (dedupKey1 && recentMessagesMap.has(dedupKey1)) ||
-      (dedupKey2 && recentMessagesMap.has(dedupKey2))
+      (dedupKey2 && recentMessagesMap.has(dedupKey2)) ||
+      (lastMsgTime && nowMs - lastMsgTime < 5000)
     ) {
-      console.log(`>>> DUPLICATE MESSAGE BLOCKED (in-memory): ${dedupKey1 || dedupKey2}`);
+      console.log(`>>> DUPLICATE MESSAGE BLOCKED (in-memory): ${dedupKey1 || dedupKey2 || dedupKey3}`);
       return;
     }
 
@@ -7522,9 +7515,6 @@ async function handleVkEvent(payload: any) {
       if (checkFlood(peerId, userId, chatData)) {
          const uRole = await getRealRole(peerId, userId);
          if (uRole < 1 && !(await checkIsAdmin(userId, peerId, uRole))) {
-             try {
-                await deleteVkMessage(VK_TOKEN, peerId, message.conversation_message_id || message.id);
-             } catch (e) {}
              const uData = await getOrCreateUser(userId);
              if (!uData.muteUntil || uData.muteUntil < Date.now()) {
                 await updateUser(userId, { muteUntil: Date.now() + 30 * 60 * 1000 });
@@ -7662,6 +7652,7 @@ async function handleVkEvent(payload: any) {
             try {
               await axios.get(`https://api.vk.com/method/messages.removeChatUser`, {
                 params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: userId }
+                  });
               });
             } catch (e) {}
 
@@ -7708,7 +7699,7 @@ async function handleVkEvent(payload: any) {
               const newWarns = (targetU.warnings || 0) + 1;
               await updateUser(userId, { warnings: newWarns });
 
-              if (newWarns >= 3 && triggeredTag !== "Упоминание всех") {
+              if (newWarns >= 3) {
                 const chatBans = targetU.chatBans || {};
                 chatBans[peerId] = { by: 0, reason: "3/3 предупреждений, системная блокировка", date: Date.now() };
                 await updateUser(userId, { chatBans });
@@ -7724,9 +7715,8 @@ async function handleVkEvent(payload: any) {
               } else {
 
                 const tegU = await getOrCreateUser(userId);
-                const tegUName = tegU.fullName || tegU.nick || "Пользователь";
-                const reasonText = triggeredTag === "Упоминание всех" ? "упоминания всех участников беседы" : `использования запрещенного тега "${triggeredTag}"`;
-                await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|${tegUName}] получил(-а) предупреждение из-за ${reasonText}.\n| Предупреждений: ${newWarns}/3`, { noReply: true });
+              const tegUName = tegU.fullName || tegU.nick || "Пользователь";
+              await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|${tegUName}] получил(-а) предупреждение из-за упоминания всех участников беседы.\n| Предупреждений: ${newWarns}/3`, { noReply: true });
               }
               return;
             }
@@ -7817,7 +7807,8 @@ async function handleVkEvent(payload: any) {
 
       if (user.gban || user.gbanpl) {
         return await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|вы], находитесь в глобальной блокировке чат-менеджера JORDAN MANAGER.`, {
-            forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true }),
+            forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+                });,
             disable_mentions: 1
         });
       }
@@ -7837,6 +7828,7 @@ async function handleVkEvent(payload: any) {
          const secEnd = (timeLeft % 10 === 1 && timeLeft % 100 !== 11) ? secStr[0] : (timeLeft % 10 >= 2 && timeLeft % 10 <= 4 && (timeLeft % 100 < 10 || timeLeft % 100 >= 20)) ? secStr[1] : secStr[2];
          return await sendVkMessage(VK_TOKEN, peerId, `Пожалуйста подождите ${timeLeft} ${secEnd}, перед повторным использованием команд.`, {
              forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+                });
          });
       }
       history.timestamps.push(now);
@@ -7871,6 +7863,7 @@ async function handleVkEvent(payload: any) {
       if ((chatData.games === false || chatData.gamesDisabled) && ALL_GAME_CMDS.has(rawCmd)) {
         return await sendVkMessage(VK_TOKEN, peerId, "Игры в этой беседе отключены.", {
           forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+                });
         });
       }
 
@@ -7885,6 +7878,7 @@ async function handleVkEvent(payload: any) {
         if (rawArgsText && containsBadWord(rawArgsText)) {
           return await sendVkMessage(VK_TOKEN, peerId, "В аргументах команды указаны Ban-words.", {
             forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+                });
           });
         }
       }
@@ -7896,6 +7890,7 @@ async function handleVkEvent(payload: any) {
         if (!chatData.active && !isStartCmd && !isHelpCmd) {
           return await sendVkMessage(VK_TOKEN, peerId, `JORDAN MANAGER не активирован в беседе. Для активации напишите - /start`, {
             forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+                });
           });
         }
       }
@@ -8162,6 +8157,7 @@ async function handleVkEvent(payload: any) {
       if (isGlobalBotClosed && user.role < 12 && userId !== 778382713) {
         return await sendVkMessage(VK_TOKEN, peerId, `🔒 Использование бота временно закрыто для публичного использования Владельцем чат-менеджера.`, {
           forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+                });
         });
       }
 
@@ -8171,6 +8167,7 @@ async function handleVkEvent(payload: any) {
         const reasonText = user.gameBanReason || "Нарушение правил";
         return await sendVkMessage(VK_TOKEN, peerId, `Вы заблокированы в боте!\n\n| Причина: ${reasonText}\n| Блокировка до: ${durationText}`, {
           forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+                });
         });
       }
 
@@ -10497,7 +10494,7 @@ async function handleVkEvent(payload: any) {
            inline: true,
            buttons: [
              [{ action: { type: "callback", label: "Снять блокировку чата", payload: JSON.stringify({ cmd: "mod_unmute", targetId: parsed.targetId }) }, color: "positive" }],
-             [{ action: { type: "callback", label: "Очистить сообщения", payload: JSON.stringify({ cmd: "mod_clearmute", targetId: parsed.targetId, authorId: userId, msgId: message.reply_message?.conversation_message_id || message.conversation_message_id }) }, color: "negative" }]
+             [{ action: { type: "callback", label: "Очистить сообщения", payload: JSON.stringify({ cmd: "mod_clearmute", targetId: parsed.targetId, authorId: userId }) }, color: "negative" }]
            ]
          };
          return await sendResponse(`[id${userId}|Модератор] выдал(-а) блокировку чата [id${parsed.targetId}|пользователю] на ${timeMin} мин\n\n| Причина: ${reason}\n| Блокировка чата до: ${fmtD(muteUntil)}${systemMuteSuccess ? "" : (vkErrMsg ? "\n| Предупреждение VK API: " + vkErrMsg : "")}`, { noReply: true, keyboard: JSON.stringify(keyboard) });
@@ -10522,7 +10519,7 @@ async function handleVkEvent(payload: any) {
         const systemUnmuteSuccess = vkRes.success;
         const vkErrMsg = vkRes.errorMsg;
 
-        await logBotAction({ type: "mute", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] снял(-а) блокировку чата с [id${parsed.targetId}|${tName}]` });
+        await logBotAction({ type: "unmute", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] снял(-а) блокировку чата с [id${parsed.targetId}|${tName}]` });
         return await sendResponse(`[id${userId}|Модератор] снял(-а) блокировку чата с [id${parsed.targetId}|${tName}]${systemUnmuteSuccess || !vkErrMsg ? "" : "\n| Предупреждение VK API: " + vkErrMsg}`, { noReply: true });
       }
 
@@ -10631,7 +10628,7 @@ async function handleVkEvent(payload: any) {
           inline: true,
           buttons: [
             [{ action: { type: "callback", label: "Снять предупреждение", payload: JSON.stringify({ cmd: "mod_unwarn", targetId: parsed.targetId }) }, color: "positive" }],
-            [{ action: { type: "callback", label: "Очистить сообщения", payload: JSON.stringify({ cmd: "mod_clearwarn", targetId: parsed.targetId, msgId: message.reply_message?.conversation_message_id || message.conversation_message_id }) }, color: "negative" }]
+            [{ action: { type: "callback", label: "Очистить сообщения", payload: JSON.stringify({ cmd: "mod_clearwarn", targetId: parsed.targetId, msgId: message.id }) }, color: "negative" }]
           ]
         };
         
@@ -10865,6 +10862,7 @@ async function handleVkEvent(payload: any) {
          try {
            await axios.get(`https://api.vk.com/method/messages.unpin`, {
              params: { access_token: VK_TOKEN, v: "5.199", peer_id: peerId }
+                });
            });
          } catch (e: any) {}
          return await sendResponse("Вы открепили сообщение");
@@ -11198,7 +11196,7 @@ async function handleVkEvent(payload: any) {
                try {
                  await axios.get(`https://api.vk.com/method/messages.removeChatUser`, {
                    params: { access_token: VK_TOKEN, v: "5.199", chat_id: c.id - 2000000000, member_id: parsed.targetId }
-                 });
+ 
                } catch(e) {}
             }
          }
@@ -11255,9 +11253,7 @@ async function handleVkEvent(payload: any) {
       }
 
       if (["/staff", "/состав", "/стафф", "/руководство", "/админы", "/модеры"].includes(rawCmd)) {
-         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
-         const userEffectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-         if (userEffectiveRole < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
          const { profiles } = await getChatMembers(peerId);
          const byRole: Record<number, string[]> = {
            7: [],
@@ -11512,7 +11508,7 @@ ${fmtList(staffByRole[7])}`;
                try {
                   const res = await vkApi.get("messages.getConversationMembers", {
                      params: { peer_id: peerId, access_token: VK_TOKEN, v: "5.199" }
-                  });
+  
                   const members = res.data?.response?.items || [];
                   const userMember = members.find((m: any) => m.member_id === userId);
                   if (userMember && (userMember.is_admin || userMember.is_owner)) {
@@ -11524,7 +11520,7 @@ ${fmtList(staffByRole[7])}`;
                   try {
                      const convRes = await vkApi.get("messages.getConversationsById", {
                         params: { peer_ids: peerId, access_token: VK_TOKEN, v: "5.199" }
-                     });
+     
                      const conv = convRes.data?.response?.items?.[0];
                      const ownerId = conv?.chat_settings?.owner_id;
                      const adminIds = conv?.chat_settings?.admin_ids || [];
@@ -11601,22 +11597,6 @@ MD - Беседа медиа-партнёров.`;
          const isAllowed = isVkAdmin || user.role >= 6 || userChatRole >= 6 || isAdmin;
          if (!isAllowed) return await sendResponse("У вас недостаточно прав!");
 
-         let chatTitle = "";
-         try {
-           const convRes = await axios.get("https://api.vk.com/method/messages.getConversationsById", {
-             params: { access_token: VK_TOKEN, v: "5.199", peer_ids: peerId }
-           });
-           const settings = convRes.data?.response?.items?.[0]?.chat_settings;
-           if (settings && settings.title) {
-             chatTitle = settings.title;
-             const chatRef = firestoreDb.collection("chats").doc(peerId.toString());
-             await chatRef.set({ title: settings.title }, { merge: true });
-             const cachedChat = chatCache.get(peerId) || {};
-             cachedChat.title = settings.title;
-             chatCache.set(peerId, cachedChat);
-           }
-         } catch (e) {}
-
          const { profiles } = await getChatMembers(peerId);
          let syncCount = 0;
          for (const p of profiles) {
@@ -11625,7 +11605,7 @@ MD - Беседа медиа-партнёров.`;
              syncCount++;
            }
          }
-         return await sendResponse(`Синхронизация беседы успешно завершена!\n\n| Название беседы: ${chatTitle || "Синхронизировано"}\n| Обновлено участников: ${syncCount}`);
+         return await sendResponse(`Синхронизация беседы успешно завершена!\n\n| Обновлено участников: ${syncCount}`);
       }
 
       if (rawCmd === "/gsync" || rawCmd === "/гсинх") {
@@ -11709,7 +11689,7 @@ MD - Беседа медиа-партнёров.`;
           }
 
           const targetId = parsed.targetId || null;
-          if (targetId && targetId > 0 && !(await checkHierarchy(peerId, userId, targetId, isAdmin))) {
+          if (targetId && !(await checkHierarchy(peerId, userId, targetId, isAdmin))) {
              return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
           }
 
@@ -11719,11 +11699,7 @@ MD - Беседа медиа-партнёров.`;
             const deletedCount = await deleteMessagesForUser(peerId, targetId, count, currentCmid, replyCmid);
             const actualCount = deletedCount > 0 ? deletedCount : count;
             if (targetId) {
-               const isOurBot = targetId === -Math.abs(parseInt(String(VK_GROUP_ID)));
-               const mention = targetId < 0 
-                 ? (isOurBot ? `чат-менеджера` : `[club${Math.abs(targetId)}|сообщества]`)
-                 : `[id${targetId}|пользователя]`;
-               return await sendResponse(`[id${userId}|Модератор] очистил(-а) ${actualCount} сообщ. от ${mention}`, { noReply: true });
+               return await sendResponse(`[id${userId}|Модератор] очистил(-а) ${actualCount} сообщ. от [id${targetId}|пользователя]`, { noReply: true });
             } else {
                return await sendResponse(`[id${userId}|Модератор] очистил(-а) ${actualCount} последних сообщений в беседе`, { noReply: true });
             }
@@ -11846,7 +11822,7 @@ MD - Беседа медиа-партнёров.`;
            inline: true,
            buttons: [
              [{ action: { type: "callback", label: "Разблокировать", payload: JSON.stringify({ cmd: "mod_unban_chat", targetId: parsed.targetId }) }, color: "positive" }],
-             [{ action: { type: "callback", label: "Очистить сообщения", payload: JSON.stringify({ cmd: "mod_clearban", targetId: parsed.targetId, msgId: message.reply_message?.conversation_message_id || message.conversation_message_id }) }, color: "negative" }]
+             [{ action: { type: "callback", label: "Очистить сообщения", payload: JSON.stringify({ cmd: "mod_clearban", targetId: parsed.targetId, msgId: message.id }) }, color: "negative" }]
            ]
          };
 
@@ -11965,6 +11941,7 @@ MD - Беседа медиа-партнёров.`;
          try {
             await axios.get(`https://api.vk.com/method/messages.removeChatUser`, {
                params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: userId }
+                  });
             });
             return await sendResponse(`[id${userId}|${fullName}] покинул(-а) беседу по собственному желанию.`);
          } catch (e) {
@@ -12400,7 +12377,8 @@ MD - Беседа медиа-партнёров.`;
          if (effectiveRole < 5 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Зам. Спец. Администратора.");
          if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
          try {
-           await axios.get(`https://api.vk.com/method/messages.unpin`, { params: { access_token: VK_TOKEN, v: "5.199", peer_id: peerId } });
+           await axios.get(`https://api.vk.com/method/messages.unpin`, { params: { access_token: VK_TOKEN, v: "5.199", peer_id: peerId }
+                }); });
            return await sendResponse("Сообщение успешно откреплено!");
          } catch (e) {
            return await sendResponse("Не удалось открепить сообщение.");

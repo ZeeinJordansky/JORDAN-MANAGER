@@ -1,0 +1,128 @@
+458: "/аддзамвладельца",
+551: "/замвладельца",
+552: "/замвладельцабота",
+687: "/снятьвладельца",
+1395: 7: "ВЛАДЕЛЕЦ БЕСЕДЫ",
+1399: 11: "ЗАМ. ВЛАДЕЛЬЦА ЧАТ-МЕНЕДЖЕРА",
+1400: 12: "ВЛАДЕЛЕЦ ЧАТ-МЕНЕДЖЕРА",
+3491: if (role >= 12) return "Владелец чат-менеджера";
+3492: if (role === 11) return "Зам. Владельца чат-менеджера";
+3500: if (role === 7) return "Владелец беседы";
+4489: `| Владелец беседы: ${ownerStr}\n` +
+4490: `| Систем. Владелец беседы: ${sysOwnerStr}\n\n` +
+4492: `| Кол-во систем. администраторов беседы: ${sysAdminsCount}\n\n` +
+4822: badge = " (Владелец беседы)";
+5086: if (clan.ownerId !== userId) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы не владелец клана!");
+5518: `| Все системы функционируют в штатном режиме.\n` +
+5556: await editVkMessage(VK_TOKEN, peerId, cmId, `Передача прав владельца сетки бесед №${netNum} отменена.`, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+5568: await editVkMessage(VK_TOKEN, peerId, cmId, `[id${userId}|${fullName}] передал(-а) права владельца сетки бесед №${netNum} [id${targetId}|${tName}]`, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+5597: `| Владелец сетки: [id${net.ownerId}|${ownerName}]\n` +
+5642: text = `...::Помощь по командам руководства::...\n\nКоманды Осн. Зам. Руководителя:\n/grrole -- Снять глобальную роль у пользователя.\n/setowner -- Назначить владельца беседы.\n/deleteowner -- Снять права владельца беседы.`;
+5648: text = `...::Помощь по командам руководства::...\n\nКоманды Зам. Владельца:\n/addgr -- Выдать права Главного Руководителя.`;
+5650: text = `...::Помощь по командам руководства::...\n\nКоманды Владельца бота:\n/addstatus -- Установить статус пользователю.\n/unstatus -- Снять статус пользователя.\n/arrole -- Снять все роли у пользователя.\n/setinfobot -- Установить инфо бота.\n/achat -- Сделать беседу админ-чатом.\n/unachat -- Убрать статус админ-чата.\n/giveowner -- Передать права владельца беседы.\n/addzamowner -- Выдать права Зам. Владельца бота.`;
+5659: if (effRole >= 11) availableButtons.push({ cmd: "ghelp_zown", label: "Зам. Владельца" });
+5660: if (effRole >= 12) availableButtons.push({ cmd: "ghelp_own", label: "Владелец бота" });
+5809: await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|Пользователь] передал(-а) свои права «Владелец Беседы» [id${tId}|пользователю]`);
+5810: await editVkMessage(VK_TOKEN, peerId, cmId, `Права «Владелец Беседы» успешно переданы.`, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+5815: await editVkMessage(VK_TOKEN, peerId, cmId, `Передача прав «Владелец Беседы» отменена.`, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+5908: text = `...::Помощь по командам бота::...\n\nКоманды Владельца беседы:\n/start - Активировать чат-менеджер в беседе.\n/type - Изменить тип беседы.\n/sync - Синхронизировать структуру беседы.\n/games - Включить/выключить игры в беседе.\n/staff - Список руководства беседы.\n/giveowner - Передать права владельца беседы.\n/addsa - Выдать права спец. администратора.\n/welcometext - Настроить приветствие.\n/leave - Вкл/выкл кик при выходе.\n/invite - Вкл/выкл инвайт только модераторами.\n/af - Вкл/выкл анти-флуд.\n/antisliv - Вкл/выкл анти-слив.\n/raid - Вкл/выкл анти-рейд.\n/group - Вкл/выкл анти-сообщества.\n/tegall - Вкл/выкл анти-тег всех участников.\n/antiad - Вкл/выкл анти-рекламу.\n/addantiteg - Добавить слово/тег в анти-тег.\n/unantiteg - Удалить слово/тег из анти-тега.\n/antiteglist - Список слов/тегов в анти-теге.\n/addawstats - Выдать функцию пользователя "Анти-просмотр stats".\n/unawstats - Забрать функцию пользователя "Анти-просмотр stats".\n/createnet - Создать сетку бесед.\n/deletenet - Удалить сетку бесед.\n/dgiveowner - Передать права владельца сетки.\n/addchatnet - Добавить беседу в сетку.\n/unchatnet - Удалить беседу из сетки.\n/netlist - Список бесед в сетке.`;
+5922: if (effectiveRole >= 7) availableButtons.push({ cmd: "help_owner", label: "Владелец беседы" });
+7384: await sendVkMessage(VK_TOKEN, peerId, `У чат-менеджера отсутствуют права системного администратора (звёздочка), выдайте ему права администратора и он продолжит работать.`, {
+7652: text: `Система Анти-реклама выдала предупреждение [id${userId}|${fullName}] (${newWarns}/3)`
+7666: await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|${fullName}] был заблокирован и исключен из беседы\n\n| Причина: 3/3 предупреждений, системная блокировка за рекламу`, { noReply: true });
+7711: chatBans[peerId] = { by: 0, reason: "3/3 предупреждений, системная блокировка", date: Date.now() };
+7721: await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|пользователь] был заблокирован и исключен из беседы\n\n| Причина: 3/3 предупреждений, системная блокировка`);
+8001: } else if (["/addzamowner", "/замвладельцабота", "/замвладельца", "/addzown", "/аддзамвладельца"].includes(rawCmd)) {
+8002: actionStr = "выдал(-а) должность «Зам. Владельца»";
+8035: actionStr = "назначил(-а) владельца беседы";
+8037: actionStr = "снял(-а) права владельца беседы";
+8049: actionStr = "передал(-а) права владельца беседы";
+8121: else if (["/взлом"].includes(rawCmd)) actionStr = "Взломал(-а) систему";
+8160: return await sendVkMessage(VK_TOKEN, peerId, `🔒 Использование бота временно закрыто для публичного использования Владельцем чат-менеджера.`, {
+9525: textResp = `Вы попытались взломать сервер Minecraft, и у вас не получилось :(\n| Что бы владелец сервера Minecraft не писал на вас заявление за взлом, вам пришлось ему отдать 20.000$`;
+9529: textResp = `Вы попытались взломать системы безопасности крупной компании, и у вас получилось!\n| Вы заработали: ${gain.toLocaleString()}$`;
+9533: textResp = `Вы попытались взломать системы безопасности крупной компании, но вас отвлёк телефонный звонок, и у вас ничего не получилось :(`;
+9757: | Из них владелец в беседах: ${ownerChatsCount}
+10397: const mStr = tUser.warnBy ? `[id${tUser.warnBy}|Модератор]` : "[id1|Система]";
+10802: if (rawCmd === "/addzamowner" || rawCmd === "/замвладельцабота" || rawCmd === "/замвладельца" || rawCmd === "/addzown" || rawCmd === "/аддзамвладельца") return await handlePromotion(12, 11, "Зам. Владельца");
+10872: if (!isOwner) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
+10913: `Для изменения настроек используйте соответствующие команды владельца беседы.`;
+10974: return await sendResponse("Не удалось кикнуть пользователя из беседы. Возможно у него имеются права системного администратора/владельца.");
+10982: return await sendResponse("Не удалось кикнуть пользователя из беседы. Возможно у него имеются права системного администратора/владельца.");
+11021: const infoText = chatData.infoText || "Текст информации беседы не установлен. Владелец может установить его командой /setinfo";
+11026: if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу чат-менеджера.");
+11286: | Владелец беседы:
+11357: const ownerName = (ownerU.globalNick && ownerU.globalNick.trim()) || (ownerU.nick && ownerU.nick.trim()) || ownerU.fullName || (await fetchVkFullName(778382713)) || `Владелец`;
+11365: | Владелец чат-менеджера:
+11368: | Зам. Владельца чат-менеджера:
+11454: if (effRole >= 11) availableButtons.push({ cmd: "ghelp_zown", label: "Зам. Владельца" });
+11455: if (effRole >= 12) availableButtons.push({ cmd: "ghelp_own", label: "Владелец бота" });
+11537: return await sendResponse("Вы не можете активировать беседу, так как у вас отсутствуют права системного администратора или владельца.");
+11554: return await sendResponse("Вы не являетесь владельцем беседы!");
+11563: if (user.role < 12 && !isAdmin) return await sendResponse("Тип OFFICIAL может установить только владелец чат-менеджера.");
+11612: if (!isAllowed) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу чат-менеджера.");
+11635: if (user.role < 12 && !isAdmin && userId !== 778382713 && userId !== 1115715881) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу чат-менеджера.");
+11667: await updateUser(parsed.targetId, { muteUntil, muteReason: "Тестовый системный мут" });
+11671: return await sendResponse(`[id${userId}|${fullName}] выдал(-а) тестовый системный мут [id${parsed.targetId}|${targetName}] на ${timeMin} мин\n\n| Системное ограничение (read-only): ${systemMuteSuccess ? "Успешно приложено сообществом VK" : "Не удалось применить VK " + vkErrMsg}`);
+11731: if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу чат-менеджера.");
+11752: if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу чат-менеджера.");
+11764: if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу чат-менеджера.");
+11774: if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу чат-менеджера.");
+11891: if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
+11895: return await sendResponse(`[id${userId}|${fullName}] ${newVal ? "включил(-а)" : "выключил(-а)"} систему кика при выходе из беседы`);
+11899: if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
+11903: return await sendResponse(`[id${userId}|${fullName}] ${newVal ? "включил(-а)" : "выключил(-а)"} систему добавления только модераторами`);
+11907: if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
+11911: return await sendResponse(`[id${userId}|${fullName}] ${newVal ? "включил(-а)" : "выключил(-а)"} систему анти-флуд сообщениями`, { noReply: true });
+11915: if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
+11919: return await sendResponse(`[id${userId}|${fullName}] ${newVal ? "включил(-а)" : "выключил(-а)"} систему анти-слив беседы`);
+11923: if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
+11927: return await sendResponse(`[id${userId}|${fullName}] ${newVal ? "включил(-а)" : "выключил(-а)"} систему анти-рейд беседы`);
+11931: if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
+11935: return await sendResponse(`[id${userId}|${fullName}] ${newVal ? "включил(-а)" : "выключил(-а)"} систему анти-сообщества`);
+11942: return await sendResponse("Не удалось кикнуть вас из беседы. Возможно у вас имеются права системного администратора/владельца.");
+11950: return await sendResponse("Не удалось кикнуть вас из беседы. Возможно у вас имеются права системного администратора/владельца.");
+11955: if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
+11960: if (antiTeg.includes(tag)) return await sendResponse("Данное слово/тег уже есть в системе!");
+11963: return await sendResponse(`[id${userId}|${fullName}] добавил(-а) слово/тег «${tag}» в систему анти-тег.`);
+11967: if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
+11972: if (!antiTeg.includes(tag)) return await sendResponse("Данное слово/тег не найдено в системе!");
+11975: return await sendResponse(`[id${userId}|${fullName}] удалил(-а) слово/тег «${tag}» из системы анти-тег.`);
+11979: if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
+12404: return await sendResponse("У вас недостаточно прав! Команда доступна только для владельца беседы.");
+12409: return await sendResponse(`Система наград за приглашение участников в текущей беседе ${newVal ? 'включена ✅ (25.000$)' : 'выключена ❌'}.`);
+12416: if (effectiveRole < 7 && !isAdmin) return await sendResponse("У вас недостаточно прав! Команда доступна только для владельца беседы.");
+12423: if (rawCmd === "/leave") return await handleToggle(rawCmd, "leaveKick", "включил(-а) систему кика при выходе из беседы", "выключил(-а) систему кика при выходе из беседы");
+12424: if (rawCmd === "/invite") return await handleToggle(rawCmd, "inviteOnlyMods", "включил(-а) систему добавления только модераторами", "выключил(-а) систему добавления только модераторами");
+12425: if (rawCmd === "/af") return await handleToggle(rawCmd, "antiFlood", "включил(-а) систему анти-флуд сообщениями", "выключил(-а) систему анти-флуд сообщениями");
+12426: if (rawCmd === "/antisliv") return await handleToggle(rawCmd, "antiSliv", "включил(-а) систему анти-слив беседы", "выключил(-а) систему анти-слив беседы");
+12427: if (rawCmd === "/raid") return await handleToggle(rawCmd, "antiRaid", "включил(-а) систему анти-рейд беседы", "выключил(-а) систему анти-рейд беседы");
+12428: if (rawCmd === "/group") return await handleToggle(rawCmd, "antiGroup", "включил(-а) систему анти-сообщества", "выключил(-а) систему анти-сообщества");
+12429: if (rawCmd === "/tegall") return await handleToggle(rawCmd, "antiTegAll", "включил(-а) систему Анти-тег всех участников", "выключил(-а) систему Анти-тег всех участников");
+12449: return await sendResponse("У вас недостаточно прав! Данная команда доступна руководству чат-менеджера (с должности Специальный администратор / Владелец).");
+12675: return await sendResponse("У вас недостаточно прав! Данная команда доступна руководству чат-менеджера (с должности Специальный администратор / Владелец).");
+12820: if (rawCmd === "/antiad") return await handleToggle(rawCmd, "antiAd", "включил(-а) систему Анти-реклама", "выключил(-а) систему Анти-реклама");
+12821: if (rawCmd === "/deletecommand" || rawCmd === "/удалятькоманды" || rawCmd === "/delcmd") return await handleToggle(rawCmd, "deleteCommand", "включил(-а) систему удаления модерационных команд", "выключил(-а) систему удаления модерационных команд");
+12841: if (net.ownerId !== userId && !isAdmin) return await sendResponse("Вы не являетесь владельцем данной сетки!");
+12858: if (net.ownerId !== userId && !isAdmin) return await sendResponse("Вы не являетесь владельцем данной сетки!");
+12869: return await sendResponse(`Вы уверены, что хотите передать права владельца сетки №${net.name}?`, { keyboard: JSON.stringify(keyboard) });
+12877: if (net.ownerId !== userId && !isAdmin) return await sendResponse("Вы не являетесь владельцем данной сетки!");
+12889: if (net.ownerId !== userId && !isAdmin) return await sendResponse("Вы не являетесь владельцем данной сетки!");
+12900: if (net.ownerId !== userId && !isAdmin) return await sendResponse("Вы не являетесь владельцем данной сетки!");
+12918: `| Владелец сетки: [id${net.ownerId}|${ownerName}]\n` +
+13010: return await sendResponse("У вас недостаточно прав! Команда доступна только Владельцу чат-менеджера.");
+13088: return await sendResponse("У вас недостаточно прав! Команда доступна только Владельцу чат-менеджера.");
+13293: if (rawCmd === "/addzamowner" || rawCmd === "/замвладельцабота") {
+13294: return await handlePromotion(12, 11, "Зам. Владельца чат-менеджера");
+13313: return await sendResponse(`[id${userId}|${fullName}] назначил(-а) [id${parsed.targetId}|пользователя] владельцем текущей беседы.`);
+13316: if (rawCmd === "/deleteowner" || rawCmd === "/delowner" || rawCmd === "/снятьвладельца" || rawCmd === "/делетоунер") {
+13324: return await sendResponse(`[id${userId}|${fullName}] снял(-а) права владельца текущей беседы с [id${parsed.targetId}|пользователя].`);
+13359: return await sendResponse(`Вы действительно хотите передать права владельца беседы [id${parsed.targetId}|пользователю]?\n\n| Для подтверждения нажмите на кнопку:`, { keyboard: JSON.stringify(keyboard) });
+13547: if (effectiveRole >= 7) availableButtons.push({ cmd: "help_owner", label: "Владелец беседы" });
+13668: return await sendResponse(`[id${userId}|${fullName}] включил(-а) систему наград за приглашения участников в беседу`);
+13670: return await sendResponse(`[id${userId}|${fullName}] выключил(-а) систему наград за приглашения участников в беседу`);
+13874: if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточно прав! Команда доступна Владельцу чат-менеджера.");
+13877: return await sendResponse(`🔒 Использование бота успешно ЗАКРЫТО для публичного использования.\n\n| Теперь команды бота доступны только Владельцу чат-менеджера.`);
+13881: if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточно прав! Команда доступна Владельцу чат-менеджера.");
+14804: return { authorized: false, error: "Неавторизованный запрос! Пожалуйста, войдите в систему.", status: 401 };
+14980: return res.status(403).json({ error: "Абсолютный иммунитет: Наказание владельца запрещено!" });
