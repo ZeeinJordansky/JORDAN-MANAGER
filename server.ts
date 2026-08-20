@@ -46,7 +46,7 @@ import { createCanvas, loadImage, registerFont } from "canvas";
 import { GoogleGenAI } from "@google/genai";
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import { CROCODILE_WORDS, sendVkMessage, editVkMessage, sendVkToast as importedSendVkToast, answerVkEvent, formatTimeRemaining, deleteVkMessage } from "./src/botGameEngine";
-import { extendedBadWordsList } from "./src/badWordsData";
+import { badWordsList } from "./src/badWordsData";
 
 dotenv.config();
 
@@ -138,9 +138,6 @@ const ai = new GoogleGenAI({
     }
   }
 });
-
-
-const badWordsList = extendedBadWordsList;
 
 let dynamicBanWords: string[] = [];
 
@@ -1092,6 +1089,63 @@ async function executeVkUnmute(peerId: number, targetId: number): Promise<{ succ
   return { success: anySuccess, errorMsg: anySuccess ? "" : lastError };
 }
 
+async function executeBatchVkRestrictions(peerId: number, memberIds: number[], action: "ro" | "rw", durationSec: number = 86400 * 30): Promise<number> {
+  const chatId = peerId > 2000000000 ? peerId - 2000000000 : peerId;
+  let successCount = 0;
+  const chunkSize = 25;
+
+  for (let i = 0; i < memberIds.length; i += chunkSize) {
+    const chunk = memberIds.slice(i, i + chunkSize);
+    const memberIdsStr = chunk.join(",");
+    let batchOk = false;
+
+    const attempts = [
+      {
+        url: "https://api.vk.com/method/messages.changeConversationMemberRestrictions",
+        params: action === "ro"
+          ? { access_token: VK_TOKEN, v: "5.199", peer_id: peerId, member_ids: memberIdsStr, for: durationSec, action: "ro" }
+          : { access_token: VK_TOKEN, v: "5.199", peer_id: peerId, member_ids: memberIdsStr, action: "rw" }
+      },
+      {
+        url: "https://api.vk.com/method/messages.changeConversationMemberRestrictions",
+        params: action === "ro"
+          ? { access_token: VK_TOKEN, v: "5.199", chat_id: chatId, member_ids: memberIdsStr, for: durationSec, action: "ro" }
+          : { access_token: VK_TOKEN, v: "5.199", chat_id: chatId, member_ids: memberIdsStr, action: "rw" }
+      },
+      {
+        url: "https://api.vk.com/method/messages.changeConversationMemberRestrictions",
+        params: action === "ro"
+          ? { access_token: VK_TOKEN, v: "5.131", peer_id: peerId, member_ids: memberIdsStr, for: durationSec, action: "ro" }
+          : { access_token: VK_TOKEN, v: "5.131", peer_id: peerId, member_ids: memberIdsStr, action: "rw" }
+      }
+    ];
+
+    for (const attempt of attempts) {
+      try {
+        const res = await axios.get(attempt.url, { params: attempt.params });
+        if (res.data && res.data.response !== undefined && !res.data.error) {
+          batchOk = true;
+          successCount += chunk.length;
+          break;
+        }
+      } catch (e) {}
+    }
+
+    if (!batchOk) {
+      const results = await Promise.allSettled(
+        chunk.map(mId => action === "ro" ? executeVkMute(peerId, mId, durationSec) : executeVkUnmute(peerId, mId))
+      );
+      results.forEach(r => {
+        if (r.status === "fulfilled" && (r.value as any)?.success) successCount++;
+      });
+    }
+
+    await new Promise(r => setTimeout(r, 60));
+  }
+
+  return successCount;
+}
+
 function drawRoundedRect(ctx: any, x: number, y: number, width: number, height: number, radius: number) {
   ctx.beginPath();
   ctx.moveTo(x + radius, y);
@@ -1571,6 +1625,35 @@ async function getAllChatNetworks(): Promise<ChatNetwork[]> {
   } catch (e) {
     return [];
   }
+}
+
+async function checkExpiredSilences() {
+  const now = Date.now();
+  for (const [peerId, chatData] of chatCache.entries()) {
+    if (chatData.silence && chatData.silenceUntil && chatData.silenceUntil > 0 && chatData.silenceUntil <= now) {
+      // Silence expired!
+      await updateChat(peerId, { silence: false, silenceUntil: 0, silenceTest: false });
+      try {
+        const { items } = await getChatMembers(peerId);
+        const memberIds = (items || [])
+          .filter((item: any) => item.member_id > 0 && !item.is_admin && !item.is_owner)
+          .map((item: any) => item.member_id);
+        executeBatchVkRestrictions(peerId, memberIds, "rw").catch(() => {});
+      } catch (e) {}
+
+      try {
+        await sendVkMessage(VK_TOKEN, peerId, `Режим тишины был окончен. Все участники беседы могут снова писать в беседу.`);
+      } catch (e) {}
+    }
+  }
+}
+
+function startExpiredSilencesChecker() {
+  setInterval(async () => {
+    try {
+      await checkExpiredSilences();
+    } catch (e) {}
+  }, 5 * 1000);
 }
 
 async function deleteUserRecentMessages(peerId: number, userId: number, count: number = 5) {
@@ -5767,14 +5850,26 @@ async function handleVkEvent(payload: any) {
           const chatRole = (u.chatRoles && u.chatRoles[peerId]) || 0;
           const effectiveRole = u.role >= 8 ? u.role : Math.max(u.role || 0, chatRole);
           const isAdminMember = await checkIsAdmin(userId, peerId, u.role);
-          if (effectiveRole < 3 && !isAdminMember) {
+          if (effectiveRole < 1 && !isAdminMember && userId !== 778382713 && userId !== 1115715881) {
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "У вас недостаточно прав!" });
              return;
           }
           await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Режим тишины выключен." });
-          await updateChat(peerId, { silence: false });
-          const fullName = u.fullName || u.nick || `User${userId}`;
-          await editVkMessage(VK_TOKEN, peerId, cmId, `[id${userId}|${fullName}] выключил(-а) режим тишины`, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+          await updateChat(peerId, { silence: false, silenceTest: false });
+          
+          try {
+             await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+          } catch (e) {}
+
+          try {
+             const { items } = await getChatMembers(peerId);
+             const memberIds = (items || [])
+                .filter((item: any) => item.member_id > 0 && !item.is_admin && !item.is_owner)
+                .map((item: any) => item.member_id);
+             executeBatchVkRestrictions(peerId, memberIds, "rw").catch(() => {});
+          } catch (e) {}
+
+          await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|Модератор] выключил(-а) режим тишины в беседе.`);
           return;
        }
 
@@ -7125,27 +7220,19 @@ async function handleVkEvent(payload: any) {
                return;
              }
           }
-          if (chatData.silenceTest) {
-             try {
-                await new Promise(r => setTimeout(r, 1500)); // Delay to ensure VK registers the user
-                await axios.get("https://api.vk.com/method/messages.changeConversationMemberRestrictions", {
-                   params: {
-                      access_token: VK_TOKEN,
-                      v: "5.199",
-                      peer_id: peerId,
-                      member_ids: String(memberId),
-                      action: "ro"
-                   }
-                });
-             } catch(e) {}
-          }
-          if (chatData.welcometext_enabled && chatData.welcometext) {
+           if (chatData.welcometext_enabled && chatData.welcometext) {
              let wText = chatData.welcometext;
              wText = wText.replace(/%u/g, `id${memberId}`);
              wText = wText.replace(/%n/g, `[id${memberId}|${uData.nick || "Участник"}]`);
              wText = wText.replace(/%i/g, `id${userId}`);
              wText = wText.replace(/%p/g, `[id${userId}|Пользователь]`); // simplified
              await sendVkMessage(VK_TOKEN, peerId, wText);
+          }
+
+          if (chatData.silence && memberId > 0) {
+             try {
+                executeVkMute(peerId, memberId, 86400 * 30).catch(() => {});
+             } catch (e) {}
           }
 
           if (chatData.invRewardEnabled && userId && memberId && Number(userId) !== Number(memberId) && Number(memberId) > 0) {
@@ -7416,8 +7503,8 @@ async function handleVkEvent(payload: any) {
       }
 
       if (chatData.silence) {
-         const silenceMinRole = chatData.silenceMinRole || 3;
-         const canSpeak = userEffectiveRole >= silenceMinRole || isAdmin || userId === 778382713;
+         const silenceMinRole = chatData.silenceMinRole || 1;
+         const canSpeak = userEffectiveRole >= silenceMinRole || isAdmin || userId === 778382713 || userId === 1115715881;
          if (!canSpeak) {
             try {
                await deleteVkMessage(VK_TOKEN, peerId, message.conversation_message_id || message.id);
@@ -7706,11 +7793,17 @@ async function handleVkEvent(payload: any) {
       cmdText = cmdText.replace(/^\[(?:club|id)\d+\|[^\]]+\]\s*/gi, "").trim();
       cmdText = cmdText.replace(/^@\S+\s*/gi, "").trim();
 
-      const prefixes = ["/", "!", ".", ",", "+", "*", ";", ":"];
+      const prefixes = ["/", "!", ".", ",", "+", "-", "*", ";", ":"];
       const hasPrefix = prefixes.some(p => cmdText.startsWith(p));
       
       if (hasPrefix) {
-        cmdText = "/" + cmdText.slice(1).trim();
+        if (cmdText.startsWith("-тишина")) {
+          cmdText = "/тишина_вкл " + cmdText.slice(7).trim();
+        } else if (cmdText.startsWith("+тишина")) {
+          cmdText = "/тишина_выкл " + cmdText.slice(7).trim();
+        } else {
+          cmdText = "/" + cmdText.slice(1).trim();
+        }
       } else {
         // Если сообщение отправлено без префикса
         let allowedWithoutPrefix = false;
@@ -7763,7 +7856,8 @@ async function handleVkEvent(payload: any) {
             "bug", "баг", "багрепорт", "bugreport", "репорт", "bug_report",
             "offer", "предложение", "предложка", "идея", "предложить", "оффер", "предл", "предложения",
             "гс", "gs", "voice", "голосовое", "стикер", "стик", "sticker", "stick",
-            "реакции", "реакция", "reactions", "reaction", "реакс"
+            "реакции", "реакция", "reactions", "reaction", "реакс", "мояреакция", "myreaction", "греакция", "greaction", "личнаяреакция",
+            "тишина", "silence", "тишинавкл", "тишинавыкл", "режимтишины", "тишина_тест", "тишинатест", "silencetest", "рник", "rnick", "ник", "nick", "снятьник", "rnickall", "никвсе", "нлист", "nlist"
           ];
           if (knownCmds.includes(firstWord)) {
             cmdText = "/" + cmdText;
@@ -10688,16 +10782,7 @@ async function handleVkEvent(payload: any) {
         await updateUser(parsed.targetId, { chatNicks });
         return await sendResponse(`[id${userId}|Модератор] удалил(-а) ник [id${parsed.targetId}|пользователю]`, { noReply: true });
       }
-      
 
-
-      if (rawCmd === "/тишина") {
-         if (user.role < 3 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
-         const chatData = await getOrCreateChat(peerId);
-         const newVal = !chatData.silence;
-         await updateChat(peerId, { silence: newVal });
-         return await sendResponse(`[id${userId}|${fullName}] ${newVal ? 'включил(-а)' : 'выключил(-а)'} режим тишины.\n\nТеперь все сообщения обычных пользователей будут удаляться!`);
-      }
       if (rawCmd === "/rnickall") {
          if (user.role < 3 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
          const { profiles } = await getChatMembers(peerId);
@@ -10755,6 +10840,12 @@ async function handleVkEvent(payload: any) {
          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin || isVkAdmin || isOwner || user.role >= 12))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
          
+         const tUser = await getOrCreateUser(parsed.targetId);
+         const targetExistingRole = giveRole >= 8
+            ? (tUser.role || 0)
+            : ((tUser.chatRoles && tUser.chatRoles[peerId]) || (tUser.role && tUser.role < 8 ? tUser.role : 0));
+         const actionVerb = targetExistingRole > 0 ? "изменил(-а)" : "выдал(-а)";
+
          if (giveRole >= 8) {
             await updateUser(parsed.targetId, {
                role: giveRole,
@@ -10765,13 +10856,12 @@ async function handleVkEvent(payload: any) {
               await sendVkMessage(VK_TOKEN, parsed.targetId, `Вы были назначены на пост ${roleName}`);
             } catch (e) {}
          } else {
-            const tUser = await getOrCreateUser(parsed.targetId);
             const chatRoles = { ...(tUser.chatRoles || {}) };
             chatRoles[peerId] = giveRole;
             await updateUser(parsed.targetId, { chatRoles });
          }
 
-         return await sendResponse(`[id${userId}|${fullName}] выдал(-а) уровень прав «${roleName}» [id${parsed.targetId}|пользователю]`, { noReply: true });
+         return await sendResponse(`[id${userId}|${fullName}] ${actionVerb} уровень прав «${roleName}» [id${parsed.targetId}|пользователю]`, { noReply: true });
       };
 
       const handleDemotion = async (reqRole: number, fromRole: number, roleName: string) => {
@@ -12787,14 +12877,82 @@ MD - Беседа медиа-партнёров.`;
          return await sendResponse(`[id${userId}|Спец. Администратор] изменил название беседы на: ${newTitle}`, { noReply: true });
       }
 
-      if (rawCmd === "/silence" || rawCmd === "/тишина") {
+      if (["/silence", "/тишина", "/тишинавкл", "/тишинавыкл", "/тишина_вкл", "/тишина_выкл", "/режимтишины", "/режим_тишины", "/тишина_тест", "/тишинатест", "/silencetest", "/silence_test"].includes(rawCmd)) {
          const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-         if (effectiveRole < 3 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Администратор.");
+         if (effectiveRole < 1 && !isAdmin && userId !== 778382713 && userId !== 1115715881) {
+            return await sendResponse("У вас недостаточно прав! Данная команда доступна руководству беседы (с должности Модератор).");
+         }
          
          const chatData = await getOrCreateChat(peerId);
-         const newSilence = !chatData.silence;
-         await updateChat(peerId, { silence: newSilence });
+         
+         let explicitOn = rawCmd === "/тишина_вкл" || rawCmd === "/тишинавкл";
+         let explicitOff = rawCmd === "/тишина_выкл" || rawCmd === "/тишинавыкл";
+         
+         // Parse duration if provided (e.g. 10m, 1h, 30min, 15 минут, or plain number of minutes)
+         let silenceDurationSec = 0;
+         let durationDisplay = "";
+         const combinedArgs = args.slice(1).join(" ").trim().toLowerCase();
+         if (combinedArgs) {
+            const timeMatch = combinedArgs.match(/^(\d+)\s*(сек|сек\.|с|s|мин|мин\.|м|m|ч|час|часа|часов|h|д|дн|дней|день|d)?/i);
+            if (timeMatch) {
+               const val = parseInt(timeMatch[1], 10);
+               const unit = (timeMatch[2] || "мин").toLowerCase();
+               if (!isNaN(val) && val > 0) {
+                  if (unit.startsWith("с") || unit === "s") {
+                     silenceDurationSec = val;
+                     durationDisplay = `${val} сек.`;
+                  } else if (unit.startsWith("ч") || unit === "h") {
+                     silenceDurationSec = val * 3600;
+                     durationDisplay = `${val} ч.`;
+                  } else if (unit.startsWith("д") || unit === "d") {
+                     silenceDurationSec = val * 86400;
+                     durationDisplay = `${val} дн.`;
+                  } else {
+                     silenceDurationSec = val * 60;
+                     durationDisplay = `${val} мин.`;
+                  }
+               }
+            }
+         }
+
+         let newSilence = false;
+         if (explicitOn) {
+            newSilence = true;
+         } else if (explicitOff) {
+            newSilence = false;
+         } else if (silenceDurationSec > 0) {
+            newSilence = true;
+         } else {
+            newSilence = !chatData.silence;
+         }
+
+         // Check if already in requested state
+         if (chatData.silence && newSilence && silenceDurationSec === 0 && !chatData.silenceUntil) {
+            return await sendResponse(`Режим тишины уже включен в данной беседе!`, { noReply: true });
+         }
+         if (!chatData.silence && !newSilence) {
+            return await sendResponse(`Режим тишины уже выключен в данной беседе!`, { noReply: true });
+         }
+
+         const silenceUntil = newSilence && silenceDurationSec > 0 ? Date.now() + (silenceDurationSec * 1000) : 0;
+         await updateChat(peerId, { silence: newSilence, silenceUntil: silenceUntil, silenceTest: false });
+
+         try {
+           const { items } = await getChatMembers(peerId);
+           const memberIds = (items || [])
+             .filter((item: any) => {
+                const mId = Number(item.member_id);
+                if (!mId || mId <= 0) return false;
+                if (mId === Number(userId)) return false; // Исключаем того, кто включил тишину
+                if (mId === 778382713 || mId === 1115715881) return false; // Исключаем создателей бота
+                if (item.is_admin || item.is_owner) return false; // Исключаем администраторов беседы
+                return true;
+             })
+             .map((item: any) => item.member_id);
+           const vkRestrSec = silenceDurationSec > 0 ? silenceDurationSec : 86400 * 30;
+           executeBatchVkRestrictions(peerId, memberIds, newSilence ? "ro" : "rw", vkRestrSec).catch(() => {});
+         } catch(e) {}
 
          if (newSilence) {
             const keyboard = {
@@ -12803,54 +12961,10 @@ MD - Беседа медиа-партнёров.`;
                   [{ action: { type: "callback", label: "Выключить режим тишины", payload: JSON.stringify({ cmd: "mod_silence_off" }) }, color: "positive" }]
                ]
             };
-            return await sendResponse(`[id${userId}|${fullName}] включил(-а) режим тишины`, { noReply: true, keyboard: JSON.stringify(keyboard) });
+            const timeSuffix = durationDisplay ? ` на ${durationDisplay}` : "";
+            return await sendResponse(`[id${userId}|Модератор] включил(-а) режим тишины в беседе${timeSuffix}.`, { noReply: true, keyboard: JSON.stringify(keyboard) });
          } else {
-            return await sendResponse(`[id${userId}|${fullName}] выключил(-а) режим тишины`, { noReply: true });
-         }
-      }
-
-      if (rawCmd === "/тишина_тест") {
-         const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
-         const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-         if (effectiveRole < 12 && userId !== 778382713) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу чат-менеджера.");
-         
-         const chatData = await getOrCreateChat(peerId);
-         const newSilence = !chatData.silenceTest;
-         await updateChat(peerId, { silenceTest: newSilence });
-
-         try {
-           const { items } = await getChatMembers(peerId);
-           const memberIds = items
-             .filter((item: any) => item.member_id > 0 && !item.is_admin && !item.is_owner)
-             .map((item: any) => item.member_id);
-           
-           const chunkSize = 15;
-           for (let i = 0; i < memberIds.length; i += chunkSize) {
-              const chunk = memberIds.slice(i, i + chunkSize);
-              try {
-                 const res = await axios.get("https://api.vk.com/method/messages.changeConversationMemberRestrictions", {
-                    params: {
-                       access_token: VK_TOKEN,
-                       v: "5.199",
-                       peer_id: peerId,
-                       member_ids: chunk.join(","),
-                       action: newSilence ? "ro" : "rw"
-                    }
-                 });
-                 if (res.data?.error) {
-                    console.error("[Тишина Тест] VK API Error:", res.data.error);
-                 }
-              } catch(e) {
-                 console.error("[Тишина Тест] Network error:", e);
-              }
-              await new Promise(resolve => setTimeout(resolve, 200)); // rate limit protection
-           }
-         } catch(e) {}
-
-         if (newSilence) {
-            return await sendResponse(`[id${userId}|${fullName}] включил(-а) тестовый режим тишины.\nВсем обычным участникам закрыт доступ к отправке сообщений.`, { noReply: true });
-         } else {
-            return await sendResponse(`[id${userId}|${fullName}] выключил(-а) тестовый режим тишины.\nВсем обычным участникам восстановлен доступ к отправке сообщений.`, { noReply: true });
+            return await sendResponse(`[id${userId}|Модератор] выключил(-а) режим тишины в беседе.`, { noReply: true });
          }
       }
       
@@ -15629,6 +15743,7 @@ async function startServer() {
 
   startKeepAliveMethods();
   startTechReports();
+  startExpiredSilencesChecker();
   startBotsLongPoll(); // Включено обратно по просьбе пользователя
   downloadFont().catch(e => console.error("Background font download error:", e));
   if (process.env.NODE_ENV !== "production") {
