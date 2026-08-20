@@ -39,7 +39,7 @@ export async function sendVkMessage(vkToken: string, peerId: number, text: strin
     const { dedup_key, ...cleanedParams } = extraParams;
 
     const params: any = {
-      peer_id: peerId,
+      peer_ids: String(peerId),
       message: text,
       random_id: randomId,
       access_token: vkToken,
@@ -217,7 +217,15 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
   const tryDelete = async (params: any) => {
     try {
       const res = await vkApi.get("messages.delete", { params });
-      return res.data?.response === 1;
+      if (res.data?.response === 1) return true;
+      if (res.data?.response && typeof res.data.response === "object") {
+        const r = res.data.response;
+        const items = Array.isArray(r) ? r : Object.values(r);
+        if (items.length > 0) {
+           return items.some((item: any) => item && !item.error);
+        }
+      }
+      return false;
     } catch (e: any) {
       return false;
     }
@@ -226,20 +234,27 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
   const baseParams = { peer_id: peerId, delete_for_all: 1, access_token: vkToken, v: "5.199" };
 
   if (typeof msgIdOrObj === "number" || typeof msgIdOrObj === "string") {
-    const num = Number(msgIdOrObj);
-    if (!isNaN(num) && num > 0) {
-      let success = await tryDelete({ ...baseParams, message_ids: String(num) });
-      if (!success && peerId >= 2000000000) {
+    const ids = String(msgIdOrObj).split(",").map(x => x.trim()).filter(x => x && !isNaN(Number(x)));
+    if (ids.length > 0) {
+      const idsStr = ids.join(",");
+      let success = false;
+      if (peerId >= 2000000000) {
+        success = await tryDelete({ ...baseParams, peer_id: peerId, cmids: idsStr, conversation_message_ids: idsStr });
+      }
+      if (!success) {
+        success = await tryDelete({ ...baseParams, message_ids: idsStr });
+      }
+      if (!success && peerId >= 2000000000 && ids.length === 1) {
         // Fallback: lookup cmid
         try {
-          const getRes = await vkApi.get("messages.getById", { params: { access_token: vkToken, v: "5.199", message_ids: String(num) } });
+          const getRes = await vkApi.get("messages.getById", { params: { access_token: vkToken, v: "5.199", message_ids: idsStr } });
           const fetchedCmId = getRes.data?.response?.items?.[0]?.conversation_message_id;
           if (fetchedCmId) {
             success = await tryDelete({ ...baseParams, cmids: String(fetchedCmId), conversation_message_ids: String(fetchedCmId) });
             if (success) return true;
           }
         } catch (e) {}
-        success = await tryDelete({ ...baseParams, cmids: String(num), conversation_message_ids: String(num) });
+        success = await tryDelete({ ...baseParams, cmids: idsStr, conversation_message_ids: idsStr });
       }
       return success;
     }

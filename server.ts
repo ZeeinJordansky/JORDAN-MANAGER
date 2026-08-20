@@ -46,6 +46,7 @@ import { createCanvas, loadImage, registerFont } from "canvas";
 import { GoogleGenAI } from "@google/genai";
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import { CROCODILE_WORDS, sendVkMessage, editVkMessage, sendVkToast as importedSendVkToast, answerVkEvent, formatTimeRemaining, deleteVkMessage } from "./src/botGameEngine";
+import { extendedBadWordsList } from "./src/badWordsData";
 
 dotenv.config();
 
@@ -139,28 +140,7 @@ const ai = new GoogleGenAI({
 });
 
 
-const badWordsList = [
-  "тцк", "tck", "tzk", "tcku", "тзк",
-  "сво", "svo", "cvo", "cвo", "свo", "сvо",
-  "гей", "gay", "gey", "gei", "гейство", "гею", "геем", "геи", "гейчик", "гейский",
-  "хуесос", "хуесосик", "хуесосище", "xuesos", "xyesos", "huessos", "huysos", "xyisoc", "xuesoc", "huessoc", "хуисос", "хуесосина", "хуесоска", "хуесосы", "хуесосить", "хуесоси",
-  "пидор", "пидар", "pidor", "pidar", "пидорас", "pidoras", "педик", "pedik", "педрила", "пидорок", "пидорасина", "пидоры", "пидары",
-  "ебаный", "ebany", "yebany", "ebani", "ебанный", "ебаная", "ебаное", "ебаные", "ебать", "ебан", "ебуч", "ебло", "еблан", "ebat", "eblan", "ebuch", "eblo", "еблище", "заебал", "выебал", "ебись", "ебал", "ёбну", "ебну",
-  "бля", "блят", "бляд", "blya", "blyat", "блядина", "блядь", "бляди", "блядство",
-  "хуй", "хуи", "хуя", "хуе", "xui", "xyi", "hui", "huy", "хуила", "хуёк", "хуек", "хуйня", "хуище", "хуем", "хую", "нахуй", "похуй", "дохуя", "нихуя", "хуевый",
-  "пизд", "pizd", "пизда", "пиздец", "пиздобол", "пиздит", "пиздить", "пизду", "пиздой", "пизденка", "пиздос", "распиздяй",
-  "залуп", "zalup", "залупа", "залупочес",
-  "сука", "суч", "suka", "such", "сучка", "сучара", "суки", "сучий",
-  "гондон", "гандон", "gandon", "гандоны", "гондоны",
-  "шлюх", "shlyuh", "shliuh", "шлюха", "шлюхи", "шлюхо", "мраз", "mraz", "мразь", "мрази", "мразота",
-  "мудак", "mudak", "мудило", "чмо", "chmo", "чмошник", "чмырь", "дроч", "droch", "дрочить", "дрочер",
-  "урод", "urod", "уроды", "пошелнах", "идинах", "нах", "nah", "пипец", "курва", "kurwa",
-  "fuck", "bitch", "cunt", "dick", "pussy", "cock", "asshole", "bastard", "motherfucker", "faggot", "slut", "whore",
-  "нигер", "nigger", "nigga", "негр", "negr", "хач", "hach", "чурка", "хохол", "hohol", "хохлы", "москаль", "жид",
-  "мама", "мать", "маму", "матери", "мачех", "папа", "отец", "папу", "отца", "отчим", "родител", "родит", "родню",
-  "родня", "бабуш", "бабк", "дедуш", "дед", "сестр", "брат", "muta", "matera", "mother", "father", "mamka", "batya", "батя",
-  "сперм", "сиськ", "письк", "жоп", "задниц", "порно", "хер", "члено", "член"
-];
+const badWordsList = extendedBadWordsList;
 
 let dynamicBanWords: string[] = [];
 
@@ -1006,16 +986,7 @@ function isModerationCmd(cmd: string): boolean {
 async function autoDeleteCmdMessage(peerId: number, message: any, chatData: any) {
   if (chatData?.deleteCommand && message?.conversation_message_id && peerId > 2000000000) {
     try {
-      await axios.get("https://api.vk.com/method/messages.delete", {
-        params: {
-          access_token: VK_TOKEN,
-          v: "5.199",
-          conversation_message_ids: String(message.conversation_message_id),
-          cmids: String(message.conversation_message_id),
-          delete_for_all: 1,
-          peer_id: peerId
-        }
-      });
+      await deleteVkMessage(VK_TOKEN, peerId, message.conversation_message_id);
     } catch (e) {}
   }
 }
@@ -1406,7 +1377,12 @@ let globalSettings = {
   duelMultiplier: 2,
   rouletteMultiplier: 3,
   prizeMultiplier: 1,
-  inviteRewardEnabled: true
+  inviteRewardEnabled: true,
+  startBalance: 1000,
+  clansEnabled: true,
+  gamesEnabled: true,
+  maxWarnings: 3,
+  casinoMultiplier: 2
 };
 
 // Sync global settings from Firestore
@@ -1602,15 +1578,7 @@ async function deleteUserRecentMessages(peerId: number, userId: number, count: n
     const recent = chatRecentMessages.get(peerId) || [];
     const userCmIds = recent.filter(m => m.fromId === userId).slice(-count).map(m => m.cmId);
     if (userCmIds.length > 0) {
-      await vkApi.get("messages.delete", {
-        params: {
-          peer_id: peerId,
-          cmids: userCmIds.join(","),
-          delete_for_all: 1,
-          access_token: VK_TOKEN,
-          v: "5.131"
-        }
-      });
+      await deleteVkMessage(VK_TOKEN, peerId, userCmIds.join(","));
     }
   } catch (e) {}
 }
@@ -2144,7 +2112,7 @@ async function getOrCreateUser(userIdRaw: number | string, nameHint?: string) {
       role: userId === 778382713 || userId === 1 ? 12 : 0, // Special Leader for admin
       fullName: realVkName || nameHint || `User${userId}`,
       nick: "",
-      balance: 1000,
+      balance: globalSettings.startBalance || 1000,
       bank: 0,
       beer: 0,
       lastBeerTime: 0,
@@ -2329,9 +2297,13 @@ const getStatsWarnsPage = async (targetId: number) => {
     warnsListText = `1) ${mStr} | ${targetUser.warnReason || 'Нарушение правил'} | ${fmtD(targetUser.warnDate || Date.now())}`;
   }
 
+  const userLinkText = warnsCount === 0
+    ? `[id${targetId}|пользователя]`
+    : `пользователя [id${targetId}|${targetName}]`;
+
   const text = `Информация о предупреждениях:
 
-| У пользователя [id${targetId}|${targetName}] ${warnsCount} предупреждений.
+| У ${userLinkText} ${warnsCount} предупреждений.
 
 | Информация о активных предупреждениях:
 ${warnsListText}`;
@@ -3817,31 +3789,11 @@ async function deleteMessagesForUser(
 
     if (cmidsList.length > 0) {
       const ids = cmidsList.join(",");
-      await axios.get("https://api.vk.com/method/messages.delete", {
-        params: {
-          access_token: VK_TOKEN,
-          v: "5.199",
-          cmids: ids,
-          conversation_message_ids: ids,
-          delete_for_all: 1,
-          peer_id: peerId
-        }
-      }).catch(err => {
-        console.error("Error calling messages.delete in deleteMessagesForUser:", err?.response?.data || err?.message);
-      });
+      await deleteVkMessage(VK_TOKEN, peerId, ids);
 
       // Also delete the /clear command itself
       if (currentCmid) {
-        axios.get("https://api.vk.com/method/messages.delete", {
-          params: {
-            access_token: VK_TOKEN,
-            v: "5.199",
-            cmids: String(currentCmid),
-            conversation_message_ids: String(currentCmid),
-            delete_for_all: 1,
-            peer_id: peerId
-          }
-        }).catch(() => {});
+        await deleteVkMessage(VK_TOKEN, peerId, currentCmid);
       }
 
       chatRecentMessages.set(peerId, rM.filter(m => !cmidsList.includes(m.cmId) && m.cmId !== currentCmid));
@@ -3919,15 +3871,7 @@ async function purgeCommandMessages(peerId: number, maxCount: number = 200): Pro
     for (let i = 0; i < cmidsList.length; i += 100) {
       const chunk = cmidsList.slice(i, i + 100);
       try {
-        await axios.get("https://api.vk.com/method/messages.delete", {
-          params: {
-            access_token: VK_TOKEN,
-            v: "5.199",
-            cmids: chunk.join(","),
-            delete_for_all: 1,
-            peer_id: peerId
-          }
-        });
+        await deleteVkMessage(VK_TOKEN, peerId, chunk.join(","));
       } catch (err) {
         console.error("Error deleting purge chunk:", err);
       }
@@ -5731,8 +5675,8 @@ async function handleVkEvent(payload: any) {
           }
           if (cmd === "mod_unmute") {
              const targetU = await getOrCreateUser(tId);
-             const tName = targetU.fullName || targetU.nick || (await fetchVkFullName(tId)) || `User${tId}`;
-             const modName = clickingUser.fullName || clickingUser.nick || (await fetchVkFullName(userId)) || `Модератор`;
+             const tName = targetU.nick || targetU.fullName || `Пользователь #${tId}`;
+             const modName = clickingUser.nick || clickingUser.fullName || `Модератор`;
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Блокировка чата снята." });
              await updateUser(tId, { muteUntil: 0, muteReason: "", mutePeerId: 0 });
              targetU.muteUntil = 0;
@@ -5746,8 +5690,8 @@ async function handleVkEvent(payload: any) {
           }
           if (cmd === "mod_unban_chat") {
              const targetU = await getOrCreateUser(tId);
-             const tName = targetU.fullName || targetU.nick || (await fetchVkFullName(tId)) || `User${tId}`;
-             const modName = clickingUser.fullName || clickingUser.nick || (await fetchVkFullName(userId)) || `Модератор`;
+             const tName = targetU.nick || targetU.fullName || `Пользователь #${tId}`;
+             const modName = clickingUser.nick || clickingUser.fullName || `Модератор`;
              const chatBans = targetU.chatBans || {};
              delete chatBans[peerId];
              delete chatBans[String(peerId)];
@@ -5758,7 +5702,6 @@ async function handleVkEvent(payload: any) {
                  params: { access_token: VK_TOKEN, v: "5.199", peer_id: peerId, member_id: tId, for_all: 0 }
                });
              } catch (e) {}
-             const fullName = clickingUser.fullName || clickingUser.nick || `User${userId}`;
              await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|Модератор] снял(-а) блокировку с [id${tId}|пользователя]`);
              await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
              return;
@@ -5766,16 +5709,20 @@ async function handleVkEvent(payload: any) {
           if (cmd === "mod_ungban") {
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Глобальная блокировка снята." });
              await updateUser(tId, { gban: false, gbanReason: "", gbanBy: 0, gbanDate: 0, gbanExpiresAt: 0 });
-             const fullName = clickingUser.fullName || clickingUser.nick || `User${userId}`;
-             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${fullName}] снял(-а) глобальную блокировку с [id${tId}|пользователя] во всех беседах`);
+             const targetU = await getOrCreateUser(tId);
+             const tName = targetU.nick || targetU.fullName || `Пользователь #${tId}`;
+             const modName = clickingUser.nick || clickingUser.fullName || `Администратор`;
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${modName}] снял(-а) глобальную блокировку с [id${tId}|${tName}] во всех беседах`);
              await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
              return;
           }
           if (cmd === "mod_ungbanpl") {
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Глобальная блокировка игроков снята." });
              await updateUser(tId, { gbanpl: false, gbanplReason: "", gbanplBy: 0, gbanplDate: 0, gbanplExpiresAt: 0 });
-             const fullName = clickingUser.fullName || clickingUser.nick || `User${userId}`;
-             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${fullName}] снял(-а) глобальную блокировку с [id${tId}|пользователя] во всех беседах игроков`);
+             const targetU = await getOrCreateUser(tId);
+             const tName = targetU.nick || targetU.fullName || `Пользователь #${tId}`;
+             const modName = clickingUser.nick || clickingUser.fullName || `Администратор`;
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${modName}] снял(-а) глобальную блокировку с [id${tId}|${tName}] во всех беседах игроков`);
              await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
              return;
           }
@@ -7178,6 +7125,20 @@ async function handleVkEvent(payload: any) {
                return;
              }
           }
+          if (chatData.silenceTest) {
+             try {
+                await new Promise(r => setTimeout(r, 1500)); // Delay to ensure VK registers the user
+                await axios.get("https://api.vk.com/method/messages.changeConversationMemberRestrictions", {
+                   params: {
+                      access_token: VK_TOKEN,
+                      v: "5.199",
+                      peer_id: peerId,
+                      member_ids: String(memberId),
+                      action: "ro"
+                   }
+                });
+             } catch(e) {}
+          }
           if (chatData.welcometext_enabled && chatData.welcometext) {
              let wText = chatData.welcometext;
              wText = wText.replace(/%u/g, `id${memberId}`);
@@ -7475,7 +7436,8 @@ async function handleVkEvent(payload: any) {
             const currentWarns = (user.warnings || 0) + 1;
             await updateUser(userId, { warnings: currentWarns });
             const uName = user.fullName || user.nick || `User${userId}`;
-            if (currentWarns >= 3) {
+            const maxWarns = globalSettings.maxWarnings || 3;
+            if (currentWarns >= maxWarns) {
                try {
                  await axios.get(`https://api.vk.com/method/messages.removeChatUser`, { params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: userId }
                   });
@@ -7744,7 +7706,7 @@ async function handleVkEvent(payload: any) {
       cmdText = cmdText.replace(/^\[(?:club|id)\d+\|[^\]]+\]\s*/gi, "").trim();
       cmdText = cmdText.replace(/^@\S+\s*/gi, "").trim();
 
-      const prefixes = ["/", "!", ".", ",", "+", "*"];
+      const prefixes = ["/", "!", ".", ",", "+", "*", ";", ":"];
       const hasPrefix = prefixes.some(p => cmdText.startsWith(p));
       
       if (hasPrefix) {
@@ -8109,6 +8071,46 @@ async function handleVkEvent(payload: any) {
           actionStr = "Развелся(-ась)";
         } else if (["/промо"].includes(rawCmd)) {
           actionStr = "Активировал(-а) промокод";
+        } else if (["/mute", "/мут", "/заглушить", "/замутить", "/m"].includes(rawCmd)) {
+          actionStr = "выдал(-а) блокировку чата";
+        } else if (["/unmute", "/размут", "/анмут", "/унмут", "/unm"].includes(rawCmd)) {
+          actionStr = "снял(-а) блокировку чата";
+        } else if (["/warn", "/варн", "/w", "/пред", "/выдатьварн", "/выдатьпред"].includes(rawCmd)) {
+          actionStr = "выдал(-а) предупреждение";
+        } else if (["/unwarn", "/разварн", "/анварн", "/унварн", "/unw", "/снятьварн", "/снятьпред", "/снятьпредупреждение"].includes(rawCmd)) {
+          actionStr = "снял(-а) предупреждение";
+        } else if (["/ban", "/бан", "/b", "/забанить"].includes(rawCmd)) {
+          actionStr = "выдал(-а) блокировку в беседе";
+        } else if (["/unban", "/разбан", "/анбан", "/унбан", "/unb", "/разбанить"].includes(rawCmd)) {
+          actionStr = "снял(-а) блокировку в беседе";
+        } else if (["/sban", "/сбан"].includes(rawCmd)) {
+          actionStr = "тихо выдал(-а) блокировку в беседе";
+        } else if (["/sunban", "/сунбан"].includes(rawCmd)) {
+          actionStr = "тихо снял(-а) блокировку в беседе";
+        } else if (["/kick", "/кик", "/к", "/k", "/выгнать", "/исключить"].includes(rawCmd)) {
+          actionStr = "исключил(-а) пользователя";
+        } else if (["/purge", "/пурдж", "/чистка", "/clear"].includes(rawCmd)) {
+          actionStr = "очистил(-а) сообщения";
+        } else if (["/addmoder", "/выдатьмодера"].includes(rawCmd)) {
+          actionStr = "выдал(-а) права модератора";
+        } else if (["/addsenmoder"].includes(rawCmd)) {
+          actionStr = "выдал(-а) права старшего модератора";
+        } else if (["/addadmin"].includes(rawCmd)) {
+          actionStr = "выдал(-а) права администратора";
+        } else if (["/addsenadmin"].includes(rawCmd)) {
+          actionStr = "выдал(-а) права старшего администратора";
+        } else if (["/addzsa"].includes(rawCmd)) {
+          actionStr = "выдал(-а) права зам. спец. администратора";
+        } else if (["/addsa"].includes(rawCmd)) {
+          actionStr = "выдал(-а) права спец. администратора";
+        } else if (["/removerole", "/снятьроль", "/снятьправа"].includes(rawCmd)) {
+          actionStr = "снял(-а) права у пользователя";
+        } else if (["/welcometext"].includes(rawCmd)) {
+          actionStr = "настроил(-а) приветственное сообщение";
+        } else if (["/type", "/тип"].includes(rawCmd)) {
+          actionStr = "изменил(-а) тип беседы";
+        } else if (["/sync", "/синх", "/синк", "/синхронизация", "/синхронизировать", "/resync"].includes(rawCmd)) {
+          actionStr = "синхронизировал(-а) беседу";
         } else if (isGame) {
           if (["/казино", "/casino", "/к"].includes(rawCmd)) actionStr = "Сыграл(-а) в казино";
           else if (["/рулетка", "/roulette", "/р"].includes(rawCmd)) actionStr = "Сыграл(-а) в рулетку";
@@ -8218,7 +8220,7 @@ async function handleVkEvent(payload: any) {
         try {
           const loadingRes = await sendVkMessage(VK_TOKEN, peerId, "Пожалуйста подождите, загружаю вашу цитату...");
           if (loadingRes?.response) {
-            initialMessageId = Array.isArray(loadingRes.response) ? loadingRes.response[0]?.message_id || loadingRes.response[0] : (loadingRes.response.message_id || loadingRes.response);
+            initialMessageId = Array.isArray(loadingRes.response) ? loadingRes.response[0]?.conversation_message_id || loadingRes.response[0]?.message_id || loadingRes.response[0] : (loadingRes.response.message_id || loadingRes.response);
           }
         } catch (e) {}
 
@@ -8359,7 +8361,7 @@ async function handleVkEvent(payload: any) {
           const waitRes = await sendResponse("Пожалуйста подождите, ваш запрос обрабатывается...");
           if (waitRes?.response) {
             if (Array.isArray(waitRes.response)) {
-              waitMsgId = typeof waitRes.response[0] === "object" ? waitRes.response[0].message_id : waitRes.response[0];
+              waitMsgId = typeof waitRes.response[0] === "object" ? waitRes.response[0].conversation_message_id || waitRes.response[0].message_id : waitRes.response[0];
             } else if (typeof waitRes.response === "object") {
               waitMsgId = waitRes.response.message_id;
             } else {
@@ -12457,6 +12459,10 @@ MD - Беседа медиа-партнёров.`;
          const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
 
+         if (effectiveRole < 8 && !isAdmin && userId !== 778382713) {
+           return await sendResponse("У вас недостаточно прав! Настройка реакций доступна только с должности Спец. Руководитель.");
+         }
+
          const reactionMap: Record<number, string> = {
            1: "👍", 2: "👎", 3: "❤️", 4: "🔥", 5: "💩", 6: "👏", 7: "😢", 8: "😡",
            9: "🥱", 10: "🌭", 11: "🤡", 12: "😱", 13: "⚡", 14: "💔", 15: "🎉", 16: "🍓"
@@ -12640,6 +12646,13 @@ MD - Беседа медиа-партнёров.`;
       }
 
       if (["/мояреакция", "/myreaction", "/моя_реакция", "/личнаяреакция", "/личная_реакция"].includes(rawCmd)) {
+         const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
+
+         if (effectiveRole < 8 && !isAdmin && userId !== 778382713) {
+           return await sendResponse("У вас недостаточно прав! Настройка реакций доступна только с должности Спец. Руководитель.");
+         }
+
          const reactionMap: Record<number, string> = {
            1: "👍", 2: "👎", 3: "❤️", 4: "🔥", 5: "💩", 6: "👏", 7: "😢", 8: "😡",
            9: "🥱", 10: "🌭", 11: "🤡", 12: "😱", 13: "⚡", 14: "💔", 15: "🎉", 16: "🍓"
@@ -12693,7 +12706,7 @@ MD - Беседа медиа-партнёров.`;
          const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
          if (effectiveRole < 8 && !isAdmin && userId !== 778382713) {
-           return await sendResponse("У вас недостаточно прав! Данная команда доступна руководству чат-менеджера (с должности Специальный администратор / Владелец).");
+           return await sendResponse("У вас недостаточно прав! Настройка реакций доступна только с должности Спец. Руководитель.");
          }
 
          const reactionMap: Record<number, string> = {
@@ -12793,6 +12806,51 @@ MD - Беседа медиа-партнёров.`;
             return await sendResponse(`[id${userId}|${fullName}] включил(-а) режим тишины`, { noReply: true, keyboard: JSON.stringify(keyboard) });
          } else {
             return await sendResponse(`[id${userId}|${fullName}] выключил(-а) режим тишины`, { noReply: true });
+         }
+      }
+
+      if (rawCmd === "/тишина_тест") {
+         const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
+         if (effectiveRole < 12 && userId !== 778382713) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу чат-менеджера.");
+         
+         const chatData = await getOrCreateChat(peerId);
+         const newSilence = !chatData.silenceTest;
+         await updateChat(peerId, { silenceTest: newSilence });
+
+         try {
+           const { items } = await getChatMembers(peerId);
+           const memberIds = items
+             .filter((item: any) => item.member_id > 0 && !item.is_admin && !item.is_owner)
+             .map((item: any) => item.member_id);
+           
+           const chunkSize = 15;
+           for (let i = 0; i < memberIds.length; i += chunkSize) {
+              const chunk = memberIds.slice(i, i + chunkSize);
+              try {
+                 const res = await axios.get("https://api.vk.com/method/messages.changeConversationMemberRestrictions", {
+                    params: {
+                       access_token: VK_TOKEN,
+                       v: "5.199",
+                       peer_id: peerId,
+                       member_ids: chunk.join(","),
+                       action: newSilence ? "ro" : "rw"
+                    }
+                 });
+                 if (res.data?.error) {
+                    console.error("[Тишина Тест] VK API Error:", res.data.error);
+                 }
+              } catch(e) {
+                 console.error("[Тишина Тест] Network error:", e);
+              }
+              await new Promise(resolve => setTimeout(resolve, 200)); // rate limit protection
+           }
+         } catch(e) {}
+
+         if (newSilence) {
+            return await sendResponse(`[id${userId}|${fullName}] включил(-а) тестовый режим тишины.\nВсем обычным участникам закрыт доступ к отправке сообщений.`, { noReply: true });
+         } else {
+            return await sendResponse(`[id${userId}|${fullName}] выключил(-а) тестовый режим тишины.\nВсем обычным участникам восстановлен доступ к отправке сообщений.`, { noReply: true });
          }
       }
       
@@ -13049,7 +13107,7 @@ MD - Беседа медиа-партнёров.`;
             });
             if (loadRes?.response) {
               loadingMsgId = Array.isArray(loadRes.response)
-                ? (loadRes.response[0]?.message_id || loadRes.response[0]?.conversation_message_id || loadRes.response[0])
+                ? (loadRes.response[0]?.conversation_message_id || loadRes.response[0]?.message_id || loadRes.response[0]?.conversation_message_id || loadRes.response[0])
                 : (loadRes.response.message_id || loadRes.response);
             }
           } catch (e) {}
@@ -14112,15 +14170,7 @@ MD - Беседа медиа-партнёров.`;
           const g = giveaways.get(peerId);
           if (g) {
             try {
-              await vkApi.get("messages.delete", {
-                params: {
-                  peer_id: peerId,
-                  cmids: String(g.cmId),
-                  delete_for_all: 1,
-                  access_token: VK_TOKEN,
-                  v: "5.131"
-                }
-              });
+              await deleteVkMessage(VK_TOKEN, peerId, g.cmId);
             } catch (e) {}
 
             if (g.participants.length === 0) {
@@ -14425,7 +14475,7 @@ MD - Беседа медиа-партнёров.`;
           const waitRes = await sendResponse("Пожалуйста подождите, ваша статистика загружается...");
           if (waitRes?.response) {
             if (Array.isArray(waitRes.response)) {
-              waitMsgId = typeof waitRes.response[0] === "object" ? waitRes.response[0].message_id : waitRes.response[0];
+              waitMsgId = typeof waitRes.response[0] === "object" ? waitRes.response[0].conversation_message_id || waitRes.response[0].message_id : waitRes.response[0];
             } else if (typeof waitRes.response === "object") {
               waitMsgId = waitRes.response.message_id;
             } else {
@@ -15114,6 +15164,171 @@ app.get("/api/dashboard/user-immunity-status", async (req, res) => {
   }
 });
 
+// Update Global Settings API
+app.post("/api/dashboard/settings/global", async (req, res) => {
+  const auth = authorizeRequest(req);
+  if (!auth.authorized) return res.status(auth.status || 401).json({ error: auth.error });
+
+  try {
+    const { 
+      jcRate, 
+      duelMultiplier, 
+      rouletteMultiplier, 
+      prizeMultiplier, 
+      inviteRewardEnabled,
+      startBalance,
+      clansEnabled,
+      gamesEnabled,
+      maxWarnings,
+      casinoMultiplier
+    } = req.body;
+    const updates: any = {};
+    if (jcRate !== undefined) updates.jcRate = Number(jcRate);
+    if (duelMultiplier !== undefined) updates.duelMultiplier = Number(duelMultiplier);
+    if (rouletteMultiplier !== undefined) updates.rouletteMultiplier = Number(rouletteMultiplier);
+    if (prizeMultiplier !== undefined) updates.prizeMultiplier = Number(prizeMultiplier);
+    if (inviteRewardEnabled !== undefined) updates.inviteRewardEnabled = Boolean(inviteRewardEnabled);
+    if (startBalance !== undefined) updates.startBalance = Number(startBalance);
+    if (clansEnabled !== undefined) updates.clansEnabled = Boolean(clansEnabled);
+    if (gamesEnabled !== undefined) updates.gamesEnabled = Boolean(gamesEnabled);
+    if (maxWarnings !== undefined) updates.maxWarnings = Number(maxWarnings);
+    if (casinoMultiplier !== undefined) updates.casinoMultiplier = Number(casinoMultiplier);
+
+    await updateGlobalSettings(updates);
+    res.json({ success: true, settings: globalSettings });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Unlock Special Access endpoint for logged-in sessions
+app.post("/api/auth/unlock-special", async (req, res) => {
+  const auth = authorizeRequest(req);
+  if (!auth.authorized) return res.status(auth.status || 401).json({ error: auth.error });
+
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: "Введите Особый Код!" });
+
+  const session = auth.session;
+  const cleanCode = String(code).trim();
+
+  const isMaster = cleanCode === "Jordanmanager";
+  const isSessionSpecial = session.specialCode && cleanCode === session.specialCode;
+
+  if (isMaster || isSessionSpecial) {
+    session.isSpecial = true;
+    res.json({ success: true, isSpecial: true });
+  } else {
+    res.status(400).json({ error: "Неверный Особый Код!" });
+  }
+});
+
+// Get VK Profiles with Photos & Names
+let cachedGroupPhoto = "";
+async function getGroupPhoto() {
+  if (cachedGroupPhoto) return cachedGroupPhoto;
+  try {
+    const cleanGroupId = Math.abs(parseInt(String(VK_GROUP_ID).replace("-", "")));
+    if (cleanGroupId && VK_TOKEN) {
+      const res = await axios.get("https://api.vk.com/method/groups.getById", {
+        params: {
+          access_token: VK_TOKEN,
+          v: "5.199",
+          group_ids: cleanGroupId,
+          fields: "photo_100"
+        }
+      });
+      if (res.data?.response?.[0]?.photo_100) {
+        cachedGroupPhoto = res.data.response[0].photo_100;
+      }
+    }
+  } catch (e) {}
+  return cachedGroupPhoto || "https://vk.com/images/community_100.png";
+}
+
+app.get("/api/dashboard/vk-profiles", async (req, res) => {
+  const auth = authorizeRequest(req);
+  if (!auth.authorized) return res.status(auth.status || 401).json({ error: auth.error });
+
+  const idsStr = req.query.ids as string;
+  if (!idsStr) return res.json({ profiles: {}, botPhoto: "https://vk.com/images/community_100.png" });
+
+  const ids = idsStr.split(",").map(id => parseInt(id.trim())).filter(id => !isNaN(id) && id > 0);
+  const botPhoto = await getGroupPhoto().catch(() => "https://vk.com/images/community_100.png");
+
+  if (ids.length === 0) {
+    return res.json({ profiles: {}, botPhoto });
+  }
+
+  const profiles: any = {};
+
+  // Batch into chunks of 100 to stick to VK limits
+  const chunkSize = 100;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    try {
+      const vkRes = await axios.get("https://api.vk.com/method/users.get", {
+        params: {
+          access_token: VK_TOKEN,
+          v: "5.199",
+          user_ids: chunk.join(","),
+          fields: "photo_100,screen_name"
+        }
+      });
+      if (vkRes.data?.response) {
+        vkRes.data.response.forEach((u: any) => {
+          profiles[u.id] = {
+            id: u.id,
+            fullName: `${u.first_name} ${u.last_name}`,
+            photo: u.photo_100 || "",
+            screenName: u.screen_name || `id${u.id}`
+          };
+          
+          // Asynchronously update profile fields in Firestore cache
+          const userRef = firestoreDb.collection("users").doc(u.id.toString());
+          userRef.set({ fullName: `${u.first_name} ${u.last_name}`, photo: u.photo_100 || "" }, { merge: true }).catch(() => {});
+        });
+      }
+    } catch (err) {
+      console.error("Error calling VK users.get in profiles endpoint:", err);
+    }
+  }
+
+  // Inject nickname (nick) from Firestore cache
+  try {
+    const usersData = await Promise.all(ids.map(async (id) => {
+      const cached = userCache.get(id);
+      if (cached) return { id, data: cached };
+      const doc = await firestoreDb.collection("users").doc(id.toString()).get();
+      if (doc.exists) {
+        const d = doc.data();
+        userCache.set(id, d);
+        return { id, data: d };
+      }
+      return { id, data: null };
+    }));
+
+    usersData.forEach((item) => {
+      if (item.data) {
+        if (!profiles[item.id]) {
+          profiles[item.id] = {
+            id: item.id,
+            fullName: item.data.fullName || `User${item.id}`,
+            photo: item.data.photo || "",
+            nick: item.data.nick || ""
+          };
+        } else {
+          profiles[item.id].nick = item.data.nick || "";
+        }
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching Firestore user profiles:", err);
+  }
+
+  res.json({ profiles, botPhoto });
+});
+
 // Stats API
 app.get("/api/dashboard/stats", async (req, res) => {
   const auth = authorizeRequest(req);
@@ -15145,7 +15360,8 @@ app.get("/api/dashboard/stats", async (req, res) => {
       jcRate: globalSettings.jcRate,
       activeCrocodiles: crocGames.size,
       activeDuels: duelGames.size,
-      activeRps: rpsGames.size
+      activeRps: rpsGames.size,
+      globalSettings
     });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -15431,3 +15647,4 @@ async function startServer() {
 }
 
 startServer();
+

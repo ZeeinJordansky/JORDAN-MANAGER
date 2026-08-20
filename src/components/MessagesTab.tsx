@@ -15,6 +15,8 @@ export default function MessagesTab({ secret }: MessagesTabProps) {
   const [selectedUser, setSelectedUser] = useState<number | null>(null);
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [profiles, setProfiles] = useState<Record<number, { fullName: string; photo: string; nick?: string }>>({});
+  const [botPhoto, setBotPhoto] = useState<string>("https://vk.com/images/community_100.png");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -26,14 +28,44 @@ export default function MessagesTab({ secret }: MessagesTabProps) {
     return () => unsubscribe();
   }, []);
 
+  // Fetch VK profiles for users in DMs list
+  useEffect(() => {
+    const dmMessages = messages.filter(m => !m.peerId || m.peerId < 2000000000);
+    const uniqueIds = Array.from(new Set(dmMessages.map(m => m.userId))).filter(id => id && (id as number) > 0);
+    if (uniqueIds.length === 0) return;
+
+    const fetchProfiles = async () => {
+      try {
+        const response = await axios.get(`/api/dashboard/vk-profiles?ids=${uniqueIds.join(',')}`, {
+          headers: { 'Authorization': `Bearer ${secret}` }
+        });
+        if (response.data) {
+          if (response.data.profiles) {
+            setProfiles(prev => ({ ...prev, ...response.data.profiles }));
+          }
+          if (response.data.botPhoto) {
+            setBotPhoto(response.data.botPhoto);
+          }
+        }
+      } catch (err) {
+        console.error("Error loading VK profiles:", err);
+      }
+    };
+
+    fetchProfiles();
+  }, [messages, secret]);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, selectedUser]);
 
-  const users = Array.from(new Set(messages.map(m => m.userId))).map(userId => {
-    const lastMsg = [...messages].reverse().find(m => m.userId === userId);
+  // Filter out any messages from group chats
+  const dmMessages = messages.filter(m => !m.peerId || m.peerId < 2000000000);
+
+  const users = Array.from(new Set(dmMessages.map(m => m.userId))).map(userId => {
+    const lastMsg = [...dmMessages].reverse().find(m => m.userId === userId);
     return {
       id: userId,
       lastMessage: lastMsg?.text || '',
@@ -41,7 +73,7 @@ export default function MessagesTab({ secret }: MessagesTabProps) {
     };
   }).sort((a, b) => b.timestamp - a.timestamp);
 
-  const selectedMessages = messages.filter(m => m.userId === selectedUser);
+  const selectedMessages = dmMessages.filter(m => m.userId === selectedUser);
 
   const handleSend = async () => {
     if (!inputText.trim() || !selectedUser || isSending) return;
@@ -78,21 +110,32 @@ export default function MessagesTab({ secret }: MessagesTabProps) {
               Нет активных сессий
             </div>
           ) : (
-            users.map(user => (
-              <button
-                key={user.id}
-                onClick={() => setSelectedUser(user.id)}
-                className={`w-full p-4 flex items-center gap-3 hover:bg-white/5 transition-colors border-b border-border-dim/50 ${selectedUser === user.id ? 'bg-vk-blue/10' : ''}`}
-              >
-                <div className="w-10 h-10 bg-bg-main rounded-full flex items-center justify-center flex-shrink-0 border border-border-dim">
-                  <User className="w-5 h-5 text-text-muted" />
-                </div>
-                <div className="text-left overflow-hidden">
-                  <div className={`text-sm font-bold truncate ${selectedUser === user.id ? 'text-vk-blue' : 'text-text-main'}`}>ID: {user.id}</div>
-                  <div className="text-[11px] text-text-muted truncate mt-0.5">{user.lastMessage}</div>
-                </div>
-              </button>
-            ))
+            users.map(user => {
+              const profile = profiles[user.id];
+              const displayName = profile?.fullName || `Пользователь #${user.id}`;
+              const displayNick = profile?.nick ? ` (${profile.nick})` : '';
+              return (
+                <button
+                  key={user.id}
+                  onClick={() => setSelectedUser(user.id)}
+                  className={`w-full p-4 flex items-center gap-3 hover:bg-white/5 transition-colors border-b border-border-dim/50 ${selectedUser === user.id ? 'bg-vk-blue/10' : ''}`}
+                >
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 border border-border-dim overflow-hidden bg-bg-main">
+                    {profile?.photo ? (
+                      <img src={profile.photo} alt={displayName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <User className="w-5 h-5 text-text-muted" />
+                    )}
+                  </div>
+                  <div className="text-left overflow-hidden">
+                    <div className={`text-sm font-bold truncate ${selectedUser === user.id ? 'text-vk-blue' : 'text-text-main'}`}>
+                      {displayName}{displayNick}
+                    </div>
+                    <div className="text-[11px] text-text-muted truncate mt-0.5">{user.lastMessage}</div>
+                  </div>
+                </button>
+              );
+            })
           )}
         </div>
       </div>
@@ -102,12 +145,25 @@ export default function MessagesTab({ secret }: MessagesTabProps) {
         {selectedUser ? (
           <>
             <div className="p-4 border-b border-border-dim bg-bg-card flex items-center justify-between">
-              <div className="font-bold text-text-main flex items-center gap-2">
-                <span className="text-vk-blue">#</span> User_{selectedUser}
+              <div className="font-bold text-text-main flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full border border-border-dim overflow-hidden bg-bg-main shrink-0">
+                  {profiles[selectedUser]?.photo ? (
+                    <img src={profiles[selectedUser].photo} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <User className="w-4 h-4 text-text-muted m-2.5" />
+                  )}
+                </div>
+                <div>
+                  <div className="text-xs font-bold leading-none text-white">
+                    {profiles[selectedUser]?.fullName || `Пользователь #${selectedUser}`}
+                    {profiles[selectedUser]?.nick && <span className="text-[#00BFFF] ml-1">({profiles[selectedUser].nick})</span>}
+                  </div>
+                  <div className="text-[9px] text-text-muted mt-1 uppercase font-semibold font-mono">ID: {selectedUser}</div>
+                </div>
               </div>
               <div className="flex items-center gap-2 text-[10px] uppercase font-bold text-green-500 bg-green-500/10 px-2 py-0.5 rounded">
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                Active Session
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                Диалог активен
               </div>
             </div>
             
@@ -118,9 +174,19 @@ export default function MessagesTab({ secret }: MessagesTabProps) {
                     key={msg.id || idx}
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`flex ${msg.fromBot ? 'justify-end' : 'justify-start'}`}
+                    className={`flex items-start gap-2.5 ${msg.fromBot ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div className={`max-w-[75%] p-3 rounded-lg text-[13px] leading-relaxed shadow-sm ${
+                    {!msg.fromBot && (
+                      <div className="w-7 h-7 rounded-full border border-border-dim overflow-hidden shrink-0 bg-bg-main">
+                        {profiles[msg.userId]?.photo ? (
+                          <img src={profiles[msg.userId].photo} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <User className="w-3.5 h-3.5 text-text-muted m-1.5" />
+                        )}
+                      </div>
+                    )}
+
+                    <div className={`max-w-[70%] p-3 rounded-lg text-[13px] leading-relaxed shadow-sm ${
                       msg.fromBot 
                         ? 'bg-vk-blue text-white rounded-tr-none' 
                         : 'bg-bg-card text-text-main border border-border-dim rounded-tl-none'
@@ -130,6 +196,12 @@ export default function MessagesTab({ secret }: MessagesTabProps) {
                         {new Date(msg.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </div>
                     </div>
+
+                    {msg.fromBot && (
+                      <div className="w-7 h-7 rounded-full border border-border-dim overflow-hidden shrink-0 bg-bg-main">
+                        <img src={botPhoto} alt="Bot" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      </div>
+                    )}
                   </motion.div>
                 ))}
               </AnimatePresence>
