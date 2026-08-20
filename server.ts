@@ -146,18 +146,38 @@ function normalizeTextForBanCheck(str: string): string {
   if (!str) return "";
   let s = str.toLowerCase();
   
+  // 1. Comprehensive homoglyph & leetspeak mapping
   const map: Record<string, string> = {
-    "0": "о", "o": "о", "1": "и", "i": "и", "l": "л", "3": "е", "e": "е", "4": "а", "a": "а",
-    "5": "с", "s": "с", "c": "с", "7": "т", "t": "т", "8": "в", "b": "в", "y": "у", "u": "у",
-    "k": "к", "h": "х", "x": "х", "p": "р", "r": "р", "m": "м", "n": "н", "g": "г", "d": "д",
-    "z": "з", "v": "в", "w": "в", "j": "й", "ё": "е"
+    "0": "о", "o": "о", "о": "о", "ö": "о", "ó": "о", "ò": "о", "ô": "о", "ø": "о",
+    "1": "и", "i": "и", "и": "и", "й": "и", "ì": "и", "í": "и", "î": "и", "ï": "и", "!": "и", "|": "и",
+    "l": "л", "л": "л", "3": "е", "e": "е", "е": "е", "ё": "е", "è": "е", "é": "е", "ê": "е", "ë": "е", "€": "е",
+    "4": "а", "a": "а", "а": "а", "@": "а", "à": "а", "á": "а", "â": "а", "ã": "а", "ä": "а", "å": "а",
+    "5": "с", "s": "с", "с": "с", "c": "с", "$": "с", "7": "т", "t": "т", "т": "т", "+": "т",
+    "8": "в", "b": "в", "в": "в", "y": "у", "u": "у", "у": "у", "ù": "у", "ú": "у", "û": "у", "ü": "у",
+    "k": "к", "к": "к", "h": "х", "x": "х", "х": "х", "p": "р", "r": "р", "р": "р",
+    "m": "м", "м": "м", "n": "н", "н": "н", "g": "г", "г": "г", "d": "д", "д": "д",
+    "z": "з", "з": "з", "v": "в", "w": "в", "j": "й", "ф": "ф", "f": "ф", "щ": "щ", "ш": "ш",
+    "ч": "ч", "ц": "ц", "ъ": "", "ь": "", "э": "е", "ю": "ю", "я": "я"
   };
   
-  let normalized = "";
+  let mapped = "";
   for (let ch of s) {
-    normalized += map[ch] || ch;
+    if (map[ch] !== undefined) {
+      mapped += map[ch];
+    } else if (/[а-яa-z0-9]/i.test(ch)) {
+      mapped += ch;
+    }
   }
-  return normalized.replace(/[^а-я0-9]/g, "");
+
+  // Collapse repeated characters (e.g. "пппиииззздддааа" -> "пизда")
+  let collapsed = "";
+  for (let i = 0; i < mapped.length; i++) {
+    if (i === 0 || mapped[i] !== mapped[i - 1]) {
+      collapsed += mapped[i];
+    }
+  }
+
+  return collapsed;
 }
 
 const shortBadWords = new Set([
@@ -169,19 +189,35 @@ const shortBadWords = new Set([
 ]);
 
 let cachedShortBadSet = new Set<string>();
-let cachedLongBadRaws: string[] = [];
-let cachedLongBadNorms: string[] = [];
+let cachedBadWordsSet = new Set<string>();
 let badWordsCacheInitialized = false;
+
+const CORE_MAT_REGEXES = [
+  /х[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[уеёi10uу][\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[йi1|]/i,
+  /п[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[иi1|!][\s\d_*\-+.!|@#$%^&()~`"'\/\\]*з[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*д/i,
+  /е[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*б[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[аоуеиiл]/i,
+  /б[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*л[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*я[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[дть]/i,
+  /м[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[уu][\s\d_*\-+.!|@#$%^&()~`"'\/\\]*д[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[аa][\s\d_*\-+.!|@#$%^&()~`"'\/\\]*к/i,
+  /з[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[аa][\s\d_*\-+.!|@#$%^&()~`"'\/\\]*л[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[уu][\s\d_*\-+.!|@#$%^&()~`"'\/\\]*п/i,
+  /г[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[аaоo][\s\d_*\-+.!|@#$%^&()~`"'\/\\]*н[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*д[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*о[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*н/i,
+  /ш[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*л[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[юu][\s\d_*\-+.!|@#$%^&()~`"'\/\\]*х/i,
+  /п[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[иi1!][\s\d_*\-+.!|@#$%^&()~`"'\/\\]*д[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[оo0][\s\d_*\-+.!|@#$%^&()~`"'\/\\]*р/i,
+  /х[\s\d_*\-+.!|@#$%^&()~`"'\/\\]*[еe3ё][\s\d_*\-+.!|@#$%^&()~`"'\/\\]*р/i,
+];
 
 function rebuildBadWordsCache() {
   const allBad = [...badWordsList, ...dynamicBanWords];
   const shortSet = new Set<string>();
-  const longRaws: string[] = [];
-  const longNorms: string[] = [];
+  const badSet = new Set<string>();
 
   for (const sw of shortBadWords) {
     const swClean = sw.toLowerCase().replace(/[^а-яa-z0-9ё]/g, "");
-    if (swClean) shortSet.add(swClean);
+    if (swClean) {
+      shortSet.add(swClean);
+      badSet.add(swClean);
+      const swNorm = normalizeTextForBanCheck(swClean);
+      if (swNorm) badSet.add(swNorm);
+    }
   }
 
   for (let i = 0; i < allBad.length; i++) {
@@ -191,18 +227,18 @@ function rebuildBadWordsCache() {
     const wRaw = wLower.replace(/[^а-яa-z0-9ё]/g, "");
     if (!wRaw) continue;
 
+    badSet.add(wRaw);
+    const wNorm = normalizeTextForBanCheck(w);
+    if (wNorm) badSet.add(wNorm);
+
     if (wRaw.length <= 4 || shortBadWords.has(wRaw) || shortBadWords.has(wLower)) {
       shortSet.add(wRaw);
-    } else {
-      longRaws.push(wRaw);
-      const wNorm = normalizeTextForBanCheck(w);
-      if (wNorm) longNorms.push(wNorm);
+      if (wNorm) shortSet.add(wNorm);
     }
   }
 
   cachedShortBadSet = shortSet;
-  cachedLongBadRaws = longRaws;
-  cachedLongBadNorms = longNorms;
+  cachedBadWordsSet = badSet;
   badWordsCacheInitialized = true;
 }
 
@@ -775,31 +811,52 @@ const containsBadWord = (text: string) => {
     rebuildBadWordsCache();
   }
 
+  // 1. Fast regex checks against core profanity patterns (handles spaces/symbols inserted between characters)
+  for (let i = 0; i < CORE_MAT_REGEXES.length; i++) {
+    if (CORE_MAT_REGEXES[i].test(text)) return true;
+  }
+
+  // 2. Tokenize raw text
   const rawLower = text.toLowerCase().replace(/[^а-яa-z0-9ё\s]/g, " ");
   const words = rawLower.split(/\s+/).filter(Boolean);
 
   for (let i = 0; i < words.length; i++) {
     const token = words[i];
-    if (cachedShortBadSet.has(token)) return true;
+    if (cachedShortBadSet.has(token) || cachedBadWordsSet.has(token)) return true;
     if (token.length >= 3) {
       const p1 = token.slice(0, token.length - 1);
-      if (p1.length >= 3 && cachedShortBadSet.has(p1)) return true;
+      if (p1.length >= 3 && (cachedShortBadSet.has(p1) || cachedBadWordsSet.has(p1))) return true;
       const p2 = token.slice(0, token.length - 2);
-      if (p2.length >= 2 && cachedShortBadSet.has(p2)) return true;
+      if (p2.length >= 2 && (cachedShortBadSet.has(p2) || cachedBadWordsSet.has(p2))) return true;
     }
   }
 
-  const cleanNoSpace = rawLower.replace(/\s+/g, "");
-  if (cleanNoSpace.length > 4) {
-    for (let i = 0; i < cachedLongBadRaws.length; i++) {
-      if (cleanNoSpace.includes(cachedLongBadRaws[i])) return true;
+  // 3. Normalize whole text (removes symbols, homoglyphs, zero-width chars, repeats)
+  const normFull = normalizeTextForBanCheck(text);
+  if (!normFull) return false;
+
+  if (cachedBadWordsSet.has(normFull)) return true;
+
+  // 4. Tokenize normalized text
+  const normWords = normFull.split(/\s+/).filter(Boolean);
+  for (let i = 0; i < normWords.length; i++) {
+    const nw = normWords[i];
+    if (cachedBadWordsSet.has(nw) || cachedShortBadSet.has(nw)) return true;
+    if (nw.length >= 3) {
+      const p1 = nw.slice(0, nw.length - 1);
+      if (p1.length >= 3 && cachedBadWordsSet.has(p1)) return true;
+      const p2 = nw.slice(0, nw.length - 2);
+      if (p2.length >= 2 && cachedBadWordsSet.has(p2)) return true;
     }
   }
 
-  const normalized = normalizeTextForBanCheck(text);
-  if (normalized.length > 4) {
-    for (let i = 0; i < cachedLongBadNorms.length; i++) {
-      if (normalized.includes(cachedLongBadNorms[i])) return true;
+  // 5. Sliding window / substring scan over normalized full string (catches words written with spaces e.g. "п и з д а")
+  if (normFull.length >= 3) {
+    for (let len = 3; len <= Math.min(normFull.length, 12); len++) {
+      for (let i = 0; i <= normFull.length - len; i++) {
+        const sub = normFull.slice(i, i + len);
+        if (cachedShortBadSet.has(sub)) return true;
+      }
     }
   }
 
@@ -8104,7 +8161,7 @@ async function handleVkEvent(payload: any) {
                                  .replace(/@\S+/gi, " ")
                                  .trim();
         if (rawArgsText && containsBadWord(rawArgsText)) {
-          return await sendVkMessage(VK_TOKEN, peerId, "В аргументах команды указаны Ban-words.", {
+          return await sendVkMessage(VK_TOKEN, peerId, "В аргументах команды указаны запрет. слова. Попробуйте снова  без запрет. слов.", {
             forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
           });
         }
