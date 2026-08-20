@@ -1820,17 +1820,45 @@ const checkFlood = (peerId, userId, chatData) => {
       return times.length >= 5;
     };
 
+function declensionWord(number: number, one: string, two: string, five: string): string {
+  const n = Math.abs(Math.floor(number)) % 100;
+  const n1 = n % 10;
+  if (n > 10 && n < 20) return five;
+  if (n1 > 1 && n1 < 5) return two;
+  if (n1 === 1) return one;
+  return five;
+}
+
+function formatTimeAccusative(count: number, unit: "sec" | "min" | "hour" | "day" | "month"): string {
+  if (unit === "sec") {
+    return `${count} ${declensionWord(count, "секунду", "секунды", "секунд")}`;
+  }
+  if (unit === "min") {
+    return `${count} ${declensionWord(count, "минуту", "минуты", "минут")}`;
+  }
+  if (unit === "hour") {
+    return `${count} ${declensionWord(count, "час", "часа", "часов")}`;
+  }
+  if (unit === "day") {
+    return `${count} ${declensionWord(count, "день", "дня", "дней")}`;
+  }
+  if (unit === "month") {
+    return `${count} ${declensionWord(count, "месяц", "месяца", "месяцев")}`;
+  }
+  return `${count} мин.`;
+}
+
 const formatDurationBanTerm = (expiresAt?: number, startDate?: number): string => {
   if (!expiresAt || expiresAt === 0) return "Навсегда";
   const start = startDate || Date.now();
   const diffMs = expiresAt - start;
   if (diffMs <= 0) return "Истёк";
   const days = Math.round(diffMs / (24 * 3600 * 1000));
-  if (days >= 1) return `${days} дн.`;
+  if (days >= 1) return `${days} ${declensionWord(days, "день", "дня", "дней")}`;
   const hours = Math.round(diffMs / (3600 * 1000));
-  if (hours >= 1) return `${hours} ч.`;
+  if (hours >= 1) return `${hours} ${declensionWord(hours, "час", "часа", "часов")}`;
   const mins = Math.max(1, Math.round(diffMs / (60 * 1000)));
-  return `${mins} мин.`;
+  return `${mins} ${declensionWord(mins, "минуту", "минуты", "минут")}`;
 };
 
 const userCache = new Map<number, any>();
@@ -2412,19 +2440,6 @@ const getStatsBansPage = async (targetId: number) => {
   const getModStr = async (mId?: number) => {
     if (!mId) return "[id1|Модератор]";
     return `[id${mId}|Модератор]`;
-  };
-
-  const formatDurationBanTerm = (expiresAt?: number, startDate?: number) => {
-    if (!expiresAt || expiresAt === 0) return "Навсегда";
-    const start = startDate || Date.now();
-    const diffMs = expiresAt - start;
-    if (diffMs <= 0) return "Истёк";
-    const days = Math.round(diffMs / (24 * 3600 * 1000));
-    if (days >= 1) return `${days} дн.`;
-    const hours = Math.round(diffMs / (3600 * 1000));
-    if (hours >= 1) return `${hours} ч.`;
-    const mins = Math.max(1, Math.round(diffMs / (60 * 1000)));
-    return `${mins} мин.`;
   };
 
   const gbanText = targetUser.gban ? `${await getModStr(targetUser.gbanBy)} | ${targetUser.gbanReason || 'без причины'} | ${formatDurationBanTerm(targetUser.gbanExpiresAt, targetUser.gbanDate)} | ${fmtD(targetUser.gbanDate || Date.now())}` : "Отсутствует.";
@@ -5758,8 +5773,14 @@ async function handleVkEvent(payload: any) {
           }
           if (cmd === "mod_unmute") {
              const targetU = await getOrCreateUser(tId);
-             const tName = targetU.nick || targetU.fullName || `Пользователь #${tId}`;
-             const modName = clickingUser.nick || clickingUser.fullName || `Модератор`;
+             if (!targetU.muteUntil || targetU.muteUntil <= Date.now()) {
+                try {
+                   await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+                } catch (e) {}
+                await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Блокировка чата у пользователя уже снята!" });
+                return;
+             }
+             const modName = clickingUser.fullName || clickingUser.nick || (await fetchVkFullName(userId)) || `Модератор`;
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Блокировка чата снята." });
              await updateUser(tId, { muteUntil: 0, muteReason: "", mutePeerId: 0 });
              targetU.muteUntil = 0;
@@ -5767,15 +5788,23 @@ async function handleVkEvent(payload: any) {
              targetU.mutePeerId = 0;
              userCache.set(tId, targetU);
              await executeVkUnmute(peerId, tId);
-             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|Модератор] снял(-а) блокировку чата с [id${tId}|пользователя]`);
-             await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${modName}] снял(-а) блокировку чата с [id${tId}|пользователя]`);
+             try {
+                await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+             } catch (e) {}
              return;
           }
           if (cmd === "mod_unban_chat") {
              const targetU = await getOrCreateUser(tId);
-             const tName = targetU.nick || targetU.fullName || `Пользователь #${tId}`;
-             const modName = clickingUser.nick || clickingUser.fullName || `Модератор`;
              const chatBans = targetU.chatBans || {};
+             if (!chatBans[peerId] && !chatBans[String(peerId)]) {
+                try {
+                   await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+                } catch (e) {}
+                await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Пользователь уже разблокирован в данной беседе!" });
+                return;
+             }
+             const modName = clickingUser.fullName || clickingUser.nick || (await fetchVkFullName(userId)) || `Модератор`;
              delete chatBans[peerId];
              delete chatBans[String(peerId)];
              await updateUser(tId, { chatBans, isGameBanned: false });
@@ -5785,43 +5814,65 @@ async function handleVkEvent(payload: any) {
                  params: { access_token: VK_TOKEN, v: "5.199", peer_id: peerId, member_id: tId, for_all: 0 }
                });
              } catch (e) {}
-             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|Модератор] снял(-а) блокировку с [id${tId}|пользователя]`);
-             await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${modName}] снял(-а) блокировку с [id${tId}|пользователя]`);
+             try {
+                await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+             } catch (e) {}
              return;
           }
           if (cmd === "mod_ungban") {
+             const targetU = await getOrCreateUser(tId);
+             if (!targetU.gban) {
+                try {
+                   await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+                } catch (e) {}
+                await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Пользователь уже не имеет глобальной блокировки!" });
+                return;
+             }
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Глобальная блокировка снята." });
              await updateUser(tId, { gban: false, gbanReason: "", gbanBy: 0, gbanDate: 0, gbanExpiresAt: 0 });
-             const targetU = await getOrCreateUser(tId);
-             const tName = targetU.nick || targetU.fullName || `Пользователь #${tId}`;
-             const modName = clickingUser.nick || clickingUser.fullName || `Администратор`;
-             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${modName}] снял(-а) глобальную блокировку с [id${tId}|${tName}] во всех беседах`);
-             await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+             const modName = clickingUser.fullName || clickingUser.nick || (await fetchVkFullName(userId)) || `Администратор`;
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${modName}] снял(-а) глобальную блокировку с [id${tId}|пользователя] во всех беседах`);
+             try {
+                await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+             } catch (e) {}
              return;
           }
           if (cmd === "mod_ungbanpl") {
+             const targetU = await getOrCreateUser(tId);
+             if (!targetU.gbanpl) {
+                try {
+                   await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+                } catch (e) {}
+                await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Пользователь уже не имеет глобальной блокировки игроков!" });
+                return;
+             }
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Глобальная блокировка игроков снята." });
              await updateUser(tId, { gbanpl: false, gbanplReason: "", gbanplBy: 0, gbanplDate: 0, gbanplExpiresAt: 0 });
-             const targetU = await getOrCreateUser(tId);
-             const tName = targetU.nick || targetU.fullName || `Пользователь #${tId}`;
-             const modName = clickingUser.nick || clickingUser.fullName || `Администратор`;
-             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${modName}] снял(-а) глобальную блокировку с [id${tId}|${tName}] во всех беседах игроков`);
-             await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+             const modName = clickingUser.fullName || clickingUser.nick || (await fetchVkFullName(userId)) || `Администратор`;
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${modName}] снял(-а) глобальную блокировку с [id${tId}|пользователя] во всех беседах игроков`);
+             try {
+                await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+             } catch (e) {}
              return;
           }
           if (cmd === "mod_unwarn") {
              const targetU = await getOrCreateUser(tId);
-             const tName = targetU.fullName || targetU.nick || (await fetchVkFullName(tId)) || `User${tId}`;
              const modName = clickingUser.fullName || clickingUser.nick || (await fetchVkFullName(userId)) || `Модератор`;
              if ((targetU.warnings || 0) <= 0) {
+                try {
+                   await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+                } catch (e) {}
                 await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "У пользователя нету активных предупреждений!" });
                 return;
              }
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Предупреждение снято." });
              const newW = Math.max(0, (targetU.warnings || 0) - 1);
              await updateUser(tId, { warnings: newW });
-             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|Модератор] снял(-а) предупреждение с [id${tId}|пользователя]`);
-             await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${modName}] снял(-а) предупреждение с [id${tId}|пользователя]`);
+             try {
+                await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+             } catch (e) {}
              return;
           }
        }
@@ -5854,8 +5905,16 @@ async function handleVkEvent(payload: any) {
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "У вас недостаточно прав!" });
              return;
           }
+          const curChat = await getOrCreateChat(peerId);
+          if (!curChat.silence) {
+             try {
+                await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+             } catch (e) {}
+             await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Режим тишины уже выключен в данной беседе!" });
+             return;
+          }
           await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Режим тишины выключен." });
-          await updateChat(peerId, { silence: false, silenceTest: false });
+          await updateChat(peerId, { silence: false, silenceUntil: 0, silenceTest: false });
           
           try {
              await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
@@ -7175,7 +7234,7 @@ async function handleVkEvent(payload: any) {
                const reason = bInfo.reason || "без причины";
                const dateStr = fmtD(bInfo.date);
                const termStr = formatDurationBanTerm(bInfo.expiresAt, bInfo.date);
-               const msgText = `[id${memberId}|${targetName}] имеет блокировку в этой беседе!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
+               const msgText = `[id${memberId}|${targetName}] был(-а) исключён из беседы так как он(-а) имеет блокировку в этой беседе!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
                const kb = { inline: true, buttons: [[{ action: { type: "callback", label: "Снять блокировку", payload: JSON.stringify({ cmd: "mod_unban_chat", targetId: memberId }) }, color: "positive" }]] };
                await sendVkMessage(VK_TOKEN, peerId, msgText, { keyboard: JSON.stringify(kb) });
                try {
@@ -7193,7 +7252,7 @@ async function handleVkEvent(payload: any) {
                const reason = uData.gbanReason || "без причины";
                const dateStr = fmtD(uData.gbanDate);
                const termStr = formatDurationBanTerm(uData.gbanExpiresAt, uData.gbanDate);
-               const msgText = `[id${memberId}|${targetName}] имеет глобальную блокировку во всех беседах в которых есть JORDAN MANAGER!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
+               const msgText = `[id${memberId}|${targetName}] был(-а) исключён из беседы так как он(-а) имеет глобальную блокировку во всех беседах в которых есть JORDAN MANAGER!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
                const kb = { inline: true, buttons: [[{ action: { type: "callback", label: "Снять блокировку", payload: JSON.stringify({ cmd: "mod_ungban", targetId: memberId }) }, color: "positive" }]] };
                await sendVkMessage(VK_TOKEN, peerId, msgText, { keyboard: JSON.stringify(kb) });
                try {
@@ -7211,7 +7270,7 @@ async function handleVkEvent(payload: any) {
                const reason = uData.gbanplReason || "без причины";
                const dateStr = fmtD(uData.gbanplDate);
                const termStr = formatDurationBanTerm(uData.gbanplExpiresAt, uData.gbanplDate);
-               const msgText = `[id${memberId}|${targetName}] имеет глобальную блокировку во всех беседах игроков в которых есть JORDAN MANAGER!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
+               const msgText = `[id${memberId}|${targetName}] был(-а) исключён из беседы так как он(-а) имеет глобальную блокировку во всех беседах игроков в которых есть JORDAN MANAGER!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
                const kb = { inline: true, buttons: [[{ action: { type: "callback", label: "Снять блокировку", payload: JSON.stringify({ cmd: "mod_ungbanpl", targetId: memberId }) }, color: "positive" }]] };
                await sendVkMessage(VK_TOKEN, peerId, msgText, { keyboard: JSON.stringify(kb) });
                try {
@@ -7317,7 +7376,7 @@ async function handleVkEvent(payload: any) {
              const reason = bInfo.reason || "без причины";
              const dateStr = fmtD(bInfo.date);
              const termStr = formatDurationBanTerm(bInfo.expiresAt, bInfo.date);
-             const msgText = `[id${userId}|${fullName}] имеет блокировку в этой беседе!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
+             const msgText = `[id${userId}|${fullName}] был(-а) исключён из беседы так как он(-а) имеет блокировку в этой беседе!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
              const kb = { inline: true, buttons: [[{ action: { type: "callback", label: "Снять блокировку", payload: JSON.stringify({ cmd: "mod_unban_chat", targetId: userId }) }, color: "positive" }]] };
              await sendVkMessage(VK_TOKEN, peerId, msgText, { keyboard: JSON.stringify(kb) });
              try {
@@ -7338,7 +7397,7 @@ async function handleVkEvent(payload: any) {
              const reason = user.gbanReason || "без причины";
              const dateStr = fmtD(user.gbanDate);
              const termStr = formatDurationBanTerm(user.gbanExpiresAt, user.gbanDate);
-             const msgText = `[id${userId}|${fullName}] имеет глобальную блокировку во всех беседах в которых есть JORDAN MANAGER!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
+             const msgText = `[id${userId}|${fullName}] был(-а) исключён из беседы так как он(-а) имеет глобальную блокировку во всех беседах в которых есть JORDAN MANAGER!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
              const kb = { inline: true, buttons: [[{ action: { type: "callback", label: "Снять блокировку", payload: JSON.stringify({ cmd: "mod_ungban", targetId: userId }) }, color: "positive" }]] };
              await sendVkMessage(VK_TOKEN, peerId, msgText, { keyboard: JSON.stringify(kb) });
              try {
@@ -7359,7 +7418,7 @@ async function handleVkEvent(payload: any) {
              const reason = user.gbanplReason || "без причины";
              const dateStr = fmtD(user.gbanplDate);
              const termStr = formatDurationBanTerm(user.gbanplExpiresAt, user.gbanplDate);
-             const msgText = `[id${userId}|${fullName}] имеет глобальную блокировку во всех беседах игроков в которых есть JORDAN MANAGER!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
+             const msgText = `[id${userId}|${fullName}] был(-а) исключён из беседы так как он(-а) имеет глобальную блокировку во всех беседах игроков в которых есть JORDAN MANAGER!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
              const kb = { inline: true, buttons: [[{ action: { type: "callback", label: "Снять блокировку", payload: JSON.stringify({ cmd: "mod_ungbanpl", targetId: userId }) }, color: "positive" }]] };
              await sendVkMessage(VK_TOKEN, peerId, msgText, { keyboard: JSON.stringify(kb) });
              try {
@@ -10587,7 +10646,7 @@ async function handleVkEvent(payload: any) {
          targetU.mutePeerId = peerId;
          userCache.set(parsed.targetId, targetU);
 
-         await logBotAction({ type: "mute", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] выдал(-а) блокировку чата [id${parsed.targetId}|пользователю] на ${timeMin} мин (Причина: ${reason})` });
+         await logBotAction({ type: "mute", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] выдал(-а) блокировку чата [id${parsed.targetId}|пользователю] на ${formatTimeAccusative(timeMin, 'min')} (Причина: ${reason})` });
          
          const keyboard = {
            inline: true,
@@ -10596,7 +10655,7 @@ async function handleVkEvent(payload: any) {
              [{ action: { type: "callback", label: "Очистить сообщения", payload: JSON.stringify({ cmd: "mod_clearmute", targetId: parsed.targetId, authorId: userId, msgId: message.reply_message?.conversation_message_id || message.conversation_message_id }) }, color: "negative" }]
            ]
          };
-         return await sendResponse(`[id${userId}|Модератор] выдал(-а) блокировку чата [id${parsed.targetId}|пользователю] на ${timeMin} мин\n\n| Причина: ${reason}\n| Блокировка чата до: ${fmtD(muteUntil)}${systemMuteSuccess ? "" : (vkErrMsg ? "\n| Предупреждение VK API: " + vkErrMsg : "")}`, { noReply: true, keyboard: JSON.stringify(keyboard) });
+         return await sendResponse(`[id${userId}|Модератор] выдал(-а) блокировку чата [id${parsed.targetId}|пользователю] на ${formatTimeAccusative(timeMin, 'min')}\n\n| Причина: ${reason}\n| Блокировка чата до: ${fmtD(muteUntil)}${systemMuteSuccess ? "" : (vkErrMsg ? "\n| Предупреждение VK API: " + vkErrMsg : "")}`, { noReply: true, keyboard: JSON.stringify(keyboard) });
        }
 
       if (["/unmute", "/анмут", "/унмут", "/размут", "/снятьмут", "/разглушить", "/размутить", "/измута", "/unm"].includes(rawCmd)) {
@@ -10647,7 +10706,7 @@ async function handleVkEvent(payload: any) {
          targetU.mutePeerId = peerId;
          userCache.set(parsed.targetId, targetU);
 
-         await logBotAction({ type: "mute", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] тихо выдал(-а) блокировку чата [id${parsed.targetId}|пользователю] на ${timeMin} мин (Причина: ${reason})` });
+         await logBotAction({ type: "mute", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] тихо выдал(-а) блокировку чата [id${parsed.targetId}|пользователю] на ${formatTimeAccusative(timeMin, 'min')} (Причина: ${reason})` });
          await executeVkMute(peerId, parsed.targetId, durationSec);
          return;
        }
@@ -12901,16 +12960,16 @@ MD - Беседа медиа-партнёров.`;
                if (!isNaN(val) && val > 0) {
                   if (unit.startsWith("с") || unit === "s") {
                      silenceDurationSec = val;
-                     durationDisplay = `${val} сек.`;
+                     durationDisplay = formatTimeAccusative(val, "sec");
                   } else if (unit.startsWith("ч") || unit === "h") {
                      silenceDurationSec = val * 3600;
-                     durationDisplay = `${val} ч.`;
+                     durationDisplay = formatTimeAccusative(val, "hour");
                   } else if (unit.startsWith("д") || unit === "d") {
                      silenceDurationSec = val * 86400;
-                     durationDisplay = `${val} дн.`;
+                     durationDisplay = formatTimeAccusative(val, "day");
                   } else {
                      silenceDurationSec = val * 60;
-                     durationDisplay = `${val} мин.`;
+                     durationDisplay = formatTimeAccusative(val, "min");
                   }
                }
             }
