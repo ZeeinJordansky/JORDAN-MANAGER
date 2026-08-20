@@ -140,6 +140,7 @@ const ai = new GoogleGenAI({
 });
 
 let dynamicBanWords: string[] = [];
+let dynamicBanWordsLoaded = false;
 
 function normalizeTextForBanCheck(str: string): string {
   if (!str) return "";
@@ -166,6 +167,44 @@ const shortBadWords = new Set([
   "нах", "nah", "негр", "negr", "хач", "hach", "жид", "дед", "брат", "мама", "папа", "отец", "мать",
   "чмо", "chmo", "член", "хер", "жоп", "сука", "суки", "суч"
 ]);
+
+let cachedShortBadSet = new Set<string>();
+let cachedLongBadRaws: string[] = [];
+let cachedLongBadNorms: string[] = [];
+let badWordsCacheInitialized = false;
+
+function rebuildBadWordsCache() {
+  const allBad = [...badWordsList, ...dynamicBanWords];
+  const shortSet = new Set<string>();
+  const longRaws: string[] = [];
+  const longNorms: string[] = [];
+
+  for (const sw of shortBadWords) {
+    const swClean = sw.toLowerCase().replace(/[^а-яa-z0-9ё]/g, "");
+    if (swClean) shortSet.add(swClean);
+  }
+
+  for (let i = 0; i < allBad.length; i++) {
+    const w = allBad[i];
+    if (!w) continue;
+    const wLower = w.toLowerCase();
+    const wRaw = wLower.replace(/[^а-яa-z0-9ё]/g, "");
+    if (!wRaw) continue;
+
+    if (wRaw.length <= 4 || shortBadWords.has(wRaw) || shortBadWords.has(wLower)) {
+      shortSet.add(wRaw);
+    } else {
+      longRaws.push(wRaw);
+      const wNorm = normalizeTextForBanCheck(w);
+      if (wNorm) longNorms.push(wNorm);
+    }
+  }
+
+  cachedShortBadSet = shortSet;
+  cachedLongBadRaws = longRaws;
+  cachedLongBadNorms = longNorms;
+  badWordsCacheInitialized = true;
+}
 
 const VALID_COMMANDS = new Set([
 "/aban",
@@ -732,29 +771,38 @@ const VALID_COMMANDS = new Set([
 ]);
 const containsBadWord = (text: string) => {
   if (!text) return false;
-  const rawLower = text.toLowerCase().replace(/[^а-яa-z0-9ё\s]/g, " ");
-  const normalized = normalizeTextForBanCheck(text);
-  const words = rawLower.split(/\s+/).filter(Boolean);
-  
-  const allBad = [...badWordsList, ...dynamicBanWords];
-  for (const w of allBad) {
-    if (!w) continue;
-    const wRaw = w.toLowerCase().replace(/[^а-яa-z0-9ё]/g, "");
-    if (!wRaw) continue;
-    const wNorm = normalizeTextForBanCheck(w);
+  if (!badWordsCacheInitialized) {
+    rebuildBadWordsCache();
+  }
 
-    if (wRaw.length <= 4 || shortBadWords.has(wRaw) || shortBadWords.has(w.toLowerCase())) {
-      // Check as separate word / token to prevent false positives (e.g. "Сергей", "освободить", "обратно")
-      for (const token of words) {
-        if (token === wRaw || token.startsWith(wRaw) && token.length <= wRaw.length + 2) {
-          return true;
-        }
-      }
-    } else {
-      if (rawLower.replace(/\s+/g, "").includes(wRaw)) return true;
-      if (wNorm && normalized.includes(wNorm)) return true;
+  const rawLower = text.toLowerCase().replace(/[^а-яa-z0-9ё\s]/g, " ");
+  const words = rawLower.split(/\s+/).filter(Boolean);
+
+  for (let i = 0; i < words.length; i++) {
+    const token = words[i];
+    if (cachedShortBadSet.has(token)) return true;
+    if (token.length >= 3) {
+      const p1 = token.slice(0, token.length - 1);
+      if (p1.length >= 3 && cachedShortBadSet.has(p1)) return true;
+      const p2 = token.slice(0, token.length - 2);
+      if (p2.length >= 2 && cachedShortBadSet.has(p2)) return true;
     }
   }
+
+  const cleanNoSpace = rawLower.replace(/\s+/g, "");
+  if (cleanNoSpace.length > 4) {
+    for (let i = 0; i < cachedLongBadRaws.length; i++) {
+      if (cleanNoSpace.includes(cachedLongBadRaws[i])) return true;
+    }
+  }
+
+  const normalized = normalizeTextForBanCheck(text);
+  if (normalized.length > 4) {
+    for (let i = 0; i < cachedLongBadNorms.length; i++) {
+      if (normalized.includes(cachedLongBadNorms[i])) return true;
+    }
+  }
+
   return false;
 };
 
@@ -1160,6 +1208,23 @@ function drawRoundedRect(ctx: any, x: number, y: number, width: number, height: 
   ctx.closePath();
 }
 
+const avatarImgCache = new Map<string, { img: any, time: number }>();
+async function loadCachedImage(url: string) {
+  if (!url || !loadImage) return null;
+  const cached = avatarImgCache.get(url);
+  if (cached && Date.now() - cached.time < 10 * 60 * 1000) {
+    return cached.img;
+  }
+  try {
+    const img = await loadImage(url);
+    if (avatarImgCache.size > 300) avatarImgCache.clear();
+    avatarImgCache.set(url, { img, time: Date.now() });
+    return img;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function generateUserStatsImage(targetUser: any, targetId: number, currentPeerId: number): Promise<Buffer> {
   if (!createCanvas) {
     return Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64");
@@ -1219,7 +1284,7 @@ async function generateUserStatsImage(targetUser: any, targetId: number, current
 
   if (avatarUrl && loadImage) {
     try {
-      const avatarImg = await loadImage(avatarUrl);
+      const avatarImg = await loadCachedImage(avatarUrl);
       ctx.save();
       drawRoundedRect(ctx, avatarX, avatarY, avatarSize, avatarSize, avatarRadius);
       ctx.clip();
@@ -1362,7 +1427,7 @@ async function generateUserStatsImage(targetUser: any, targetId: number, current
     ctx.textAlign = "left";
   });
 
-  return canvas.toBuffer("image/png");
+  return canvas.toBuffer("image/jpeg", { quality: 0.85 });
 }
 
 const getMskDateStr = (ms: number = Date.now()) => {
@@ -1470,7 +1535,7 @@ const clanCache = new Map<string, any>();
 
 async function getOrCreateChat(peerId: number) {
   const cached = chatCache.get(peerId);
-  if (cached && cached.title) return cached;
+  if (cached) return cached;
 
   const chatRef = firestoreDb.collection("chats").doc(peerId.toString());
   let chatDoc: any = null;
@@ -1482,59 +1547,36 @@ async function getOrCreateChat(peerId: number) {
 
   if (chatDoc && chatDoc.exists) {
     const data = chatDoc.data() || {};
-    if ((!data.title || data.title.startsWith("Беседа №")) && peerId > 2000000000) {
-      try {
-        const convRes = await axios.get("https://api.vk.com/method/messages.getConversationsById", {
-          params: { access_token: VK_TOKEN, v: "5.199", peer_ids: peerId }
-        });
-        const settings = convRes.data?.response?.items?.[0]?.chat_settings;
-        if (settings) {
-          const upd: any = {};
-          if (settings.title) { data.title = settings.title; upd.title = settings.title; }
-          if (settings.owner_id) { data.ownerId = settings.owner_id; upd.ownerId = settings.owner_id; }
-          if (settings.members_count) { data.membersCount = settings.members_count; upd.membersCount = settings.members_count; }
-          if (settings.acl?.can_get_invite_link && !data.inviteLink) {
-             try {
-                const linkRes = await axios.get("https://api.vk.com/method/messages.getInviteLink", {
-                   params: { access_token: VK_TOKEN, v: "5.199", peer_id: peerId }
-                });
-
-                if (linkRes.data?.response?.link) {
-                   data.inviteLink = linkRes.data.response.link;
-                   upd.inviteLink = data.inviteLink;
-                }
-             } catch (e) {}
-          }
-          if (Object.keys(upd).length > 0) {
-            chatRef.set(upd, { merge: true }).catch(() => {});
-          }
-        }
-      } catch (e) {}
-    }
     chatCache.set(peerId, data);
+
+    if ((!data.title || data.title.startsWith("Беседа №")) && peerId > 2000000000) {
+      (async () => {
+        try {
+          const convRes = await vkApi.get("messages.getConversationsById", {
+            params: { access_token: VK_TOKEN, v: "5.199", peer_ids: peerId }
+          });
+          const settings = convRes.data?.response?.items?.[0]?.chat_settings;
+          if (settings) {
+            const upd: any = {};
+            if (settings.title) { data.title = settings.title; upd.title = settings.title; }
+            if (settings.owner_id) { data.ownerId = settings.owner_id; upd.ownerId = settings.owner_id; }
+            if (settings.members_count) { data.membersCount = settings.members_count; upd.membersCount = settings.members_count; }
+            if (Object.keys(upd).length > 0) {
+              chatCache.set(peerId, data);
+              chatRef.set(upd, { merge: true }).catch(() => {});
+            }
+          }
+        } catch (e) {}
+      })();
+    }
     return data;
   } else {
     let title = `Беседа №${peerId}`;
-    let ownerId = 0;
-    let membersCount = 0;
-    if (peerId > 2000000000) {
-      try {
-        const convRes = await axios.get("https://api.vk.com/method/messages.getConversationsById", {
-          params: { access_token: VK_TOKEN, v: "5.199", peer_ids: peerId }
-        });
-        const settings = convRes.data?.response?.items?.[0]?.chat_settings;
-        if (settings) {
-          if (settings.title) title = settings.title;
-          ownerId = settings.owner_id || 0;
-          membersCount = settings.members_count || 0;
-        }
-      } catch (e) {}
-    }
     const newChat: any = {
       id: peerId,
       title,
-      ownerId,
-      membersCount,
+      ownerId: 0,
+      membersCount: 0,
       type: "PL",
       af: false,
       antisliv: false,
@@ -1543,8 +1585,29 @@ async function getOrCreateChat(peerId: number) {
       welcometext: null,
       welcometext_enabled: false
     };
-    chatRef.set(newChat).catch(() => {});
     chatCache.set(peerId, newChat);
+    chatRef.set(newChat).catch(() => {});
+
+    if (peerId > 2000000000) {
+      (async () => {
+        try {
+          const convRes = await vkApi.get("messages.getConversationsById", {
+            params: { access_token: VK_TOKEN, v: "5.199", peer_ids: peerId }
+          });
+          const settings = convRes.data?.response?.items?.[0]?.chat_settings;
+          if (settings) {
+            const upd: any = {};
+            if (settings.title) { newChat.title = settings.title; upd.title = settings.title; }
+            if (settings.owner_id) { newChat.ownerId = settings.owner_id; upd.ownerId = settings.owner_id; }
+            if (settings.members_count) { newChat.membersCount = settings.members_count; upd.membersCount = settings.members_count; }
+            if (Object.keys(upd).length > 0) {
+              chatCache.set(peerId, newChat);
+              chatRef.set(upd, { merge: true }).catch(() => {});
+            }
+          }
+        } catch (e) {}
+      })();
+    }
     return newChat;
   }
 }
@@ -1885,7 +1948,7 @@ async function getChatMembers(peerId: number) {
     }
     const items = res.data?.response?.items || [];
     const profiles = res.data?.response?.profiles || [];
-    chatMembersCache.set(peerId, { members: items, profiles, expiry: Date.now() + 30000 }); // 30 sec cache
+    chatMembersCache.set(peerId, { members: items, profiles, expiry: Date.now() + 120000 }); // 2 min cache
     return { items, profiles };
   } catch (e) {
     return { items: [], profiles: [] };
@@ -1923,7 +1986,7 @@ async function getAllUsers(): Promise<any[]> {
       if (id) map.set(id, { ...map.get(id), ...u });
     });
     cachedAllUsersList = Array.from(map.values());
-    cachedAllUsersExpiry = now + 15000; // 15s cache
+    cachedAllUsersExpiry = now + 60000; // 60s cache
     return cachedAllUsersList;
   } catch (err: any) {
     console.warn("getAllUsers Firestore warning (using memory cache):", err?.message || err);
@@ -2149,18 +2212,38 @@ function getChatNumber(pId: number | string): number {
   return num > 2000000000 ? num - 2000000000 : num;
 }
 
+const vkNameCache = new Map<number, string>();
+const vkNameInFlight = new Map<number, Promise<string | null>>();
+
 async function fetchVkFullName(userId: number): Promise<string | null> {
   if (userId <= 0) return null;
-  try {
-    const res = await axios.get("https://api.vk.com/method/users.get", {
-      params: { access_token: VK_TOKEN, v: "5.199", user_ids: userId }
-    });
-    if (res.data?.response?.[0]) {
-      const u = res.data.response[0];
-      return `${u.first_name} ${u.last_name}`;
-    }
-  } catch (e) {}
-  return null;
+  if (vkNameCache.has(userId)) {
+    return vkNameCache.get(userId)!;
+  }
+  if (vkNameInFlight.has(userId)) {
+    return vkNameInFlight.get(userId)!;
+  }
+
+  const promise = (async () => {
+    try {
+      const res = await axios.get("https://api.vk.com/method/users.get", {
+        params: { access_token: VK_TOKEN, v: "5.199", user_ids: userId },
+        timeout: 3000
+      });
+      if (res.data?.response?.[0]) {
+        const u = res.data.response[0];
+        const fullName = `${u.first_name} ${u.last_name}`;
+        vkNameCache.set(userId, fullName);
+        return fullName;
+      }
+    } catch (e) {}
+    return null;
+  })();
+
+  vkNameInFlight.set(userId, promise);
+  const result = await promise;
+  vkNameInFlight.delete(userId);
+  return result;
 }
 
 async function getOrCreateUser(userIdRaw: number | string, nameHint?: string) {
@@ -3792,7 +3875,7 @@ async function checkIsAdmin(userId: number, peerId: number, userRole: number = 0
     }
   }
   
-  adminCache.set(cacheKey, { isAdmin, expiry: Date.now() + 30000 }); // 1 hour cache
+  adminCache.set(cacheKey, { isAdmin, expiry: Date.now() + 300000 }); // 5 min cache
   return isAdmin;
 }
 
@@ -3814,7 +3897,7 @@ async function checkIsOwner(userId: number, peerId: number, userRole: number = 0
     } catch (e) {}
   }
   
-  adminCache.set(cacheKey, { isAdmin: isOwner, expiry: Date.now() + 30000 }); // 1 hour cache
+  adminCache.set(cacheKey, { isAdmin: isOwner, expiry: Date.now() + 300000 }); // 5 min cache
   return isOwner;
 }
 
@@ -4087,6 +4170,28 @@ async function downloadFont() {
 
 const QUOTE_BG = "https://sun9-65.vkuserphoto.ru/s/v1/ig2/yfGeUF-mW9XAtyEG1xu-oBBigudVlAc9MDjPsc7kE9coceNO20TLi6EY3GOMIYggG0mUoRc84WDZAwFGW7YPmw3z.jpg?quality=95&as=32x15,48x23,72x35,108x52,160x77,240x115,360x173,480x230,540x259,640x307,720x345,738x354&from=bu&u=p1F45DicS7BR81vlRwI10-lNZa5eTxowjFUGNFPF60A&cs=738x0";
 
+let quoteBgImageCache: any = null;
+let quoteBgLoadingPromise: Promise<any> | null = null;
+
+async function getQuoteBgImage() {
+  if (quoteBgImageCache) return quoteBgImageCache;
+  if (quoteBgLoadingPromise) return quoteBgLoadingPromise;
+  if (!loadImage) return null;
+
+  quoteBgLoadingPromise = (async () => {
+    try {
+      const bg = await loadImage(QUOTE_BG);
+      quoteBgImageCache = bg;
+      return bg;
+    } catch (e) {
+      return null;
+    } finally {
+      quoteBgLoadingPromise = null;
+    }
+  })();
+  return quoteBgLoadingPromise;
+}
+
 async function generateQuote(text: string, avatarUrl: string, name: string): Promise<Buffer> {
   if (!createCanvas || !loadImage) {
     return Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64");
@@ -4097,8 +4202,13 @@ async function generateQuote(text: string, avatarUrl: string, name: string): Pro
   const ctx = canvas.getContext("2d");
 
   try {
-    const bg = await loadImage(QUOTE_BG);
-    ctx.drawImage(bg, 0, 0, width, height);
+    const bg = await getQuoteBgImage();
+    if (bg) {
+      ctx.drawImage(bg, 0, 0, width, height);
+    } else {
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(0, 0, width, height);
+    }
   } catch (e) {
     ctx.fillStyle = "#1a1a1a";
     ctx.fillRect(0, 0, width, height);
@@ -4112,20 +4222,22 @@ async function generateQuote(text: string, avatarUrl: string, name: string): Pro
   const avatarY = (height - avatarSize) / 2 - 30;
 
   try {
-    const avatar = await loadImage(avatarUrl);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-    ctx.drawImage(avatar, avatarX, avatarY, avatarSize, avatarSize);
-    ctx.restore();
-    
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-    ctx.stroke();
+    const avatar = await loadCachedImage(avatarUrl);
+    if (avatar) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(avatar, avatarX, avatarY, avatarSize, avatarSize);
+      ctx.restore();
+      
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   } catch (e) {}
 
   ctx.fillStyle = "#ffffff";
@@ -5992,21 +6104,21 @@ async function handleVkEvent(payload: any) {
       
       let text = "";
       if (cmd === "cmd_help_main") {
-        text = `...::Помощь по командам бота::...\n\nКоманды пользователей:\n/help - Помощь по командам.\n/gamehelp - Помощь по игровым командам.\n/stats - Узнать статистику пользователя.\n/ping - Узнать пинг бота.\n/infobot - Информация о боте.\n/q - Покинуть беседу.`;
+        text = `...::Помощь по командам бота::...\n\nДоступные префиксы команд: «/» «!» «.» «,» «;» «:»\n\n| Команды пользователей:\n/help - Помощь по командам.\n/gamehelp - Помощь по игровым командам.\n/stats - Узнать статистику пользователя.\n/ping - Узнать пинг бота.\n/infobot - Информация о боте.\n/q - Покинуть беседу.`;
       } else if (cmd === "help_moder") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Модератора:\n/mute - Выдать блокировку чата пользователю.\n/unmute - Снять блокировку чата пользователю.\n/warn - Выдать предупреждение пользователю.\n/unwarn - Снять предупреждение пользователю.\n/warns - Посмотреть предупреждения пользователя.\n/kick - Исключить пользователя из беседы.\n/clear - Очистить сообщения пользователя.\n/mclear - Очистить несколько сообщений.\n/staff - Список руководства беседы.\n/mutelist - Список заблокированных в чате.\n/warnlist - Список предупреждений в беседе.\n/smute - Тихо выдать блокировку чата пользователю.\n/skick - Тихо исключить пользователя из беседы.\n/sclear - Тихо очистить сообщение от пользователя.\n/smclear - Тихо очистить сообщения от пользователя.`;
+        text = `...::Помощь по командам бота::...\n\n| Команды Модератора:\n/mute - Выдать блокировку чата пользователю.\n/unmute - Снять блокировку чата пользователю.\n/warn - Выдать предупреждение пользователю.\n/unwarn - Снять предупреждение пользователю.\n/warns - Посмотреть предупреждения пользователя.\n/kick - Исключить пользователя из беседы.\n/clear - Очистить сообщения пользователя.\n/mclear - Очистить несколько сообщений.\n/staff - Список руководства беседы.\n/mutelist - Список заблокированных в чате.\n/warnlist - Список предупреждений в беседе.\n/smute - Тихо выдать блокировку чата пользователю.\n/skick - Тихо исключить пользователя из беседы.\n/sclear - Тихо очистить сообщение от пользователя.\n/smclear - Тихо очистить сообщения от пользователя.`;
       } else if (cmd === "help_smoder") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Старшего Модератора:\n/ban - Заблокировать пользователя в беседе.\n/unban - Разблокировать пользователя в беседе.\n/banlist - Список заблокированных в беседе.\n/addmoder - Выдать права модератора.\n/removerole - Снять права у пользователя.\n/zov - Созвать участников беседы.\n/olist - Список участников онлайн.\n/offlinelist - Список участников оффлайн.\n/sban - Тихо заблокировать пользователя в беседе.\n/sunban - Тихо разблокировать пользователя в беседе.`;
+        text = `...::Помощь по командам бота::...\n\n| Команды Старшего Модератора:\n/ban - Заблокировать пользователя в беседе.\n/unban - Разблокировать пользователя в беседе.\n/banlist - Список заблокированных в беседе.\n/addmoder - Выдать права модератора.\n/removerole - Снять права у пользователя.\n/zov - Созвать участников беседы.\n/olist - Список участников онлайн.\n/offlinelist - Список участников оффлайн.\n/sban - Тихо заблокировать пользователя в беседе.\n/sunban - Тихо разблокировать пользователя в беседе.`;
       } else if (cmd === "cmd_help_admin_bot") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Администратора:\n/purge - Очистить последние сообщения в беседе.\n/infoid - Найти беседы пользователя.\n/addsenmoder - Выдать права старшего модератора.\n/logsadm - Логи выдачи/снятия прав в беседе.\n/logsmute - Логи блокировок чата в беседе.\n/logsban - Логи блокировок в беседе.\n/logswarn - Логи предупреждений в беседе.\n/logskick - Логи киков в беседе.\n/nban - Заблокировать пользователя в беседах сетки.\n/nkick - Исключить пользователя в беседах сетки.\n/nrole - Выдать роль пользователю в беседах сетки.\n/nremoverole - Забрать роль у пользователя в беседах сетки.\n/snban - Тихо заблокировать пользователя в беседах сетки.\n/snkick - Тихо исключить пользователя в беседах сетки.\n/snrole - Тихо выдать роль пользователю в беседах сетки.\n/snremoverole - Тихо забрать роль у пользователя в беседах сетки.`;
+        text = `...::Помощь по командам бота::...\n\n| Команды Администратора:\n/purge - Очистить последние сообщения в беседе.\n/infoid - Найти беседы пользователя.\n/addsenmoder - Выдать права старшего модератора.\n/logsadm - Логи выдачи/снятия прав в беседе.\n/logsmute - Логи блокировок чата в беседе.\n/logsban - Логи блокировок в беседе.\n/logswarn - Логи предупреждений в беседе.\n/logskick - Логи киков в беседе.\n/nban - Заблокировать пользователя в беседах сетки.\n/nkick - Исключить пользователя в беседах сетки.\n/nrole - Выдать роль пользователю в беседах сетки.\n/nremoverole - Забрать роль у пользователя в беседах сетки.\n/snban - Тихо заблокировать пользователя в беседах сетки.\n/snkick - Тихо исключить пользователя в беседах сетки.\n/snrole - Тихо выдать роль пользователю в беседах сетки.\n/snremoverole - Тихо забрать роль у пользователя в беседах сетки.`;
       } else if (cmd === "help_sadmin") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Старшего Администратора:\n/addadmin - Выдать права администратора.`;
+        text = `...::Помощь по командам бота::...\n\n| Команды Старшего Администратора:\n/addadmin - Выдать права администратора.`;
       } else if (cmd === "help_zsa") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Зам. Спец. Администратора:\n/addsenadmin - Выдать права старшего администратора.\n/pin - Закрепить сообщение.\n/unpin - Открепить сообщение.`;
+        text = `...::Помощь по командам бота::...\n\n| Команды Зам. Спец. Администратора:\n/addsenadmin - Выдать права старшего администратора.\n/pin - Закрепить сообщение.\n/unpin - Открепить сообщение.`;
       } else if (cmd === "help_sa") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Специального Администратора:\n/settings - Настройки чат-менеджер в беседе.\n/addzsa - Выдать права зам. спец. администратора.`;
+        text = `...::Помощь по командам бота::...\n\n| Команды Специального Администратора:\n/settings - Настройки чат-менеджер в беседе.\n/addzsa - Выдать права зам. спец. администратора.`;
       } else if (cmd === "help_owner") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Владельца беседы:\n/start - Активировать чат-менеджер в беседе.\n/type - Изменить тип беседы.\n/sync - Синхронизировать структуру беседы.\n/games - Включить/выключить игры в беседе.\n/giveowner - Передать права владельца беседы.\n/addsa - Выдать права спец. администратора.\n/welcometext - Настроить приветствие.\n/leave - Вкл/выкл кик при выходе.\n/invite - Вкл/выкл инвайт только модераторами.\n/af - Вкл/выкл анти-флуд.\n/antisliv - Вкл/выкл анти-слив.\n/raid - Вкл/выкл анти-рейд.\n/group - Вкл/выкл анти-сообщества.\n/tegall - Вкл/выкл анти-тег всех участников.\n/antiad - Вкл/выкл анти-рекламу.\n/addantiteg - Добавить слово/тег в анти-тег.\n/unantiteg - Удалить слово/тег из анти-тега.\n/antiteglist - Список слов/тегов в анти-теге.\n/addawstats - Выдать функцию пользователя "Анти-просмотр stats".\n/unawstats - Забрать функцию пользователя "Анти-просмотр stats".\n/createnet - Создать сетку бесед.\n/deletenet - Удалить сетку бесед.\n/dgiveowner - Передать права владельца сетки.\n/addchatnet - Добавить беседу в сетку.\n/unchatnet - Удалить беседу из сетки.\n/netlist - Список бесед в сетке.`;
+        text = `...::Помощь по командам бота::...\n\n| Команды Владельца беседы:\n/start - Активировать чат-менеджер в беседе.\n/type - Изменить тип беседы.\n/sync - Синхронизировать структуру беседы.\n/games - Включить/выключить игры в беседе.\n/giveowner - Передать права владельца беседы.\n/addsa - Выдать права спец. администратора.\n/welcometext - Настроить приветствие.\n/leave - Вкл/выкл кик при выходе.\n/invite - Вкл/выкл инвайт только модераторами.\n/af - Вкл/выкл анти-флуд.\n/antisliv - Вкл/выкл анти-слив.\n/raid - Вкл/выкл анти-рейд.\n/group - Вкл/выкл анти-сообщества.\n/tegall - Вкл/выкл анти-тег всех участников.\n/antiad - Вкл/выкл анти-рекламу.\n/addantiteg - Добавить слово/тег в анти-тег.\n/unantiteg - Удалить слово/тег из анти-тега.\n/antiteglist - Список слов/тегов в анти-теге.\n/addawstats - Выдать функцию пользователя "Анти-просмотр stats".\n/unawstats - Забрать функцию пользователя "Анти-просмотр stats".\n/createnet - Создать сетку бесед.\n/deletenet - Удалить сетку бесед.\n/dgiveowner - Передать права владельца сетки.\n/addchatnet - Добавить беседу в сетку.\n/unchatnet - Удалить беседу из сетки.\n/netlist - Список бесед в сетке.`;
       }
  
       let keyboard = { inline: true, buttons: [] as any[] };
@@ -7319,28 +7431,22 @@ async function handleVkEvent(payload: any) {
 
     try {
       let fullName = `User${userId}`;
-      const cached = userCache.get(userId);
-      if (cached && cached.nick && !cached.nick.startsWith("User")) {
-        fullName = cached.nick;
+      const cachedUser = userCache.get(userId);
+      if (cachedUser && (cachedUser.fullName || cachedUser.nick)) {
+        fullName = cachedUser.fullName || cachedUser.nick;
       } else {
-        try {
-          const uRes = await vkApi.get("users.get", {
-            params: { user_ids: userId, access_token: VK_TOKEN, v: "5.131" }
-          });
-          if (uRes.data.response?.[0]) {
-            fullName = `${uRes.data.response[0].first_name} ${uRes.data.response[0].last_name}`;
-            if (cached) cached.nick = fullName;
-          }
-        } catch (e) {}
+        fullName = (await fetchVkFullName(userId)) || `User${userId}`;
+        if (cachedUser) cachedUser.fullName = fullName;
       }
 
-      if (dynamicBanWords.length === 0) {
-        try {
-          const doc = await firestoreDb.collection("bot_settings").doc("global").get();
+      if (!dynamicBanWordsLoaded) {
+        dynamicBanWordsLoaded = true;
+        firestoreDb.collection("bot_settings").doc("global").get().then(doc => {
           if (doc.exists && Array.isArray(doc.data()?.banWords)) {
             dynamicBanWords = doc.data()?.banWords;
+            rebuildBadWordsCache();
           }
-        } catch (e) {}
+        }).catch(() => {});
       }
 
       const chatData = await getOrCreateChat(peerId);
@@ -7457,7 +7563,7 @@ async function handleVkEvent(payload: any) {
              const trimmed = (text || "").trim();
              const isCommand = (() => {
                if (!trimmed) return false;
-               const prefixes = ["/", "!", ".", ",", "+", "*"];
+               const prefixes = ["/", "!", ".", ",", "+", ";", ":"];
                const cleanMsg = trimmed.replace(/^\[(?:club|id)\d+\|[^\]]+\]\s*/gi, "").trim().replace(/^@\S+\s*/gi, "").trim();
                const startsWithPrefix = prefixes.some(p => cleanMsg.startsWith(p));
                if (startsWithPrefix) return true;
@@ -7852,7 +7958,7 @@ async function handleVkEvent(payload: any) {
       cmdText = cmdText.replace(/^\[(?:club|id)\d+\|[^\]]+\]\s*/gi, "").trim();
       cmdText = cmdText.replace(/^@\S+\s*/gi, "").trim();
 
-      const prefixes = ["/", "!", ".", ",", "+", "-", "*", ";", ":"];
+      const prefixes = ["/", "!", ".", ",", "+", ";", ":"];
       const hasPrefix = prefixes.some(p => cmdText.startsWith(p));
       
       if (hasPrefix) {
@@ -8297,7 +8403,7 @@ async function handleVkEvent(payload: any) {
         }
 
         if (actionStr !== "") {
-          await logToChat10({
+          logToChat10({
             isGame,
             userId,
             fullName,
@@ -8309,7 +8415,7 @@ async function handleVkEvent(payload: any) {
             action: actionStr,
             cmdName: rawCmd,
             msgCmId: message.conversation_message_id ? `${peerId}_${message.conversation_message_id}` : undefined
-          });
+          }).catch(() => {});
         }
       }
 
@@ -9273,11 +9379,11 @@ async function handleVkEvent(payload: any) {
         if (win) {
           const winAmount = Math.floor(stake * (globalSettings.rouletteMultiplier || 3));
           await updateUser(userId, { balance: user.balance + winAmount });
-          await logBotAction({ type: "game", peerId, userId, text: `[id${userId}|${fullName}] выиграл(-а) ${winAmount.toLocaleString()}$ в рулетке (Ставка: ${stake.toLocaleString()}$)` });
+          logBotAction({ type: "game", peerId, userId, text: `[id${userId}|${fullName}] выиграл(-а) ${winAmount.toLocaleString()}$ в рулетке (Ставка: ${stake.toLocaleString()}$)` }).catch(() => {});
           return await sendResponse(`🎰 [id${userId}|${fullName}], вы выиграли ${winAmount.toLocaleString()}$ в рулетке!`);
         } else {
           await updateUser(userId, { balance: user.balance - stake });
-          await logBotAction({ type: "game", peerId, userId, text: `[id${userId}|${fullName}] проиграл(-а) ${stake.toLocaleString()}$ в рулетке` });
+          logBotAction({ type: "game", peerId, userId, text: `[id${userId}|${fullName}] проиграл(-а) ${stake.toLocaleString()}$ в рулетке` }).catch(() => {});
           return await sendResponse(`🎰 [id${userId}|${fullName}], вы проиграли ${stake.toLocaleString()}$ в рулетке.`);
         }
       }
@@ -10646,7 +10752,7 @@ async function handleVkEvent(payload: any) {
          targetU.mutePeerId = peerId;
          userCache.set(parsed.targetId, targetU);
 
-         await logBotAction({ type: "mute", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] выдал(-а) блокировку чата [id${parsed.targetId}|пользователю] на ${formatTimeAccusative(timeMin, 'min')} (Причина: ${reason})` });
+         logBotAction({ type: "mute", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] выдал(-а) блокировку чата [id${parsed.targetId}|пользователю] на ${formatTimeAccusative(timeMin, 'min')} (Причина: ${reason})` }).catch(() => {});
          
          const keyboard = {
            inline: true,
@@ -13783,7 +13889,7 @@ MD - Беседа медиа-партнёров.`;
       }
 
       if (rawCmd === "/help" || rawCmd === "/помощь" || rawCmd === "/хелп" || rawCmd === "/команды" || rawCmd === "/other") {
-        let helpText = `...::Помощь по командам бота::...\n\nКоманды пользователей:\n/help - Помощь по командам.\n/gamehelp - Помощь по игровым командам.\n/stats - Узнать статистику пользователя.\n/ping - Узнать пинг бота.\n/infobot - Информация о боте.\n/q - Покинуть беседу.`;
+        let helpText = `...::Помощь по командам бота::...\n\nДоступные префиксы команд: «/» «!» «.» «,» «;» «:»\n\n| Команды пользователей:\n/help - Помощь по командам.\n/gamehelp - Помощь по игровым командам.\n/stats - Узнать статистику пользователя.\n/ping - Узнать пинг бота.\n/infobot - Информация о боте.\n/q - Покинуть беседу.`;
 
         let keyboard = { inline: true, buttons: [] as any[] };
         let availableButtons = [];
@@ -15386,7 +15492,7 @@ app.post("/api/auth/unlock-special", async (req, res) => {
   const cleanCode = String(code).trim();
 
   const isMaster = cleanCode === "Jordanmanager";
-  const isSessionSpecial = session.specialCode && cleanCode === session.specialCode;
+  const isSessionSpecial = (session as any).specialCode && cleanCode === (session as any).specialCode;
 
   if (isMaster || isSessionSpecial) {
     session.isSpecial = true;
