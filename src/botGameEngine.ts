@@ -27,6 +27,7 @@ function generateDeterministicRandomId(seedStr: string): number {
 }
 
 export async function sendVkMessage(vkToken: string, peerId: number, text: string, extraParams: any = {}) {
+  text = formatVkText(text);
   try {
     let randomId = extraParams.random_id;
     if (!randomId) {
@@ -39,7 +40,7 @@ export async function sendVkMessage(vkToken: string, peerId: number, text: strin
     const { dedup_key, ...cleanedParams } = extraParams;
 
     const params: any = {
-      peer_id: peerId,
+      peer_ids: peerId, // using peer_ids to get cmid in response
       message: text,
       random_id: randomId,
       access_token: vkToken,
@@ -47,6 +48,7 @@ export async function sendVkMessage(vkToken: string, peerId: number, text: strin
       disable_mentions: 1,
       ...cleanedParams
     };
+    if (params.peer_id) delete params.peer_id; // remove peer_id if it got merged from cleanedParams
 
     const searchParams = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) {
@@ -66,91 +68,82 @@ export async function sendVkMessage(vkToken: string, peerId: number, text: strin
   }
 }
 
-export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: number, text?: string, extraParams: any = {}) {
+export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: any, text?: string, extraParams: any = {}) {
+  if (text) text = formatVkText(text);
   try {
     const params: any = {
-      peer_id: peerId,
       access_token: vkToken,
       v: "5.199",
+      peer_id: peerId,
       disable_mentions: 1,
       keep_forward_messages: 1,
       keep_snippets: 1,
+      dont_parse_links: 1,
       ...extraParams
     };
-    if (extraParams.conversation_message_id) {
-      params.conversation_message_id = extraParams.conversation_message_id;
-      delete params.message_id;
-    } else if (extraParams.message_id) {
-      params.message_id = extraParams.message_id;
-      delete params.conversation_message_id;
-    } else if (idOrCmId) {
-      if (peerId >= 2000000000) {
-        params.conversation_message_id = idOrCmId;
-        delete params.message_id;
-      } else {
-        params.message_id = idOrCmId;
-        delete params.conversation_message_id;
-      }
-    }
+
     if (text !== undefined && text !== null && text !== "") {
       params.message = text;
-    } else if (!params.message && !params.attachment) {
-      try {
-        const formatAttachments = (attachments: any[]) => attachments.map((a: any) => {
-          if (a.photo) return `photo${a.photo.owner_id}_${a.photo.id}${a.photo.access_key ? '_' + a.photo.access_key : ''}`;
-          if (a.video) return `video${a.video.owner_id}_${a.video.id}${a.video.access_key ? '_' + a.video.access_key : ''}`;
-          if (a.audio) return `audio${a.audio.owner_id}_${a.audio.id}`;
-          if (a.doc) return `doc${a.doc.owner_id}_${a.doc.id}${a.doc.access_key ? '_' + a.doc.access_key : ''}`;
-          return "";
-        }).filter(x => x).join(",");
-
-        if (params.conversation_message_id) {
-          const getRes = await vkApi.get("messages.getByConversationMessageId", {
-            params: {
-              access_token: vkToken,
-              v: "5.199",
-              peer_id: peerId,
-              conversation_message_ids: params.conversation_message_id
-            }
-          });
-          const items = getRes.data?.response?.items;
-          if (items && items.length > 0) {
-            if (items[0].text !== undefined) params.message = items[0].text;
-            if (items[0].attachments && items[0].attachments.length > 0) {
-              params.attachment = formatAttachments(items[0].attachments);
-            }
-          }
-        } else if (params.message_id) {
-          const getRes = await vkApi.get("messages.getById", {
-            params: {
-              access_token: vkToken,
-              v: "5.199",
-              message_ids: params.message_id
-            }
-          });
-          const items = getRes.data?.response?.items;
-          if (items && items.length > 0) {
-            if (items[0].text !== undefined) params.message = items[0].text;
-            if (items[0].attachments && items[0].attachments.length > 0) {
-              params.attachment = formatAttachments(items[0].attachments);
-            }
-          }
-        }
-      } catch (e) {}
     }
 
-    const searchParams = new URLSearchParams();
-    for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined && v !== null) {
-        searchParams.append(k, typeof v === "object" ? JSON.stringify(v) : String(v));
+    const tryEdit = async (editParams: any) => {
+      try {
+        const searchParams = new URLSearchParams();
+        for (const [k, v] of Object.entries(editParams)) {
+          if (v !== undefined && v !== null) {
+            searchParams.append(k, typeof v === "object" ? JSON.stringify(v) : String(v));
+          }
+        }
+        const res = await vkApi.post("messages.edit", searchParams);
+        if (res.data?.response === 1 || res.data?.response) return res.data;
+        return null;
+      } catch (e) {
+        return null;
+      }
+    };
+
+    if (extraParams.conversation_message_id) {
+      const res = await tryEdit({ ...params, conversation_message_id: extraParams.conversation_message_id });
+      if (res) return res;
+    }
+    if (extraParams.message_id) {
+      const res = await tryEdit({ ...params, message_id: extraParams.message_id });
+      if (res) return res;
+    }
+
+    let targetId: number | null = null;
+    let targetCmid: number | null = null;
+    if (idOrCmId) {
+      if (typeof idOrCmId === "number" || typeof idOrCmId === "string") {
+        targetId = Number(idOrCmId);
+      } else if (typeof idOrCmId === "object" && idOrCmId !== null) {
+        const respObj = idOrCmId.response !== undefined ? idOrCmId.response : idOrCmId;
+        if (Array.isArray(respObj) && respObj[0]) {
+          targetCmid = respObj[0].conversation_message_id || null;
+          targetId = respObj[0].message_id || (typeof respObj[0] === "number" ? respObj[0] : null);
+        } else if (typeof respObj === "object" && respObj !== null) {
+          targetCmid = respObj.conversation_message_id || null;
+          targetId = respObj.message_id || null;
+        } else if (typeof respObj === "number") {
+          targetId = respObj;
+        }
       }
     }
 
-    const res = await vkApi.post("messages.edit", searchParams);
-    if (res.data?.error) {
-      console.error(`[VK API ERROR] messages.edit for peer ${peerId}:`, res.data.error);
+    if (targetCmid) {
+      const res = await tryEdit({ ...params, conversation_message_id: targetCmid });
+      if (res) return res;
     }
-    return res.data;
+
+    if (targetId) {
+      let res = await tryEdit({ ...params, message_id: targetId });
+      if (res) return res;
+
+      res = await tryEdit({ ...params, conversation_message_id: targetId });
+      if (res) return res;
+    }
+
+    return null;
   } catch (e: any) {
     console.error("editVkMessage error:", e.message);
     return null;
@@ -211,18 +204,68 @@ export function formatTimeRemaining(ms: number) {
   return parts.join(" ");
 }
 
+export function formatVkText(text: string): string {
+  if (!text) return "";
+
+  // 1. Strikethrough ~~text~~ -> convert each character c to c + \u0336
+  text = text.replace(/~~([^~]+)~~/g, (_, p1) => {
+    return p1.split("").map((c: string) => (c === "\n" ? c : c + "\u0336")).join("");
+  });
+
+  // Helper for converting Latin letters and digits to Unicode bold (Sans-Serif Bold)
+  // And Cyrillic letters to UPPERCASE as an alternative since Unicode has no Cyrillic bold
+  const toBoldLatinDigit = (str: string) => {
+    return str.replace(/([A-Za-z0-9А-Яа-яЁё])/g, (c: string) => {
+      const code = c.charCodeAt(0);
+      if (code >= 65 && code <= 90) return String.fromCodePoint(0x1D5D4 + (code - 65));
+      if (code >= 97 && code <= 122) return String.fromCodePoint(0x1D5EE + (code - 97));
+      if (code >= 48 && code <= 57) return String.fromCodePoint(0x1D7EC + (code - 48));
+      return c.toUpperCase(); // For Cyrillic and others, just make it uppercase
+    });
+  };
+
+  // 2. Bold **text** or __text__ -> convert Latin/digits to unicode bold and Cyrillic to UPPERCASE
+  text = text.replace(/(\*\*|__)(.*?)\1/gs, (_, __, p1) => {
+    return toBoldLatinDigit(p1);
+  });
+  text = text.replace(/\*\*|__/g, "");
+
+  // 3. Italic *text* or _text_
+  text = text.replace(/(\*|_)(.*?)\1/g, "$2");
+
+  // 4. Headers # Header
+  text = text.replace(/^#{1,2}\s+(.+)$/gm, "📌 $1");
+  text = text.replace(/^#{3,6}\s+(.+)$/gm, "🔹 $1");
+
+  // 5. Code blocks ``` and inline `
+  text = text.replace(/```[a-z]*\n?([\s\S]*?)```/g, "$1");
+  text = text.replace(/`([^`]+)`/g, "«$1»");
+
+  return text.trim();
+}
+
 export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrObj: any) {
   if (!msgIdOrObj) return false;
 
   const tryDelete = async (params: any) => {
     try {
-      const res = await vkApi.get("messages.delete", { params });
+      const searchParams = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null) {
+          searchParams.append(k, String(v));
+        }
+      }
+      const res = await vkApi.post("messages.delete", searchParams);
       if (res.data?.response === 1) return true;
       if (res.data?.response && typeof res.data.response === "object") {
         const r = res.data.response;
         const items = Array.isArray(r) ? r : Object.values(r);
         if (items.length > 0) {
-           return items.some((item: any) => item && !item.error);
+           return items.some((item: any) => {
+             if (typeof item === "number") return item === 1;
+             if (typeof item === "object" && item !== null) return !item.error && (item.response === 1 || item.status === 1 || !item.error_code);
+             return false;
+           });
         }
       }
       return false;
@@ -233,71 +276,87 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
 
   const baseParams = { peer_id: peerId, delete_for_all: 1, access_token: vkToken, v: "5.199" };
 
-  if (typeof msgIdOrObj === "number" || typeof msgIdOrObj === "string") {
-    const ids = String(msgIdOrObj).split(",").map(x => x.trim()).filter(x => x && !isNaN(Number(x)));
-    if (ids.length > 0) {
-      const idsStr = ids.join(",");
-      let success = false;
-      if (peerId >= 2000000000) {
-        success = await tryDelete({ ...baseParams, peer_id: peerId, cmids: idsStr, conversation_message_ids: idsStr });
+  const candidateCmIds = new Set<number>();
+  const candidateMsgIds = new Set<number>();
+
+  const extractIdsFromVal = (val: any) => {
+    if (val === null || val === undefined) return;
+    if (typeof val === "number" || typeof val === "string") {
+      const num = Number(val);
+      if (!isNaN(num) && num > 0) {
+        candidateCmIds.add(num);
+        candidateMsgIds.add(num);
       }
-      if (!success) {
-        success = await tryDelete({ ...baseParams, message_ids: idsStr });
+    } else if (typeof val === "object") {
+      if (val.response !== undefined) {
+        extractIdsFromVal(val.response);
       }
-      if (!success && peerId >= 2000000000 && ids.length === 1) {
-        // Fallback: lookup cmid
-        try {
-          const getRes = await vkApi.get("messages.getById", { params: { access_token: vkToken, v: "5.199", message_ids: idsStr } });
-          const fetchedCmId = getRes.data?.response?.items?.[0]?.conversation_message_id;
-          if (fetchedCmId) {
-            success = await tryDelete({ ...baseParams, cmids: String(fetchedCmId), conversation_message_ids: String(fetchedCmId) });
-            if (success) return true;
-          }
-        } catch (e) {}
-        success = await tryDelete({ ...baseParams, cmids: idsStr, conversation_message_ids: idsStr });
+      if (Array.isArray(val)) {
+        val.forEach(item => extractIdsFromVal(item));
+      } else {
+        if (val.conversation_message_id) candidateCmIds.add(Number(val.conversation_message_id));
+        if (val.cmid) candidateCmIds.add(Number(val.cmid));
+        if (val.message_id) candidateMsgIds.add(Number(val.message_id));
+        if (val.id) candidateMsgIds.add(Number(val.id));
       }
-      return success;
+    }
+  };
+
+  extractIdsFromVal(msgIdOrObj);
+
+  // 1. Try candidate MSGIDs first (works directly for messages.send returns)
+  if (candidateMsgIds.size > 0) {
+    for (const msgId of candidateMsgIds) {
+      if (!msgId) continue;
+      const strMsgId = String(msgId);
+      let ok = await tryDelete({ ...baseParams, message_ids: strMsgId });
+      if (ok) return true;
+      ok = await tryDelete({ peer_id: peerId, message_ids: strMsgId, access_token: vkToken, v: "5.199" });
+      if (ok) return true;
     }
   }
 
-  let cmId: number | undefined;
-  let msgId: number | undefined;
-
-  if (typeof msgIdOrObj === "object") {
-    const resp = msgIdOrObj.response !== undefined ? msgIdOrObj.response : msgIdOrObj;
-    if (Array.isArray(resp) && resp.length > 0) {
-      const first = resp[0];
-      if (typeof first === "object" && first !== null) {
-        cmId = Number(first.conversation_message_id) || undefined;
-        msgId = Number(first.message_id) || undefined;
-      } else if (typeof first === "number" && first > 0) {
-        if (peerId >= 2000000000) cmId = first;
-        else msgId = first;
-      }
-    } else if (typeof resp === "object" && resp !== null) {
-      cmId = Number(resp.conversation_message_id) || undefined;
-      msgId = Number(resp.message_id) || undefined;
-    } else if (typeof resp === "number" && resp > 0) {
-      if (peerId >= 2000000000) cmId = resp;
-      else msgId = resp;
+  // 2. Try candidate CMIDs
+  if (candidateCmIds.size > 0) {
+    for (const cmid of candidateCmIds) {
+      if (!cmid) continue;
+      const strCmid = String(cmid);
+      let ok = await tryDelete({ ...baseParams, cmids: strCmid });
+      if (ok) return true;
+      ok = await tryDelete({ ...baseParams, conversation_message_ids: strCmid });
+      if (ok) return true;
     }
   }
 
-  if (msgId && msgId > 0) {
-      let success = await tryDelete({ ...baseParams, message_ids: String(msgId) });
-      if (!success && peerId >= 2000000000) {
-        try {
-          const getRes = await vkApi.get("messages.getById", { params: { access_token: vkToken, v: "5.199", message_ids: String(msgId) } });
-          const fetchedCmId = getRes.data?.response?.items?.[0]?.conversation_message_id;
-          if (fetchedCmId) {
-            success = await tryDelete({ ...baseParams, cmids: String(fetchedCmId), conversation_message_ids: String(fetchedCmId) });
+  // 3. Fallback: check messages.getHistory for chats
+  if (peerId >= 2000000000) {
+    try {
+      const getHistoryRes = await vkApi.get("messages.getHistory", {
+        params: { access_token: vkToken, v: "5.199", peer_id: peerId, count: 15 }
+      });
+      const items = getHistoryRes.data?.response?.items || [];
+      for (const item of items) {
+        if (!item) continue;
+        const matchesMsgId = candidateMsgIds.has(item.id);
+        const matchesCmId = item.conversation_message_id && candidateCmIds.has(item.conversation_message_id);
+        const matchesWaitText = item.out === 1 && (
+          item.text?.includes("обрабатывается") ||
+          item.text?.includes("подождите") ||
+          item.text?.includes("загружается") ||
+          item.text?.includes("генерируется")
+        );
+        if (matchesMsgId || matchesCmId || matchesWaitText) {
+          if (item.id) {
+            let ok = await tryDelete({ ...baseParams, message_ids: String(item.id) });
+            if (ok) return true;
           }
-        } catch (e) {}
+          if (item.conversation_message_id) {
+            let ok = await tryDelete({ ...baseParams, cmids: String(item.conversation_message_id) });
+            if (ok) return true;
+          }
+        }
       }
-      if (success) return true;
-  }
-  if (cmId && cmId > 0 && peerId >= 2000000000) {
-      return await tryDelete({ ...baseParams, cmids: String(cmId), conversation_message_ids: String(cmId) });
+    } catch (e) {}
   }
 
   return false;
