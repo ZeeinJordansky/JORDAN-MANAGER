@@ -71,6 +71,37 @@ export async function sendVkMessage(vkToken: string, peerId: number, text: strin
 export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: any, text?: string, extraParams: any = {}) {
   if (text) text = formatVkText(text);
   try {
+    let targetId: number | null = null;
+    let targetCmid: number | null = null;
+    if (extraParams.conversation_message_id) {
+      targetCmid = Number(extraParams.conversation_message_id);
+    }
+    if (extraParams.message_id) {
+      targetId = Number(extraParams.message_id);
+    }
+
+    if (idOrCmId) {
+      if (typeof idOrCmId === "number" || typeof idOrCmId === "string") {
+        const numVal = Number(idOrCmId);
+        if (peerId > 2000000000) {
+          if (!targetCmid) targetCmid = numVal;
+        } else {
+          if (!targetId) targetId = numVal;
+        }
+      } else if (typeof idOrCmId === "object" && idOrCmId !== null) {
+        const respObj = idOrCmId.response !== undefined ? idOrCmId.response : idOrCmId;
+        if (Array.isArray(respObj) && respObj[0]) {
+          targetCmid = respObj[0].conversation_message_id || null;
+          targetId = respObj[0].message_id || (typeof respObj[0] === "number" ? respObj[0] : null);
+        } else if (typeof respObj === "object" && respObj !== null) {
+          targetCmid = respObj.conversation_message_id || null;
+          targetId = respObj.message_id || null;
+        } else if (typeof respObj === "number") {
+          targetId = respObj;
+        }
+      }
+    }
+
     const params: any = {
       access_token: vkToken,
       v: "5.199",
@@ -84,6 +115,54 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
 
     if (text !== undefined && text !== null && text !== "") {
       params.message = text;
+    }
+
+    // Preserve existing attachments & text if not explicitly provided, to prevent VK messages.edit from wiping attachments on button clicks
+    if (extraParams.attachment === undefined) {
+      try {
+        let existingMsg: any = null;
+        if (targetCmid && peerId > 2000000000) {
+          const res = await vkApi.post("messages.getByConversationMessageId", new URLSearchParams({
+            access_token: vkToken,
+            v: "5.199",
+            peer_id: String(peerId),
+            conversation_message_ids: String(targetCmid)
+          }));
+          if (res.data?.response?.items?.[0]) {
+            existingMsg = res.data.response.items[0];
+          }
+        } else if (targetId) {
+          const res = await vkApi.post("messages.getById", new URLSearchParams({
+            access_token: vkToken,
+            v: "5.199",
+            message_ids: String(targetId)
+          }));
+          if (res.data?.response?.items?.[0]) {
+            existingMsg = res.data.response.items[0];
+          }
+        }
+
+        if (existingMsg) {
+          if ((text === undefined || text === null || text === "") && existingMsg.text) {
+            params.message = existingMsg.text;
+          }
+          if (Array.isArray(existingMsg.attachments) && existingMsg.attachments.length > 0) {
+            const atts: string[] = [];
+            for (const att of existingMsg.attachments) {
+              const type = att.type;
+              const obj = att[type];
+              if (obj && obj.owner_id !== undefined && obj.id !== undefined) {
+                let s = `${type}${obj.owner_id}_${obj.id}`;
+                if (obj.access_key) s += `_${obj.access_key}`;
+                atts.push(s);
+              }
+            }
+            if (atts.length > 0) {
+              params.attachment = atts.join(",");
+            }
+          }
+        }
+      } catch (e) {}
     }
 
     const tryEdit = async (editParams: any) => {
@@ -101,34 +180,6 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
         return null;
       }
     };
-
-    if (extraParams.conversation_message_id) {
-      const res = await tryEdit({ ...params, conversation_message_id: extraParams.conversation_message_id });
-      if (res) return res;
-    }
-    if (extraParams.message_id) {
-      const res = await tryEdit({ ...params, message_id: extraParams.message_id });
-      if (res) return res;
-    }
-
-    let targetId: number | null = null;
-    let targetCmid: number | null = null;
-    if (idOrCmId) {
-      if (typeof idOrCmId === "number" || typeof idOrCmId === "string") {
-        targetId = Number(idOrCmId);
-      } else if (typeof idOrCmId === "object" && idOrCmId !== null) {
-        const respObj = idOrCmId.response !== undefined ? idOrCmId.response : idOrCmId;
-        if (Array.isArray(respObj) && respObj[0]) {
-          targetCmid = respObj[0].conversation_message_id || null;
-          targetId = respObj[0].message_id || (typeof respObj[0] === "number" ? respObj[0] : null);
-        } else if (typeof respObj === "object" && respObj !== null) {
-          targetCmid = respObj.conversation_message_id || null;
-          targetId = respObj.message_id || null;
-        } else if (typeof respObj === "number") {
-          targetId = respObj;
-        }
-      }
-    }
 
     if (targetCmid) {
       const res = await tryEdit({ ...params, conversation_message_id: targetCmid });
@@ -304,7 +355,19 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
 
   extractIdsFromVal(msgIdOrObj);
 
-  // 1. Try candidate MSGIDs first (works directly for messages.send returns)
+  // 1. If in chat (peerId >= 2000000000), try candidate CMIDs FIRST
+  if (peerId >= 2000000000 && candidateCmIds.size > 0) {
+    for (const cmid of candidateCmIds) {
+      if (!cmid) continue;
+      const strCmid = String(cmid);
+      let ok = await tryDelete({ ...baseParams, conversation_message_ids: strCmid });
+      if (ok) return true;
+      ok = await tryDelete({ ...baseParams, cmids: strCmid });
+      if (ok) return true;
+    }
+  }
+
+  // 2. Try candidate MSGIDs
   if (candidateMsgIds.size > 0) {
     for (const msgId of candidateMsgIds) {
       if (!msgId) continue;
@@ -316,14 +379,14 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
     }
   }
 
-  // 2. Try candidate CMIDs
-  if (candidateCmIds.size > 0) {
+  // 3. Fallback CMIDs for non-chat if any
+  if (peerId < 2000000000 && candidateCmIds.size > 0) {
     for (const cmid of candidateCmIds) {
       if (!cmid) continue;
       const strCmid = String(cmid);
-      let ok = await tryDelete({ ...baseParams, cmids: strCmid });
+      let ok = await tryDelete({ ...baseParams, conversation_message_ids: strCmid });
       if (ok) return true;
-      ok = await tryDelete({ ...baseParams, conversation_message_ids: strCmid });
+      ok = await tryDelete({ ...baseParams, cmids: strCmid });
       if (ok) return true;
     }
   }

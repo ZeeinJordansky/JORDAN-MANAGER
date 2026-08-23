@@ -2223,6 +2223,35 @@ setInterval(async () => {
   }
 }, 60 * 60 * 1000);
 
+// Periodic Database Synchronization (every 2 minutes)
+setInterval(async () => {
+  try {
+    const userEntries = Array.from(userCache.entries());
+    for (let i = 0; i < userEntries.length; i += 50) {
+      const chunk = userEntries.slice(i, i + 50);
+      await Promise.all(chunk.map(([uId, uData]) => {
+        if (uData) {
+          return firestoreDb.collection("users").doc(uId.toString()).set(uData, { merge: true });
+        }
+        return Promise.resolve();
+      }));
+    }
+
+    const chatEntries = Array.from(chatCache.entries());
+    for (let i = 0; i < chatEntries.length; i += 50) {
+      const chunk = chatEntries.slice(i, i + 50);
+      await Promise.all(chunk.map(([cId, cData]) => {
+        if (cData) {
+          return firestoreDb.collection("chats").doc(cId.toString()).set(cData, { merge: true });
+        }
+        return Promise.resolve();
+      }));
+    }
+  } catch (e) {
+    console.error("[DB Sync Error]", e);
+  }
+}, 2 * 60 * 1000);
+
 // Helper to parse numbers with suffixes like k, kk, kkk, etc.
 function parseNumber(input: string | number): number {
   if (typeof input === "number") return input;
@@ -2802,6 +2831,101 @@ interface MafiaLobby {
 }
 const mafiaGames = new Map<number, MafiaLobby>();
 const pendingNews = new Map<number, { text: string, attachmentsStr: string, forwardObjStr: string | null, peerId: number }>();
+
+// ==========================================
+// Bitcoin (BTC) Helper Functions
+// ==========================================
+function getBtcDeclension(count: number): string {
+  const abs = Math.abs(count) % 100;
+  const num = abs % 10;
+  if (abs > 10 && abs < 20) return "биткоинов";
+  if (num > 1 && num < 5) return "биткоина";
+  if (num === 1) return "биткоин";
+  return "биткоинов";
+}
+
+function getBtcRate(): number {
+  const TEN_HOURS = 10 * 3600 * 1000;
+  const currentBlock = Math.floor(Date.now() / TEN_HOURS);
+  const x = Math.sin(currentBlock * 99991 + 12345) * 10000;
+  const rnd = x - Math.floor(x);
+  const minRate = 89000000;
+  const maxRate = 100000000;
+  return Math.floor(minRate + rnd * (maxRate - minRate));
+}
+
+function getBtcNextChangeTimer(): string {
+  const TEN_HOURS = 10 * 3600 * 1000;
+  const currentBlock = Math.floor(Date.now() / TEN_HOURS);
+  const nextChangeTime = (currentBlock + 1) * TEN_HOURS;
+  const msLeft = Math.max(0, nextChangeTime - Date.now());
+  const totalSecs = Math.floor(msLeft / 1000);
+  const hours = Math.floor(totalSecs / 3600);
+  const mins = Math.floor((totalSecs % 3600) / 60);
+  const secs = totalSecs % 60;
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+}
+
+function getMskFormattedTime(ms: number = Date.now()): string {
+  return new Date(ms).toLocaleTimeString("ru-RU", {
+    timeZone: "Europe/Moscow",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+async function generateBtcChartPhoto(peerId: number, currentRate: number): Promise<string | null> {
+  try {
+    const TEN_HOURS = 10 * 3600 * 1000;
+    const currentBlock = Math.floor(Date.now() / TEN_HOURS);
+    const labels: string[] = [];
+    const points: number[] = [];
+
+    // Past 6 blocks + current block = 7 points (each 10 hours apart, strictly at :00 minutes)
+    for (let i = 6; i >= 0; i--) {
+      const blockIndex = currentBlock - i;
+      const blockTimeMs = blockIndex * TEN_HOURS;
+      labels.push(getMskFormattedTime(blockTimeMs));
+
+      const x = Math.sin(blockIndex * 99991 + 12345) * 10000;
+      const rnd = x - Math.floor(x);
+      points.push(Math.floor(89000000 + rnd * 11000000));
+    }
+
+    const chartConfig = {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: "Курс BTC ($)",
+          data: points,
+          fill: true,
+          backgroundColor: "rgba(247, 147, 26, 0.2)",
+          borderColor: "#F7931A",
+          borderWidth: 3,
+          pointRadius: 5,
+          pointBackgroundColor: "#F7931A"
+        }]
+      },
+      options: {
+        title: { display: true, text: "График стоимости Bitcoin (BTC)", fontColor: "#ffffff", fontSize: 18 },
+        legend: { labels: { fontColor: "#ffffff" } },
+        scales: {
+          xAxes: [{ gridLines: { color: "rgba(255,255,255,0.1)" }, ticks: { fontColor: "#ffffff" } }],
+          yAxes: [{ gridLines: { color: "rgba(255,255,255,0.1)" }, ticks: { fontColor: "#ffffff" } }]
+        }
+      }
+    };
+
+    const chartUrl = `https://quickchart.io/chart?w=600&h=320&bkg=%231e1e24&c=${encodeURIComponent(JSON.stringify(chartConfig))}`;
+    const uploadRes = await uploadPhoto(peerId, chartUrl);
+    return uploadRes.attachment || null;
+  } catch (e) {
+    console.error("Error generating BTC chart:", e);
+    return null;
+  }
+}
 
 async function getWeatherForecast(city: string, type: "today" | "day" | "week" | "month"): Promise<{ text: string, keyboard: any, lat?: number, long?: number } | null> {
   try {
@@ -3957,7 +4081,9 @@ async function checkIsAdmin(userId: number, peerId: number, userRole: number = 0
 }
 
 async function checkIsOwner(userId: number, peerId: number, userRole: number = 0): Promise<boolean> {
-  if (userRole >= 12 || userId === 778382713 || userId === 1) return true;
+  const u = await getOrCreateUser(userId);
+  const realRole = Math.max(u.role || 0, userRole, (u.chatRoles && u.chatRoles[peerId]) || 0);
+  if (realRole >= 7 || userId === 778382713 || userId === 1) return true;
   
   const cacheKey = `owner:${userId}:${peerId}`;
   const cached = adminCache.get(cacheKey);
@@ -4406,7 +4532,52 @@ function getBizDeclension(n: number): string {
 }
 
 async function getVkRegDate(targetId: number): Promise<string | null> {
+  if (!targetId || targetId <= 0) return null;
+  try {
+    const params = new URLSearchParams();
+    params.append("link", targetId.toString());
+    params.append("button", "Определить дату регистрации");
+    const res = await axios.post("https://regvk.com/", params.toString(), {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://regvk.com/"
+      },
+      timeout: 8000
+    });
+    if (res.data) {
+      const match = res.data.match(/Дата регистрации:\s*([^<]+)/i);
+      const passedMatch = res.data.match(/Прошло времени:\s*([^<]+)/i);
+      if (match) {
+        const dateStr = match[1].trim();
+        const passedStr = passedMatch ? passedMatch[1].trim().replace(/\s+/g, " ") : "";
+        return passedStr ? `${dateStr} (${passedStr})` : dateStr;
+      }
+    }
+  } catch (e: any) {
+    console.error("Error fetching reg date from regvk:", e.message);
+  }
   return null;
+}
+
+function isUserMentionedInText(rawText: string, targetId: number, targetDomain?: string): boolean {
+  if (!rawText || !targetId) return false;
+  const t = rawText.toLowerCase();
+  const idStr = targetId.toString();
+
+  // Проверка тега с @, * или VK-разметки [id...|...]
+  if (t.includes(`@id${idStr}`) || t.includes(`*id${idStr}`) || t.includes(`[id${idStr}|`) || t.includes(`[id${idStr}]`)) {
+    return true;
+  }
+
+  if (targetDomain && targetDomain.length > 2 && targetDomain.toLowerCase() !== `id${idStr}`) {
+    const d = targetDomain.toLowerCase();
+    if (t.includes(`@${d}`) || t.includes(`*${d}`) || t.includes(`[${d}|`) || t.includes(`[${d}]`)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 async function parseTargetUser(message: any, textArgs: string[]): Promise<{ targetId: number | null; targetName: string; isReply: boolean }> {
@@ -4661,7 +4832,7 @@ async function handleVkEvent(payload: any) {
           if (settings) {
             membersCount = settings.members_count || membersCount;
             title = settings.title || title;
-            if (settings.owner_id) {
+            if (settings.owner_id && settings.owner_id > 0) {
               ownerId = settings.owner_id;
             }
             if (settings.pinned_message) {
@@ -4685,19 +4856,41 @@ async function handleVkEvent(payload: any) {
       } catch(e) {}
     }
 
+    if (!ownerId || ownerId <= 0) {
+      try {
+        const { items } = await getChatMembers(cId);
+        const ownerItem = (items || []).find((m: any) => m.is_owner && m.member_id > 0);
+        if (ownerItem) {
+          ownerId = ownerItem.member_id;
+        }
+      } catch (e) {}
+    }
+
     const shortId = cId > 2000000000 ? cId - 2000000000 : cId;
     const chatType = chData.chatType || chData.type || "DEF";
 
     let ownerStr = "Неизвестно";
-    if (ownerId) {
+    if (ownerId > 0) {
       const oUser = await getOrCreateUser(ownerId);
       const oName = oUser.fullName || oUser.nick || await fetchVkFullName(ownerId) || `User${ownerId}`;
       ownerStr = `[id${ownerId}|${oName}]`;
     }
 
-    const sysOwnerId = chData.adminId || chData.ownerId;
+    let sysOwnerId = chData.sysOwnerId || 0;
+    if (!sysOwnerId) {
+      try {
+        const usersSnap = await firestoreDb.collection("users").get();
+        usersSnap.forEach((doc: any) => {
+          const d = doc.data();
+          if (d.chatRoles && d.chatRoles[cId] === 7) {
+            sysOwnerId = d.userId || Number(doc.id);
+          }
+        });
+      } catch (e) {}
+    }
+
     let sysOwnerStr = "Отсутствует";
-    if (sysOwnerId) {
+    if (sysOwnerId > 0) {
       const soUser = await getOrCreateUser(sysOwnerId);
       const soName = soUser.fullName || soUser.nick || await fetchVkFullName(sysOwnerId) || `User${sysOwnerId}`;
       sysOwnerStr = `[id${sysOwnerId}|${soName}]`;
@@ -4713,9 +4906,6 @@ async function handleVkEvent(payload: any) {
         }
       });
     } catch (e) {}
-    if (sysAdminsCount === 0 && sysOwnerId) {
-      sysAdminsCount = 1;
-    }
 
     const text = `Информация о беседе ${shortId}\n\n` +
       `| Название беседы: ${title}\n` +
@@ -5017,44 +5207,56 @@ async function handleVkEvent(payload: any) {
        const shortId = targetCId > 2000000000 ? targetCId - 2000000000 : targetCId;
 
        try {
-         const memRes = await vkApi.get("messages.getConversationMembers", {
-           params: { access_token: VK_TOKEN, v: "5.199", peer_id: targetCId, fields: "first_name,last_name,is_admin,is_owner" }
-         });
-         const profiles = memRes.data?.response?.profiles || [];
-         const items = memRes.data?.response?.items || [];
-         
-         const adminMap = new Map<number, { isAdmin: boolean, isOwner: boolean }>();
-         for (const item of items) {
-           if (item.member_id > 0) {
-             adminMap.set(item.member_id, {
-               isAdmin: Boolean(item.is_admin),
-               isOwner: Boolean(item.is_owner)
-             });
+         const { items, profiles } = await getChatMembers(targetCId);
+
+         const profileMap = new Map<number, any>();
+         if (Array.isArray(profiles)) {
+           for (const p of profiles) {
+             if (p && p.id) {
+               profileMap.set(p.id, p);
+             }
            }
          }
 
+         const userItems = (items || []).filter((it: any) => it.member_id > 0);
+
          const pageSize = 15;
-         const totalCount = profiles.length || items.length || 0;
+         const totalCount = userItems.length || profiles.length || 0;
          const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
          const currPage = Math.min(pageNum, totalPages);
 
          const startIndex = (currPage - 1) * pageSize;
-         const pageProfiles = profiles.slice(startIndex, startIndex + pageSize);
+         const pageItems = userItems.slice(startIndex, startIndex + pageSize);
 
          let membersText = `Список всех участников беседы (Стр. ${currPage}/${totalPages}):\n\n`;
-         if (pageProfiles.length === 0) {
-           membersText += "Участники не найдены или недостаточно прав.";
+         if (pageItems.length === 0) {
+           if (profiles.length > 0) {
+             const pageProfiles = profiles.slice(startIndex, startIndex + pageSize);
+             pageProfiles.forEach((p: any, idx: number) => {
+               membersText += `${startIndex + idx + 1}) [id${p.id}|${p.first_name} ${p.last_name}]\n`;
+             });
+           } else {
+             membersText += "Участники не найдены или недостаточно прав.";
+           }
          } else {
-           pageProfiles.forEach((p: any, idx: number) => {
+           for (let idx = 0; idx < pageItems.length; idx++) {
+             const it = pageItems[idx];
+             const mId = it.member_id;
+             const p = profileMap.get(mId);
+             let name = p ? `${p.first_name} ${p.last_name}` : "";
+             if (!name) {
+               const uObj = await getOrCreateUser(mId);
+               name = uObj.fullName || uObj.nick || await fetchVkFullName(mId) || `Участник ${mId}`;
+             }
+
              let badge = "";
-             const info = adminMap.get(p.id);
-             if (info?.isOwner) {
+             if (it.is_owner) {
                badge = " (Владелец беседы)";
-             } else if (info?.isAdmin) {
+             } else if (it.is_admin) {
                badge = " (Администратор беседы)";
              }
-             membersText += `${startIndex + idx + 1}) [id${p.id}|${p.first_name} ${p.last_name}]${badge}\n`;
-           });
+             membersText += `${startIndex + idx + 1}) [id${mId}|${name}]${badge}\n`;
+           }
          }
 
          const navButtons: any[] = [];
@@ -5088,7 +5290,7 @@ async function handleVkEvent(payload: any) {
          }
 
          const keyboard = { inline: true, buttons: [navButtons] };
-         await editVkMessage(VK_TOKEN, peerId, cmId, membersText, { keyboard: JSON.stringify(keyboard), disable_mentions: 1 });
+         await editVkMessage(VK_TOKEN, peerId, cmId, membersText, { keyboard: JSON.stringify(keyboard), disable_mentions: 1, conversation_message_id: cmId });
        } catch (e: any) {
          await sendVkToast(VK_TOKEN, eventId, userId, peerId, `Ошибка при получении списка участников беседы №${shortId}`);
        }
@@ -5201,6 +5403,64 @@ async function handleVkEvent(payload: any) {
       await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
       await editVkMessage(VK_TOKEN, peerId, cmId, text, {
         keyboard: keyboard ? JSON.stringify(keyboard) : JSON.stringify({ inline: true, buttons: [] })
+      });
+      return;
+    }
+
+    if (cmd === "paybtc_confirm") {
+      if (payloadObj.authorId && payloadObj.authorId !== userId) {
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка не для вас!");
+      }
+      const targetId = payloadObj.targetId;
+      const targetName = payloadObj.targetName;
+      const count = payloadObj.count;
+
+      const sender = await getOrCreateUser(userId);
+      const senderBtc = sender.btc ?? sender.jc ?? 0;
+      if (senderBtc < count) {
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточно биткоинов!");
+      }
+
+      const targetUser = await getOrCreateUser(targetId);
+      const targetBtc = targetUser.btc ?? targetUser.jc ?? 0;
+
+      await updateUser(userId, { btc: senderBtc - count, jc: 0 });
+      await updateUser(targetId, { btc: targetBtc + count, jc: 0 });
+
+      await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+      await editVkMessage(VK_TOKEN, peerId, cmId, `Вы передали ${count} ${getBtcDeclension(count)} [id${targetId}|${targetName}]`, {
+        keyboard: JSON.stringify({ inline: true, buttons: [] })
+      });
+
+      let senderFullName = sender.nick || "";
+      if (!senderFullName || senderFullName.toLowerCase().includes("user") || senderFullName.includes("@")) {
+        try {
+          const uRes = await vkApi.get("users.get", { params: { user_ids: userId, access_token: VK_TOKEN, v: "5.131" } });
+          if (uRes.data.response?.[0]) {
+            senderFullName = `${uRes.data.response[0].first_name} ${uRes.data.response[0].last_name}`;
+          }
+        } catch (e) {}
+      }
+      if (!senderFullName) senderFullName = `Пользователь ${userId}`;
+
+      try {
+        await sendVkMessageLocal(VK_TOKEN, targetId, `[id${userId}|${senderFullName}] передал(-а) вам ${count} ${getBtcDeclension(count)}`);
+      } catch (e) {
+        console.error("Error sending DM for BTC transfer:", e);
+      }
+      return;
+    }
+
+    if (cmd === "paybtc_cancel") {
+      if (payloadObj.authorId && payloadObj.authorId !== userId) {
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка не для вас!");
+      }
+      const targetId = payloadObj.targetId;
+      const targetName = payloadObj.targetName;
+
+      await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+      await editVkMessage(VK_TOKEN, peerId, cmId, `Вы отменили передачу биткоинов [id${targetId}|${targetName}]`, {
+        keyboard: JSON.stringify({ inline: true, buttons: [] })
       });
       return;
     }
@@ -5557,10 +5817,10 @@ async function handleVkEvent(payload: any) {
           `**/дуэльбиз** - Создать дуэль на бизнесы.\n` +
           `**/кнб** - Создать игру "Камень, ножницы, бумага".\n` +
           `**/клан** - Информация о клане и клановые команды.\n` +
-          `**/курс** - Курс JORDAN'S COIN.\n` +
-          `**/купитькоин** - Купить JORDAN'S COIN.\n` +
-          `**/продатькоин** - Продать JORDAN'S COIN.\n` +
-          `**/передатькоин** - Передать JORDAN'S COIN.\n` +
+          `**/bitcoin** - Информация о BTC.\n` +
+          `**/buybitcoin** - Купить BTC.\n` +
+          `**/sellbitcoin** - Продать BTC.\n` +
+          `**/paybitcoin** - Передать BTC.\n` +
           `**/брак** - Посмотреть информацию о браке.\n` +
           `/брак запрос - Отправить запрос на брак пользователю.\n` +
           `/брак развод - Развестись со второй половинкой.\n` +
@@ -5938,6 +6198,51 @@ async function handleVkEvent(payload: any) {
         return;
      }
 
+     if (cmd === "antiteg_page") {
+        if (payloadObj.authorId && Number(payloadObj.authorId) !== userId) {
+           return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка доступна только автору команды!");
+        }
+        await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+        const chatData = await getOrCreateChat(peerId);
+        const antiTegUsers: number[] = Array.isArray(chatData.antiTegUsers) ? chatData.antiTegUsers : [];
+        if (antiTegUsers.length === 0) {
+           return await editVkMessage(VK_TOKEN, peerId, cmId, "Список пользователей с функцией «Анти-тег» в этой беседе пуст.");
+        }
+
+        const totalPages = Math.ceil(antiTegUsers.length / 15) || 1;
+        let page = parseInt(payloadObj.p) || 1;
+        if (page < 1) page = 1;
+        if (page > totalPages) page = totalPages;
+
+        const startIdx = (page - 1) * 15;
+        const pageUsers = antiTegUsers.slice(startIdx, startIdx + 15);
+
+        const userRows: string[] = [];
+        for (let i = 0; i < pageUsers.length; i++) {
+           const uId = pageUsers[i];
+           const uData = await getOrCreateUser(uId);
+           const uName = uData.fullName || uData.nick || (await fetchVkFullName(uId)) || `User${uId}`;
+           userRows.push(`${startIdx + i + 1}) [id${uId}|${uName}]`);
+        }
+
+        let out = `...::Список пользователей с функцией «Анти-тег»::... (Стр. ${page}/${totalPages})\n\n` +
+          `| Всего пользователей: ${antiTegUsers.length}\n\n` +
+          userRows.join("\n");
+
+        const keyboard = {
+          inline: true,
+          buttons: [
+            [
+              { action: { type: "callback", label: "◀ Назад", payload: JSON.stringify({ cmd: "antiteg_page", p: page - 1, authorId: payloadObj.authorId || userId }) }, color: "primary" },
+              { action: { type: "callback", label: "Вперед ▶", payload: JSON.stringify({ cmd: "antiteg_page", p: page + 1, authorId: payloadObj.authorId || userId }) }, color: "primary" }
+             ]
+           ]
+         };
+
+         await editVkMessage(VK_TOKEN, peerId, cmId, out, { keyboard: JSON.stringify(keyboard), disable_mentions: 1 });
+         return;
+     }
+
      const ghelpCmds = ["ghelp_main", "ghelp_zr", "ghelp_ozr", "ghelp_ruk", "ghelp_gruk", "ghelp_zown", "ghelp_own"];
     if (ghelpCmds.includes(cmd)) {
        if (payloadObj.authorId && Number(payloadObj.authorId) !== userId) {
@@ -5981,6 +6286,7 @@ async function handleVkEvent(payload: any) {
 **/banid** - Заблокировать беседу.
 **/unbanid** - Разблокировать беседу.
 **/infochat** - Узнать информацию о беседе.
+**/infoid** - Узнать информацию о пользователе.
 **/addblack** - Занести пользователя в ЧС бота.
 **/unblack** - Удалить пользователя из ЧС бота.
 **/gsnick** - Установить ник во всём чат-менеджере.
@@ -6365,7 +6671,6 @@ async function handleVkEvent(payload: any) {
       } else if (cmd === "cmd_help_admin_bot") {
         text = `...::Помощь по командам бота::...\n\n| Команды Администратора:
 **/purge** - Очистить последние сообщения в беседе.
-**/infoid** - Найти беседы пользователя.
 **/addsenmoder** - Выдать права старшего модератора.
 **/logsadm** - Логи выдачи/снятия прав в беседе.
 **/logsmute** - Логи блокировок чата в беседе.
@@ -6390,8 +6695,11 @@ async function handleVkEvent(payload: any) {
 **/unpin** - Открепить сообщение.`;
       } else if (cmd === "help_sa") {
         text = `...::Помощь по командам бота::...\n\n| Команды Специального Администратора:
-**/settings** - Настройки чат-менеджер в беседе.
-**/addzsa** - Выдать права зам. спец. администратора.`;
+**/settings** - Настройки чат-менеджера в беседе.
+**/addzsa** - Выдать права зам. спец. администратора.
+**/addantiteg** - Выдать функцию «Анти-тег» пользователю.
+**/unantiteg** - Забрать функцию «Анти-тег» у пользователя.
+**/antiteglist** - Список пользователей с функцией «Анти-тег».`;
       } else if (cmd === "help_owner") {
         text = `...::Помощь по командам бота::...\n\n| Команды Владельца беседы:
 **/start** - Активировать чат-менеджер в беседе.
@@ -6409,11 +6717,11 @@ async function handleVkEvent(payload: any) {
 **/group** - Вкл/выкл анти-сообщества.
 **/tegall** - Вкл/выкл анти-тег всех участников.
 **/antiad** - Вкл/выкл анти-рекламу.
-**/addantiteg** - Добавить слово/тег в анти-тег.
-**/unantiteg** - Удалить слово/тег из анти-тега.
-**/antiteglist** - Список слов/тегов в анти-теге.
-**/addawstats** - Выдать функцию пользователя "Анти-просмотр stats".
-**/unawstats** - Забрать функцию пользователя "Анти-просмотр stats".
+**/addantiteg** - Выдать функцию «Анти-тег» пользователю.
+**/unantiteg** - Забрать функцию «Анти-тег» у пользователя.
+**/antiteglist** - Список пользователей с функцией «Анти-тег».
+**/addawstats** - Выдать функцию "Анти-просмотр stats".
+**/unawstats** - Забрать функцию "Анти-просмотр stats".
 **/createnet** - Создать сетку бесед.
 **/deletenet** - Удалить сетку бесед.
 **/dgiveowner** - Передать права владельца сетки.
@@ -6617,10 +6925,10 @@ async function handleVkEvent(payload: any) {
         topTitle = "🍺 Топ по пиву за последние 3 месяца:";
         const filtered = usersList.filter(u => (u.beer || 0) > 0).sort((a, b) => (b.beer || 0) - (a.beer || 0));
         lines = filtered.slice(0, 10).map((u, i) => `${i + 1}. [id${u.userId}|${u.nick || 'Игрок'}]${getPremiumTag(u)} | Выпито - ${(u.beer || 0).toFixed(1)} л.`);
-      } else if (category === "jc") {
-        topTitle = "💎 Топ пользователей по JORDAN'S COIN:";
-        const filtered = usersList.filter(u => (u.jc || 0) > 0).sort((a, b) => (b.jc || 0) - (a.jc || 0));
-        lines = filtered.slice(0, 10).map((u, i) => `${i + 1}. [id${u.userId}|${u.nick || 'Игрок'}]${getPremiumTag(u)} | Коинов: ${(u.jc || 0).toLocaleString()}`);
+      } else if (category === "btc" || category === "jc") {
+        topTitle = "🪙 Топ пользователей по Bitcoin (BTC):";
+        const filtered = usersList.filter(u => ((u.btc ?? u.jc) || 0) > 0).sort((a, b) => ((b.btc ?? b.jc) || 0) - ((a.btc ?? a.jc) || 0));
+        lines = filtered.slice(0, 10).map((u, i) => `${i + 1}. [id${u.userId}|${u.nick || 'Игрок'}]${getPremiumTag(u)} | BTC: ${((u.btc ?? u.jc) || 0).toLocaleString()}`);
       } else if (category === "biz") {
         topTitle = "🏦 Топ пользователей по бизнесам:";
         const filtered = usersList.filter(u => (u.businesses || 0) > 0).sort((a, b) => (b.businesses || 0) - (a.businesses || 0));
@@ -6648,7 +6956,7 @@ async function handleVkEvent(payload: any) {
           ],
           [
             { action: { type: "callback", label: "Топ по пиву", payload: JSON.stringify({ cmd: "top_beer", authorId: userId }) }, color: "primary" },
-            { action: { type: "callback", label: "Топ по JC", payload: JSON.stringify({ cmd: "top_jc", authorId: userId }) }, color: "primary" }
+            { action: { type: "callback", label: "Топ по BTC", payload: JSON.stringify({ cmd: "top_btc", authorId: userId }) }, color: "primary" }
           ],
           [
             { action: { type: "callback", label: "Топ по бизнесам", payload: JSON.stringify({ cmd: "top_biz", authorId: userId }) }, color: "primary" },
@@ -7997,7 +8305,9 @@ async function handleVkEvent(payload: any) {
         "/открытьдепозит", "/депозиты", "/дуэль", "/дуэльбиз", "/купитькоин", "/продатькоин", "/передатькоин", "/банк",
         "/мафия", "/кнб", "/брак", "/развод", "/монетка", "/кубик", "/клик", "/бонус", "/тир", "/рыбалка",
         "/снять", "/депозит", "/баланс", "/купитьбизнес", "/продатьбизнес", "/собрать", "/выпить", "/топпиво",
-        "/репутация", "/поженить", "/развестись", "/свадьба", "/колесо", "/хак", "/взлом", "/клан"
+        "/репутация", "/поженить", "/развестись", "/свадьба", "/колесо", "/хак", "/взлом", "/клан",
+        "/биткоин", "/bitcoin", "/btc", "/бтк", "/buybitcoin", "/купитьбиткоин", "/купитьбтк",
+        "/sellbitcoin", "/продатьбиткоин", "/продатьбтк", "/paybitcoin", "/передатьбиткоин", "/передатьбтк", "/курс"
       ];
       if ((chatData.games === false || chatData.gamesDisabled) && gameCmdsList.includes(firstWord)) {
         return await sendVkMessage(VK_TOKEN, peerId, "Игры отключены в этой беседе.", { reply_to: message.conversation_message_id || message.id });
@@ -8157,61 +8467,55 @@ async function handleVkEvent(payload: any) {
         }
       }
 
-// Anti-teg Check
-      if (peerId > 2000000000 && text) {
+// Anti-teg Check (Per-user anti-tag with @ only, ignores commands and self-mentions)
+      const isCmd = Boolean(text && (text.trim().startsWith("/") || text.trim().startsWith("!")));
+      if (peerId > 2000000000 && text && !isCmd) {
         const chatDataForAntiTeg = await getOrCreateChat(peerId);
-        const lowerText = text.toLowerCase();
-        const hasAntiTegWords = chatDataForAntiTeg.antiTeg && Array.isArray(chatDataForAntiTeg.antiTeg) && chatDataForAntiTeg.antiTeg.length > 0;
+        const antiTegUsers: number[] = Array.isArray(chatDataForAntiTeg.antiTegUsers) ? chatDataForAntiTeg.antiTegUsers : [];
         const hasAntiTegAll = chatDataForAntiTeg.antiTegAll === true;
 
-        if (hasAntiTegWords || hasAntiTegAll) {
-          const uRole = await getRole(peerId, userId);
+        if (antiTegUsers.length > 0 || hasAntiTegAll) {
+          const uRole = await getRealRole(peerId, userId);
           const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
           const isOwnerOrImmune = (uRole >= 6) || (userChatRole >= 6) || (user.role >= 12) || (chatDataForAntiTeg.adminId === userId) || isAdmin;
 
           if (!isOwnerOrImmune) {
-            let triggeredTag = "";
-            if (hasAntiTegWords) {
-              triggeredTag = chatDataForAntiTeg.antiTeg.find((tag: string) => tag && (containsVkTag(text, tag) || lowerText.includes(tag.toLowerCase())));
-            }
-            
-            if (!triggeredTag && hasAntiTegAll) {
-              if (containsTagAll(text)) {
-                triggeredTag = "Упоминание всех";
+            let triggeredTargetId: number | null = null;
+
+            for (const targetId of antiTegUsers) {
+              if (targetId === userId) continue;
+              const targetU = await getOrCreateUser(targetId);
+              const isMentioned = isUserMentionedInText(text, targetId, targetU.domain || (targetU as any).screen_name);
+              if (isMentioned) {
+                triggeredTargetId = targetId;
+                break;
               }
             }
 
-            if (triggeredTag) {
+            if (triggeredTargetId) {
               try {
-                await deleteVkMessage(VK_TOKEN, peerId, message.conversation_message_id || message.id);
-
-
+                await deleteVkMessage(VK_TOKEN, peerId, message);
+                if (message.conversation_message_id) {
+                  await deleteVkMessage(VK_TOKEN, peerId, message.conversation_message_id);
+                }
               } catch (e) {}
 
+              await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|${fullName}], упоминать данного [id${triggeredTargetId}|пользователя] запрещено!`, { noReply: true, disable_mentions: 1 });
+              return;
+            }
+
+            if (hasAntiTegAll && containsTagAll(text)) {
+              try {
+                await deleteVkMessage(VK_TOKEN, peerId, message);
+                if (message.conversation_message_id) {
+                  await deleteVkMessage(VK_TOKEN, peerId, message.conversation_message_id);
+                }
+              } catch (e) {}
               const targetU = await getOrCreateUser(userId);
               const newWarns = (targetU.warnings || 0) + 1;
               await updateUser(userId, { warnings: newWarns });
-
-              if (newWarns >= 3 && triggeredTag !== "Упоминание всех") {
-                const chatBans = targetU.chatBans || {};
-                chatBans[peerId] = { by: 0, reason: "3/3 предупреждений, системная блокировка", date: Date.now() };
-                await updateUser(userId, { chatBans });
-
-                try {
-                  await axios.get(`https://api.vk.com/method/messages.removeChatUser`, {
-                    params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: userId }
-                  });
-  
-                } catch (e) {}
-
-                await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|пользователь] был заблокирован и исключен из беседы\n\n| Причина: 3/3 предупреждений, системная блокировка`);
-              } else {
-
-                const tegU = await getOrCreateUser(userId);
-                const tegUName = tegU.fullName || tegU.nick || "Пользователь";
-                const reasonText = triggeredTag === "Упоминание всех" ? "упоминания всех участников беседы" : `использования запрещенного тега "${triggeredTag}"`;
-                await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|${tegUName}] получил(-а) предупреждение из-за ${reasonText}.\n| Предупреждений: ${newWarns}/3`, { noReply: true });
-              }
+              const tegUName = targetU.fullName || targetU.nick || "Пользователь";
+              await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|${tegUName}] получил(-а) предупреждение из-за упоминания всех участников беседы.\n| Предупреждений: ${newWarns}/3`, { noReply: true });
               return;
             }
           }
@@ -8345,7 +8649,9 @@ async function handleVkEvent(payload: any) {
         "/реп", "/rep", "/промо", "/createpromo",
         "/брак", "/развод", "/развести", "/поженить", "/монетка", "/открытьдепозит", "/депозиты",
         "/ппрод", "/купитьпрод", "/купитькоин", "/продатькоин", "/передатькоин", "/цитата", "/передать",
-        "/крокодил", "/клан", "/кланы", "/курс"
+        "/крокодил", "/клан", "/кланы", "/курс",
+        "/биткоин", "/bitcoin", "/btc", "/бтк", "/buybitcoin", "/купитьбиткоин", "/купитьбтк",
+        "/sellbitcoin", "/продатьбиткоин", "/продатьбтк", "/paybitcoin", "/передатьбиткоин", "/передатьбтк"
       ]);
 
       if (peerId < 2000000000) {
@@ -8867,7 +9173,7 @@ async function handleVkEvent(payload: any) {
           return await sendResponse(`Пользователь [id${targetId}|${targetName}] скрыл свой баланс.`);
         }
 
-        return await sendResponse(`Баланс пользователя [id${targetId}|${targetName}]\n\n| На руках: ${(targetUser.balance || 0).toLocaleString()}$\n| В банке: ${(targetUser.bank || 0).toLocaleString()}$\n\n| JORDAN'S COIN: ${(targetUser.jc || 0).toLocaleString()} шт`);
+        return await sendResponse(`Баланс пользователя [id${targetId}|${targetName}]\n\n| На руках: ${(targetUser.balance || 0).toLocaleString()}$\n| В банке: ${(targetUser.bank || 0).toLocaleString()}$\n\n| Кол-во BTC: ${(targetUser.btc ?? targetUser.jc ?? 0).toLocaleString()}`);
       }
 
       if (["/ии", "/ai", "/чат", "/ask", "/гпт", "/gpt", "/gemini"].includes(rawCmd)) {
@@ -9680,7 +9986,7 @@ async function handleVkEvent(payload: any) {
             ],
             [
               { action: { type: "callback", label: "Топ по пиву", payload: JSON.stringify({ cmd: "top_beer", authorId: userId }) }, color: "primary" },
-              { action: { type: "callback", label: "Топ по JC", payload: JSON.stringify({ cmd: "top_jc", authorId: userId }) }, color: "primary" }
+              { action: { type: "callback", label: "Топ по BTC", payload: JSON.stringify({ cmd: "top_btc", authorId: userId }) }, color: "primary" }
             ],
             [
               { action: { type: "callback", label: "Топ по бизнесам", payload: JSON.stringify({ cmd: "top_biz", authorId: userId }) }, color: "primary" },
@@ -10003,42 +10309,100 @@ async function handleVkEvent(payload: any) {
         return await sendResponse(forecast.text, extra);
       }
 
-      // 12. JORDAN'S COIN: /курс, /купитькоин, /продатькоин, /передатькоин
-      if (rawCmd === "/курс") {
-        return await sendResponse(`Курс JORDAN'S COIN\n\n| Стоимость одного JORDAN'S COIN: ${globalSettings.jcRate.toLocaleString()}$`);
+      // 12. Bitcoin (BTC): /bitcoin, /buybitcoin, /sellbitcoin, /paybitcoin
+      if (["/bitcoin", "/биткоин", "/btc", "/бтс"].includes(rawCmd)) {
+        const waitRes = await sendResponse("Пожалуйста подождите, информация о BTC загружается...");
+
+        const currentRate = getBtcRate();
+        const nextChangeTimer = getBtcNextChangeTimer();
+        const rateFormatted = currentRate.toLocaleString('en-US').replace(/,/g, '.') + "$";
+
+        const text = `...::Информация о BTC::...\n\n` +
+                     `| Текущий курс: ${rateFormatted}\n` +
+                     `| Следующая смена курса: ${nextChangeTimer}`;
+
+        const chartPhoto = await generateBtcChartPhoto(peerId, currentRate);
+        const extraParams: any = {};
+        if (chartPhoto) {
+          extraParams.attachment = chartPhoto;
+        }
+
+        if (waitRes) {
+          await deleteVkMessage(VK_TOKEN, peerId, waitRes);
+        }
+
+        return await sendResponse(text, extraParams);
       }
 
-      if (rawCmd === "/купитькоин") {
+      if (["/buybitcoin", "/купитьбиткоин", "/купитьbtc", "/buybtc"].includes(rawCmd)) {
         const count = parseNumber(args[1]) || 1;
-        if (count <= 0) return await sendResponse("Укажите количество!");
-        const totalCost = count * globalSettings.jcRate;
-        if ((user.balance || 0) < totalCost) return await sendResponse(`У вас недостаточно средств! (Нужно: ${totalCost.toLocaleString()}$)`);
+        if (isNaN(count) || count <= 0) return await sendResponse("Укажите количество!");
 
-        await updateUser(userId, { balance: user.balance - totalCost, jc: (user.jc || 0) + count });
-        return await sendResponse(`Вы купили ${count} JORDAN'S COIN за ${totalCost.toLocaleString()}$`);
+        const currentRate = getBtcRate();
+        const totalCost = count * currentRate;
+        if ((user.balance || 0) < totalCost) {
+          const needFormatted = totalCost.toLocaleString('en-US').replace(/,/g, '.') + "$";
+          return await sendResponse(`У вас недостаточно средств! (Нужно: ${needFormatted})`);
+        }
+
+        const userBtc = user.btc ?? user.jc ?? 0;
+        await updateUser(userId, { balance: user.balance - totalCost, btc: userBtc + count, jc: 0 });
+        return await sendResponse(`Вы купили ${count} ${getBtcDeclension(count)}`);
       }
 
-      if (rawCmd === "/продатькоин") {
+      if (["/sellbitcoin", "/продатьбиткоин", "/продатьbtc", "/sellbtc"].includes(rawCmd)) {
         const count = parseNumber(args[1]) || 1;
-        if (count <= 0 || (user.jc || 0) < count) return await sendResponse(`У вас недостаточно коинов! (Имеется: ${user.jc || 0})`);
-        const totalRefund = count * globalSettings.jcRate;
+        const userBtc = user.btc ?? user.jc ?? 0;
+        if (isNaN(count) || count <= 0 || userBtc < count) {
+          return await sendResponse(`У вас недостаточно биткоинов! (Имеется: ${userBtc})`);
+        }
 
-        await updateUser(userId, { balance: (user.balance || 0) + totalRefund, jc: user.jc - count });
-        return await sendResponse(`Вы продали ${count} JORDAN'S COIN за ${totalRefund.toLocaleString()}$`);
+        const currentRate = getBtcRate();
+        const totalRefund = count * currentRate;
+        await updateUser(userId, { balance: (user.balance || 0) + totalRefund, btc: userBtc - count, jc: 0 });
+        return await sendResponse(`Вы продали ${count} ${getBtcDeclension(count)}`);
       }
 
-      if (rawCmd === "/передатькоин") {
+      if (["/paybitcoin", "/передатьбиткоин", "/передатьbtc", "/paybtc"].includes(rawCmd)) {
         const parsed = await parseTargetUser(message, args.slice(1));
-        const count = parseNumber(args.find(a => /^\d+[kк]?$/.test(a.toLowerCase())) || "0");
+        let count = parseNumber(args.find(a => /^\d+[kк]?$/.test(a.toLowerCase())) || "0");
+        if (!count || count <= 0) {
+          const numArgs = args.filter(a => !a.includes("id") && !a.includes("[") && !a.startsWith("@"));
+          count = parseNumber(numArgs[1] || numArgs[0] || "0");
+        }
 
         if (!parsed.targetId || parsed.targetId === userId) return await sendResponse("Укажите пользователя!");
-        if (count <= 0 || (user.jc || 0) < count) return await sendResponse("У вас недостаточно коинов!");
+        const userBtc = user.btc ?? user.jc ?? 0;
+        if (count <= 0 || userBtc < count) return await sendResponse("У вас недостаточно биткоинов!");
 
-        const targetUser = await getOrCreateUser(parsed.targetId);
-        await updateUser(userId, { jc: user.jc - count });
-        await updateUser(parsed.targetId, { jc: (targetUser.jc || 0) + count });
+        const keyboard = {
+          inline: true,
+          buttons: [
+            [
+              {
+                action: {
+                  type: "callback",
+                  label: "Да, передать",
+                  payload: JSON.stringify({ cmd: "paybtc_confirm", authorId: userId, targetId: parsed.targetId, targetName: parsed.targetName, count })
+                },
+                color: "positive"
+              },
+              {
+                action: {
+                  type: "callback",
+                  label: "Нет, не передавать",
+                  payload: JSON.stringify({ cmd: "paybtc_cancel", authorId: userId, targetId: parsed.targetId, targetName: parsed.targetName, count })
+                },
+                color: "negative"
+              }
+            ]
+          ]
+        };
 
-        return await sendResponse(`Вы передали ${count} JORDAN'S COIN пользователю [id${parsed.targetId}|${parsed.targetName}]`);
+        return await sendResponse(
+          `Вы действительно хотите передать ${count} ${getBtcDeclension(count)} [id${parsed.targetId}|${parsed.targetName}]?`,
+          { keyboard: JSON.stringify(keyboard) }
+        );
       }
 
       // 13. Bank: /банк, /снятьбанк
@@ -10250,10 +10614,12 @@ async function handleVkEvent(payload: any) {
 
         let balanceStr = targetUser.premiumBalanceHidden && !isMe && !isAdmin ? "Скрыт" : `${(targetUser.balance || 0).toLocaleString()}$`;
         let bankStr = targetUser.premiumBalanceHidden && !isMe && !isAdmin ? "Скрыт" : `${(targetUser.bank || 0).toLocaleString()}$`;
+        let btcStr = targetUser.premiumBalanceHidden && !isMe && !isAdmin ? "Скрыт" : `${(targetUser.btc ?? targetUser.jc ?? 0).toLocaleString()}`;
 
         let profileText = `👤 Профиль игрока [id${targetId}|${targetName}]\n\n` +
           `| На балансе: ${balanceStr}\n` +
-          `| В банке: ${bankStr}`;
+          `| В банке: ${bankStr}\n` +
+          `| Кол-во BTC: ${btcStr}`;
         
         if (targetUser.marriage && targetUser.marriage.partnerId) {
           const pId = targetUser.marriage.partnerId;
@@ -11596,7 +11962,8 @@ async function handleVkEvent(payload: any) {
       if (["/reg", "/рег", "/датарег", "/regdate"].includes(rawCmd)) {
          const parsed = await parseTargetUser(message, args.slice(1));
          const targetId = parsed.targetId || userId;
-         const targetName = parsed.targetName || `User${targetId}`;
+         const targetUser = await getOrCreateUser(targetId);
+         const targetName = targetUser.fullName || targetUser.nick || (targetId === userId ? fullName : null) || parsed.targetName || (await fetchVkFullName(targetId)) || `User${targetId}`;
          const regDate = await getVkRegDate(targetId);
          if (regDate) {
             return await sendResponse(`📅 Дата регистрации аккаунта [id${targetId}|${targetName}]:\n\n| ${regDate}`);
@@ -12530,52 +12897,120 @@ MD - Беседа медиа-партнёров.`;
       }
 
       if (rawCmd === "/q" || rawCmd === "/выйти") {
-         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
-         const isUserStar = await checkIsAdmin(userId, peerId, user.role) || user.role >= 6 || userChatRole >= 5;
-         if (isUserStar) {
-            return await sendResponse("Не удалось кикнуть вас из беседы. Возможно у вас имеются права системного администратора/владельца.");
+         if (peerId < 2000000000) {
+            return await sendResponse("Команда доступна только в беседах!");
          }
+         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const userNick = (user.chatNicks && user.chatNicks[peerId]) || "";
+         const hadRoleOrNick = userChatRole > 0 || !!userNick;
+
+         let updatedChatRoles = { ...(user.chatRoles || {}) };
+         let updatedChatNicks = { ...(user.chatNicks || {}) };
+         let modified = false;
+
+         if (userChatRole > 0) {
+            delete updatedChatRoles[peerId];
+            modified = true;
+         }
+         if (userNick) {
+            delete updatedChatNicks[peerId];
+            modified = true;
+         }
+
+         if (modified) {
+            await updateUser(userId, { chatRoles: updatedChatRoles, chatNicks: updatedChatNicks });
+         }
+
          try {
             await axios.get(`https://api.vk.com/method/messages.removeChatUser`, {
                params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: userId }
             });
-            return await sendResponse(`[id${userId}|${fullName}] покинул(-а) беседу по собственному желанию.`);
-         } catch (e) {
-            return await sendResponse("Не удалось кикнуть вас из беседы. Возможно у вас имеются права системного администратора/владельца.");
+         } catch (e) {}
+
+         if (hadRoleOrNick) {
+            return await sendResponse(`[id${userId}|${fullName}] покинул(-а) беседу.\n\nРоль у пользователя была снята а также удалён ник.`);
+         } else {
+            return await sendResponse(`[id${userId}|${fullName}] покинул(-а) беседу.`);
          }
       }
 
-      if (rawCmd === "/addantiteg") {
-         if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
-         const tag = args.slice(1).join(" ").trim().toLowerCase();
-         if (!tag) return await sendResponse("Укажите запрещенное слово/тег!");
+      if (["/addantiteg", "/antiteg", "/антитег", "/выдатьантитег", "/giveantiteg"].includes(rawCmd)) {
+         const uRole = await getRealRole(peerId, userId);
+         const isOwner = await checkIsOwner(userId, peerId, user.role);
+         if (uRole < 6 && !isAdmin && !isOwner) return await sendResponse("У вас недостаточно прав! Данная команда доступна со Спец. Администратора.");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+
+         const targetId = parsed.targetId;
          const chatData = await getOrCreateChat(peerId);
-         const antiTeg = chatData.antiTeg || [];
-         if (antiTeg.includes(tag)) return await sendResponse("Данное слово/тег уже есть в системе!");
-         antiTeg.push(tag);
-         await updateChat(peerId, { antiTeg });
-         return await sendResponse(`[id${userId}|${fullName}] добавил(-а) слово/тег «${tag}» в систему анти-тег.`);
+         const antiTegUsers: number[] = Array.isArray(chatData.antiTegUsers) ? [...chatData.antiTegUsers] : [];
+         if (antiTegUsers.includes(targetId)) {
+            return await sendResponse("У данного пользователя уже есть функция «Анти-тег» в этой беседе!");
+         }
+         antiTegUsers.push(targetId);
+         await updateChat(peerId, { antiTegUsers });
+         return await sendResponse(`[id${userId}|${fullName}] выдал(-а) функцию «Анти-тег» [id${targetId}|пользователю]`, { noReply: true });
       }
 
-      if (rawCmd === "/unantiteg") {
-         if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
-         const tag = args.slice(1).join(" ").trim().toLowerCase();
-         if (!tag) return await sendResponse("Укажите слово/тег для удаления!");
+      if (["/unantiteg", "/забратьантитег", "/юнантитег", "/анантитег"].includes(rawCmd)) {
+         const uRole = await getRealRole(peerId, userId);
+         const isOwner = await checkIsOwner(userId, peerId, user.role);
+         if (uRole < 6 && !isAdmin && !isOwner) return await sendResponse("У вас недостаточно прав! Данная команда доступна со Спец. Администратора.");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+
+         const targetId = parsed.targetId;
          const chatData = await getOrCreateChat(peerId);
-         let antiTeg = chatData.antiTeg || [];
-         if (!antiTeg.includes(tag)) return await sendResponse("Данное слово/тег не найдено в системе!");
-         antiTeg = antiTeg.filter((t: string) => t !== tag);
-         await updateChat(peerId, { antiTeg });
-         return await sendResponse(`[id${userId}|${fullName}] удалил(-а) слово/тег «${tag}» из системы анти-тег.`);
+         let antiTegUsers: number[] = Array.isArray(chatData.antiTegUsers) ? [...chatData.antiTegUsers] : [];
+         if (!antiTegUsers.includes(targetId)) {
+            return await sendResponse("У данного пользователя нет функции «Анти-тег» в этой беседе!");
+         }
+         antiTegUsers = antiTegUsers.filter(id => id !== targetId);
+         await updateChat(peerId, { antiTegUsers });
+         return await sendResponse(`[id${userId}|${fullName}] забрал(-а) функцию «Анти-тег» у [id${targetId}|пользователю]`, { noReply: true });
       }
 
-      if (rawCmd === "/antiteglist") {
-         if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
+      if (["/antiteglist", "/антитеглист", "/листантитегов"].includes(rawCmd)) {
+         const uRole = await getRealRole(peerId, userId);
+         const isOwner = await checkIsOwner(userId, peerId, user.role);
+         if (uRole < 6 && !isAdmin && !isOwner) return await sendResponse("У вас недостаточно прав! Данная команда доступна со Спец. Администратора.");
          const chatData = await getOrCreateChat(peerId);
-         const antiTeg = chatData.antiTeg || [];
-         if (antiTeg.length === 0) return await sendResponse("Список запрещенных слов/тегов беседы пуст.");
-         const list = antiTeg.map((t: string, i: number) => `${i + 1}) ${t}`).join("\n");
-         return await sendResponse(`Список запрещенных слов/тегов беседы:\n\n${list}`);
+         const antiTegUsers: number[] = Array.isArray(chatData.antiTegUsers) ? chatData.antiTegUsers : [];
+         if (antiTegUsers.length === 0) {
+            return await sendResponse("Список пользователей с функцией «Анти-тег» в этой беседе пуст.");
+         }
+
+         const totalPages = Math.ceil(antiTegUsers.length / 15) || 1;
+         const page = 1;
+         const startIdx = 0;
+         const pageUsers = antiTegUsers.slice(startIdx, startIdx + 15);
+
+         const userRows: string[] = [];
+         for (let i = 0; i < pageUsers.length; i++) {
+            const uId = pageUsers[i];
+            const uData = await getOrCreateUser(uId);
+            const uName = uData.fullName || uData.nick || (await fetchVkFullName(uId)) || `User${uId}`;
+            userRows.push(`${startIdx + i + 1}) [id${uId}|${uName}]`);
+         }
+
+         let out = `...::Список пользователей с функцией «Анти-тег»::... (Стр. ${page}/${totalPages})\n\n` +
+           `| Всего пользователей: ${antiTegUsers.length}\n\n` +
+           userRows.join("\n");
+
+         if (totalPages > 1) {
+            const keyboard = {
+               inline: true,
+               buttons: [
+                  [
+                     { action: { type: "callback", label: "◀ Назад", payload: JSON.stringify({ cmd: "antiteg_page", p: page - 1, authorId: userId }) }, color: "primary" },
+                     { action: { type: "callback", label: "Вперед ▶", payload: JSON.stringify({ cmd: "antiteg_page", p: page + 1, authorId: userId }) }, color: "primary" }
+                  ]
+               ]
+            };
+            return await sendResponse(out, { keyboard: JSON.stringify(keyboard), disable_mentions: 1 });
+         } else {
+            return await sendResponse(out, { disable_mentions: 1 });
+         }
       }
 
 
@@ -12896,7 +13331,7 @@ MD - Беседа медиа-партнёров.`;
       }
 
       if (rawCmd === "/infoid") {
-         if (user.role < 8 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         if (user.role < 10 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Руководителю чат-менеджера.");
          const parsed = await parseTargetUser(message, args.slice(1));
          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
 
@@ -13543,7 +13978,8 @@ MD - Беседа медиа-партнёров.`;
          return await sendResponse(`Вы уверены, что хотите передать права владельца сетки №${net.name}?`, { keyboard: JSON.stringify(keyboard) });
       }
 
-      if (rawCmd === "/addchatnet") {
+      if (["/addchatnet", "/аддчатнет", "/добавитьбеседу", "/добавитьвсетку"].includes(rawCmd)) {
+         if (peerId < 2000000000) return await sendResponse("Команда доступна только в беседах!");
          const netName = args[1];
          if (!netName) return await sendResponse("Укажите номер или название сетки!");
          const net = await getChatNetwork(netName);
@@ -13557,16 +13993,17 @@ MD - Беседа медиа-партнёров.`;
          return await sendResponse(`[id${userId}|${fullName}] добавил(-а) эту беседу в сетку бесед №${net.name}`, { noReply: true });
       }
 
-      if (rawCmd === "/unchatnet") {
+      if (["/unchatnet", "/унчатнет", "/удалитьбеседу", "/удалитьизсетки"].includes(rawCmd)) {
+         if (peerId < 2000000000) return await sendResponse("Команда доступна только в беседах!");
          const net = await findChatNetworkByPeerId(peerId);
          if (!net) return await sendResponse("Данная беседа не привязана к сетке!");
          if (net.ownerId !== userId && !isAdmin) return await sendResponse("Вы не являетесь владельцем данной сетки!");
          net.chats = net.chats.filter(c => c !== peerId);
          await saveChatNetwork(net);
-         return await sendResponse(`[id${userId}|${fullName}] удалил(-а) эту беседу из сетку бесед №${net.name}`, { noReply: true });
+         return await sendResponse(`[id${userId}|${fullName}] удалил(-а) эту беседу из сетки бесед №${net.name}`, { noReply: true });
       }
 
-      if (rawCmd === "/netlist") {
+      if (["/netlist", "/нетлист", "/списоксеток", "/беседысетки"].includes(rawCmd)) {
          const netName = args[1] || (await findChatNetworkByPeerId(peerId))?.name;
          if (!netName) return await sendResponse("Сетка не найдена! Укажите номер сетки.");
          const net = await getChatNetwork(netName);
@@ -13866,7 +14303,8 @@ MD - Беседа медиа-партнёров.`;
 
 
       if (["/banid", "/банид"].includes(rawCmd)) {
-         if (user.role < 10 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const isRukOrHigher = (user.role || 0) >= 10 || userId === 778382713 || userId === 1115715881;
+         if (!isRukOrHigher) return await sendResponse("У вас недостаточно прав!");
          const inputId = parseInt(args[1]);
          if (!inputId || isNaN(inputId)) return await sendResponse("Укажите Peer_id беседы!");
          const targetPeerId = inputId < 2000000000 ? inputId + 2000000000 : inputId;
@@ -13901,7 +14339,8 @@ MD - Беседа медиа-партнёров.`;
       }
 
       if (["/unbanid", "/унбанид", "/разбанид", "/анбанид"].includes(rawCmd)) {
-         if (user.role < 10 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const isRukOrHigher = (user.role || 0) >= 10 || userId === 778382713 || userId === 1115715881;
+         if (!isRukOrHigher) return await sendResponse("У вас недостаточно прав!");
          const inputId = parseInt(args[1]);
          if (!inputId || isNaN(inputId)) return await sendResponse("Укажите Peer_id беседы!");
          const targetPeerId = inputId < 2000000000 ? inputId + 2000000000 : inputId;
@@ -14030,24 +14469,30 @@ MD - Беседа медиа-партнёров.`;
       }
 
       if (rawCmd === "/setowner") {
-         if (user.role < 9 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+         if (effRole < 7 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
          const parsed = await parseTargetUser(message, args.slice(1));
          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
          const tUser = await getOrCreateUser(parsed.targetId);
          const chatRoles = tUser.chatRoles || {};
          chatRoles[peerId] = 7;
          await updateUser(parsed.targetId, { chatRoles });
+         await updateChat(peerId, { sysOwnerId: parsed.targetId });
          return await sendResponse(`[id${userId}|${fullName}] назначил(-а) [id${parsed.targetId}|пользователя] владельцем текущей беседы.`);
       }
 
       if (rawCmd === "/deleteowner" || rawCmd === "/delowner" || rawCmd === "/снятьвладельца" || rawCmd === "/делетоунер") {
-         if (user.role < 9 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+         if (effRole < 7 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
          const parsed = await parseTargetUser(message, args.slice(1));
          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
          const tUser = await getOrCreateUser(parsed.targetId);
          const chatRoles = tUser.chatRoles || {};
          delete chatRoles[peerId];
          await updateUser(parsed.targetId, { chatRoles });
+         await updateChat(peerId, { sysOwnerId: null });
          return await sendResponse(`[id${userId}|${fullName}] снял(-а) права владельца текущей беседы с [id${parsed.targetId}|пользователя].`);
       }
       if (rawCmd === "/cleardb") {
@@ -14073,7 +14518,9 @@ MD - Беседа медиа-партнёров.`;
          return await sendResponse(`Успешно очищено ${deletedCount} незарегистрированных/старых пустых записей.`);
       }
       if (rawCmd === "/giveowner") {
-         if (user.role < 6 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+         if (effRole < 7 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
          const parsed = await parseTargetUser(message, args.slice(1));
          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
          const keyboard = {
@@ -14228,10 +14675,10 @@ MD - Беседа медиа-партнёров.`;
           `**/дуэльбиз** - Создать дуэль на бизнесы.\n` +
           `**/кнб** - Создать игру "Камень, ножницы, бумага".\n` +
           `**/клан** - Информация о клане и клановые команды.\n` +
-          `**/курс** - Курс JORDAN'S COIN.\n` +
-          `**/купитькоин** - Купить JORDAN'S COIN.\n` +
-          `**/продатькоин** - Продать JORDAN'S COIN.\n` +
-          `**/передатькоин** - Передать JORDAN'S COIN.\n` +
+          `**/bitcoin** - Информация о BTC.\n` +
+          `**/buybitcoin** - Купить BTC.\n` +
+          `**/sellbitcoin** - Продать BTC.\n` +
+          `**/paybitcoin** - Передать BTC.\n` +
           `**/брак** - Посмотреть информацию о браке.\n` +
           `/брак запрос - Отправить запрос на брак пользователю.\n` +
           `/брак развод - Развестись со второй половинкой.\n` +
@@ -15140,7 +15587,7 @@ MD - Беседа медиа-партнёров.`;
 
           // А затем отправляем готовую картинку статистики
           if (uploadRes.attachment) {
-            return await sendResponse(`Статистика пользователя [id${targetId}|${targetUser.fullName || targetUser.nick || 'Игрок'}]:`, { attachment: uploadRes.attachment, disable_mentions: 1 });
+            return await sendResponse(`Статистика [id${targetId}|пользователя] в формате фото:`, { attachment: uploadRes.attachment, disable_mentions: 1 });
           } else {
             return await sendResponse(`Ошибка генерации статистики: ${uploadRes.error || 'не удалось создать фото'}`);
           }

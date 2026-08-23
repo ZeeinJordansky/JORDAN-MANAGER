@@ -145,12 +145,12 @@ function scheduleSync() {
   isDirty = true;
 }
 
-// Фоновый интервал отправки в HuggingFace раз в 15 минут (макс. 4 коммита в час при лимите HF 128/час)
+// Фоновый интервал отправки в HuggingFace раз в 2 минуты
 setInterval(() => {
   if (isDirty && !isSyncing) {
     performHFSync().catch(() => {});
   }
-}, 15 * 60 * 1000);
+}, 2 * 60 * 1000);
 
 async function performHFSync() {
   if (!isDirty || isSyncing) return;

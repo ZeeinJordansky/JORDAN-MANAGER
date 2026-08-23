@@ -550,11 +550,11 @@ export default function Dashboard({ secret, onLogout }: DashboardProps) {
                 <div className="bg-bg-card rounded-xl border border-border-dim p-5">
                   <h3 className="text-xs font-bold mb-4 uppercase tracking-wider text-text-muted flex items-center gap-2">
                     <Coins className="w-4 h-4 text-yellow-400" />
-                    Курс JORDAN'S COIN & Игровые лобби
+                    Курс Bitcoin (BTC) & Игровые лобби
                   </h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between p-3 bg-black/30 rounded-xl border border-border-dim">
-                      <span className="text-xs font-semibold text-text-muted">1 JORDAN'S COIN</span>
+                      <span className="text-xs font-semibold text-text-muted">1 Bitcoin (BTC)</span>
                       <span className="mono text-sm font-bold text-yellow-400">
                         {stats?.jcRate ? `${stats.jcRate.toLocaleString()}$` : '95,000,000$'}
                       </span>
