@@ -1,0 +1,401 @@
+9297-          } else {
+9298-            history.timestamps = []; // reset if failed to upload photo
+9299-          }
+9300-        }
+9301-        const burstTimestamps = history.timestamps.filter(t => now - t < 5000);
+9302-        if (burstTimestamps.length >= 5) {
+9303-          const timeLeft = 5 - Math.floor((now - burstTimestamps[0]) / 1000);
+9304-          const secStr = ["секунду", "секунды", "секунд"];
+9305-          const secEnd = (timeLeft % 10 === 1 && timeLeft % 100 !== 11) ? secStr[0] : (timeLeft % 10 >= 2 && timeLeft % 10 <= 4 && (timeLeft % 100 < 10 || timeLeft % 100 >= 20)) ? secStr[1] : secStr[2];
+9306-          return await sendVkMessage(VK_TOKEN, peerId, `Пожалуйста подождите ${timeLeft} ${secEnd}, перед повторным использованием команд.`, {
+9307-              forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+9308-          });
+9309-        }
+9310-      }
+9311-      history.timestamps.push(now);
+9312-
+9313-      const args = cmdText.split(/\s+/);
+9314-      const rawCmd = args[0].toLowerCase();
+9315-
+9316-      const ALL_GAME_CMDS = new Set([
+9317-        "/приз", "/казино", "/к", "/casino",
+9318-        "/рулетка", "/р", "/roulette",
+9319-        "/роль", "/баланс", "/б", "/bal", "/balance", "/банк", "/снятьбанк", "/топ", "/пивозавры",
+9320-        "/бизнес", "/бизнесы", "/купитьбиз", "/продатьбиз", "/дуэль", "/д", "/дуэльбиз",
+9321-        "/кнб", "/мафия", "/пиво", "/инфа", "/кто", "/погода",
+9322-        "/взлом", "/фортуна", "/бонус", "/подписка", "/купитьпрем", "/прем", "/премпрофиль", "/прембаланс",
+9323-        "/реп", "/rep", "/промо", "/createpromo",
+9324-        "/брак", "/развод", "/развести", "/поженить", "/монетка", "/открытьдепозит", "/депозиты",
+9325-        "/ппрод", "/купитьпрод", "/купитькоин", "/продатькоин", "/передатькоин", "/цитата", "/передать",
+9326-        "/крокодил", "/клан", "/кланы", "/курс",
+9327-        "/биткоин", "/bitcoin", "/btc", "/бтк", "/buybitcoin", "/купитьбиткоин", "/купитьбтк",
+9328-        "/sellbitcoin", "/продатьбиткоин", "/продатьбтк", "/paybitcoin", "/передатьбиткоин", "/передатьбтк"
+9329-      ]);
+9330-
+9331-      if (peerId < 2000000000) {
+9332-        const allowedInDm = new Set([
+9333-          ...ALL_GAME_CMDS,
+9334-          "/start", "/help", "/gamehelp", "/ghelp", "/старт", "/помощь", "/хелп", "/команды", "/меню",
+9335-          "/игровые", "/игры", "/гхелп", "/пинг", "/ping", "/инфо", "/info", "/infobot", "/инфобот"
+9336-        ]);
+9337-        if (!allowedInDm.has(rawCmd)) {
+9338-          return await sendVkMessage(VK_TOKEN, peerId, "В ЛС бота работают только игровые команды!");
+9339-        }
+9340-      }
+9341-
+9342-      if ((chatData.games === false || chatData.gamesDisabled) && ALL_GAME_CMDS.has(rawCmd)) {
+9343-        return await sendVkMessage(VK_TOKEN, peerId, "Игры в этой беседе отключены.", {
+9344-          forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+9345-        });
+9346-      }
+9347-
+9348-      // Check Ban-words in command arguments
+9349-      if (args.length > 1) {
+9350-        let rawArgsText = getRawArgText(cmdText);
+9351-        // Strip VK mentions e.g. [id123|Name], [club123|Name], @id123, URLs from ban-words check so real names are not false flagged
+9352-        rawArgsText = rawArgsText.replace(/\[(?:id|club)\d+\|[^\]]+\]/gi, " ")
+9353-                                 .replace(/https?:\/\/\S+/gi, " ")
+9354-                                 .replace(/@\S+/gi, " ")
+9355-                                 .trim();
+9356-        if (rawArgsText && containsBadWord(rawArgsText)) {
+9357-          return await sendVkMessage(VK_TOKEN, peerId, "В аргументах команды указаны запрет. слова. Попробуйте снова  без запрет. слов.", {
+9358-            forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+9359-          });
+9360-        }
+9361-      }
+9362-
+9363-      // Check if chat is active. Only /start and /старт commands are allowed if chat is NOT active.
+9364-      if (peerId > 2000000000) {
+9365-        const isStartCmd = ["/start", "/старт", "/активировать", "/активация", "/включитьбота", "/activate", "/начать"].includes(rawCmd);
+9366-        const isHelpCmd = ["/help", "/помощь", "/хелп", "/команды", "/меню", "/cmd", "/cmds", "/commands"].includes(rawCmd);
+9367-        if (!chatData.active && !isStartCmd && !isHelpCmd) {
+9368-          return await sendVkMessage(VK_TOKEN, peerId, `JORDAN MANAGER не активирован в беседе. Для активации напишите - /start`, {
+9369-            forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+9370-          });
+9371-        }
+9372-      }
+9373-
+9374-      if (!user.wroteInDm) {
+9375-        updateUser(userId, { wroteInDm: true }).catch(() => {});
+9376-        user.wroteInDm = true;
+9377-      }
+9378-
+9379-      let pendingCommandLog: any = null;
+9380-      // Log the command in chat 10 (only for actual users, ignoring communities, mask profanity, and for ALL commands)
+9381-      if (userId > 0 && /^[\/+!\.,]/.test(rawCmd)) {
+9382-        const STRICT_GAME_CMDS = new Set([
+9383-          "/приз", "/казино", "/к", "/casino",
+9384-          "/рулетка", "/р", "/roulette",
+9385-          "/дуэль", "/д", "/дуэльбиз",
+9386-          "/кнб", "/мафия", "/пиво", "/beer",
+9387-          "/взлом", "/фортуна", "/бонус",
+9388-          "/купитьбиз", "/продатьбиз",
+9389-          "/монетка", "/купитькоин", "/продатькоин", "/передатькоин",
+9390-          "/передать", "/pay", "/transfer", "/крокодил",
+9391-          "/сейф", "/кейс", "/кейсы", "/работать", "/работа", "/ферма", "/майнинг"
+9392-        ]);
+9393-        const isGame = STRICT_GAME_CMDS.has(rawCmd);
+9394-
+9395-        let targetIdVal = 0;
+9396-        if (message.reply_message) {
+9397-          targetIdVal = message.reply_message.from_id;
+9398-        } else if (message.fwd_messages && message.fwd_messages.length > 0) {
+9399-          targetIdVal = message.fwd_messages[0].from_id;
+9400-        } else {
+9401-          const parsed = await parseTargetUser(message, args.slice(1));
+9402-          if (parsed.targetId) targetIdVal = parsed.targetId;
+9403-        }
+9404-
+9405-        let targetFullName = "";
+9406-        if (targetIdVal > 0) {
+9407-          const tu = await getOrCreateUser(targetIdVal);
+9408-          targetFullName = tu.fullName || tu.nick || (await fetchVkFullName(targetIdVal)) || `User${targetIdVal}`;
+9409-        }
+9410-
+9411-        let actionStr = "";
+9412-        let durationStr = "None";
+9413-        let reasonStr = "None";
+9414-        let betStr = "None";
+9415-
+9416-        if (["/mute", "/мут"].includes(rawCmd)) {
+9417-          actionStr = "выдал(-а) блокировку чата";
+9418-          if (args[1] && !isNaN(Number(args[1]))) {
+9419-            durationStr = `${args[1]} мин`;
+9420-            if (args.length > 2) reasonStr = args.slice(2).join(" ");
+9421-          } else if (args[2] && !isNaN(Number(args[2]))) {
+9422-            durationStr = `${args[2]} мин`;
+9423-            if (args.length > 3) reasonStr = args.slice(3).join(" ");
+9424-          }
+9425-        } else if (["/unmute", "/размут", "/анмут", "/снятьмут", "/разглушить", "/размутить", "/измута", "/unm"].includes(rawCmd)) {
+9426-          actionStr = "снял(-а) блокировку чата";
+9427-        } else if (["/ban", "/бан", "/забанить"].includes(rawCmd)) {
+9428-          actionStr = "заблокировал(-а) пользователя в беседе";
+9429-          if (args.length > 2) reasonStr = args.slice(2).join(" ");
+9430-        } else if (["/unban", "/разбан", "/разбанить"].includes(rawCmd)) {
+9431-          actionStr = "разблокировал(-а) пользователя в беседе";
+9432-        } else if (["/kick", "/кик", "/исключить", "/выгнать", "/к", "/k"].includes(rawCmd)) {
+9433-          actionStr = "исключил(-а) пользователя из беседы";
+9434-          if (args.length > 2) reasonStr = args.slice(2).join(" ");
+9435-        } else if (["/warn", "/варн", "/предупреждение", "/датьварн", "/пред", "/выдатьварн", "/w"].includes(rawCmd)) {
+9436-          actionStr = "выдал(-а) предупреждение";
+9437-          if (args.length > 2) reasonStr = args.slice(2).join(" ");
+9438-        } else if (["/unwarn", "/разварн", "/снятьварн", "/снятьпред", "/unw"].includes(rawCmd)) {
+9439-          actionStr = "снял(-а) предупреждение";
+9440-        } else if (["/gban"].includes(rawCmd)) {
+9441-          actionStr = "выдал(-а) глобальную блокировку";
+9442-          if (args.length > 2) reasonStr = args.slice(2).join(" ");
+9443-        } else if (["/ungban"].includes(rawCmd)) {
+9444-          actionStr = "снял(-а) глобальную блокировку";
+9445-          actionStr = "выдал(-а) глобальную блокировку игроков";
+9446-          if (args.length > 2) reasonStr = args.slice(2).join(" ");
+9447-          actionStr = "снял(-а) глобальную блокировку игроков";
+9448-        } else if (["/rebuke", "/выговор"].includes(rawCmd)) {
+9449-          actionStr = "выдал(-а) выговор руководителю";
+9450-          if (args.length > 2) reasonStr = args.slice(2).join(" ");
+9451-        } else if (["/unrebuke", "/снятьвыговор"].includes(rawCmd)) {
+9452-          actionStr = "снял(-а) выговор с руководителя";
+9453-          if (args.length > 2) reasonStr = args.slice(2).join(" ");
+9454-        } else if (["/addmoder", "/модер", "/выдатьмодера", "/setmoder", "/аддмодер"].includes(rawCmd)) {
+9455-          actionStr = "выдал(-а) должность «Модератор»";
+9456-        } else if (["/addsenmoder", "/смодер", "/setsenmoder", "/setsmoder", "/старшиймодератор", "/аддсмодер"].includes(rawCmd)) {
+9457-          actionStr = "выдал(-а) должность «Старший модератор»";
+9458-        } else if (["/addadmin", "/админ", "/setadmin", "/аддадмин", "/выдатьадмина"].includes(rawCmd)) {
+9459-          actionStr = "выдал(-а) должность «Администратор»";
+9460-        } else if (["/addsenadmin", "/садмин", "/setsenadmin", "/setsadmin", "/старшийадминистратор", "/аддсадмин"].includes(rawCmd)) {
+9461-          actionStr = "выдал(-а) должность «Старший администратор»";
+9462-        } else if (["/addzsa", "/замспец", "/выдатьзса", "/setzsa", "/addzamspets", "/аддзса"].includes(rawCmd)) {
+9463-          actionStr = "выдал(-а) должность «Зам. главного администратора»";
+9464-        } else if (["/addsa", "/са", "/sa", "/setsa", "/выдатьса", "/addspets", "/аддса", "/спецадмин"].includes(rawCmd)) {
+9465-          actionStr = "выдал(-а) должность «Главный администратор»";
+9466-        } else if (["/addzsr", "/заместитель", "/заместительдиректора", "/addzam", "/аддзср"].includes(rawCmd)) {
+9467-          actionStr = "выдал(-а) должность «Зам. Руководителя»";
+9468-        } else if (["/addozsr", "/озаместитель", "/озаместительдиректора", "/addozam", "/аддозср"].includes(rawCmd)) {
+9469-          actionStr = "выдал(-а) должность «Осн. Зам. Руководителя»";
+9470-        } else if (["/addruk", "/руководитель", "/addsr", "/adddirector", "/директор"].includes(rawCmd)) {
+9471-          actionStr = "выдал(-а) должность «Руководитель»";
+9472-        } else if (["/addgr", "/главруководитель", "/addgruk", "/главдиректор", "/addgdirector"].includes(rawCmd)) {
+9473-          actionStr = "выдал(-а) должность «Главный Руководитель»";
+9474-        } else if (["/addzamowner", "/замвладельцабота", "/замвладельца", "/addzown", "/аддзамвладельца"].includes(rawCmd)) {
+9475-          actionStr = "выдал(-а) должность «Зам. Владельца»";
+9476-        } else if (["/removerole", "/снятьроль", "/снятьправа", "/delrole", "/унроль", "/unrole", "/delmoder", "/delsenmoder", "/deladmin", "/delsenadmin", "/delzsa", "/delsa", "/unmoder"].includes(rawCmd)) {
+9477-          actionStr = "снял(-а) должность";
+9478-        } else if (["/arrole"].includes(rawCmd)) {
+9479-          actionStr = "снял(-а) ВСЕ роли у пользователя";
+9480-        } else if (["/grrole"].includes(rawCmd)) {
+9481-          actionStr = "снял(-а) глобальную роль";
+9482-        } else if (["/givemoney", "/датьденег", "/выдатьденьги", "/выдать_деньги"].includes(rawCmd)) {
+9483-          actionStr = "выдал(-а) валюту";
+9484-          if (args[2]) betStr = args[2];
+9485-        } else if (["/takemoney", "/забратьденьги", "/снятьденьги", "/забратьбаланс", "/снятьбаланс"].includes(rawCmd)) {
+9486-          actionStr = "забрал(-а) валюту";
+9487-          if (args[2]) betStr = args[2];
+9488-        } else if (["/setmoney"].includes(rawCmd)) {
+9489-          actionStr = "установил(-а) баланс";
+9490-          if (args[2]) betStr = args[2];
+9491-        } else if (["/resetmoney"].includes(rawCmd)) {
+9492-          actionStr = "обнулил(-а) баланс";
+9493-        } else if (["/takebusiness", "/забратьбизнес"].includes(rawCmd)) {
+9494-          actionStr = "забрал(-а) бизнес-(ы)";
+9495-        } else if (["/takeprod", "/забратьпродукты"].includes(rawCmd)) {
+9496-          actionStr = "забрал(-а) продукты";
+9497-        } else if (["/takebeer", "/забратьпиво"].includes(rawCmd)) {
+9498-          actionStr = "забрал(-а) пиво";
+9499-        } else if (["/takerep", "/забратьрепутацию"].includes(rawCmd)) {
+9500-          actionStr = "забрал(-а) репутацию";
+9501-        } else if (["/takevip", "/забратьvip"].includes(rawCmd)) {
+9502-          actionStr = "забрал(-а) VIP";
+9503-        } else if (["/hidetop"].includes(rawCmd)) {
+9504-          actionStr = "скрыл(-а) пользователя из топа";
+9505-        } else if (["/unhidetop"].includes(rawCmd)) {
+9506-          actionStr = "убрал(-а) пользователя из скрытых в топе";
+9507-        } else if (["/setowner"].includes(rawCmd)) {
+9508-          actionStr = "назначил(-а) владельца беседы";
+9509-        } else if (["/deleteowner"].includes(rawCmd)) {
+9510-          actionStr = "снял(-а) права владельца беседы";
+9511-        } else if (["/addstatus"].includes(rawCmd)) {
+9512-          actionStr = "установил(-а) статус пользователю";
+9513-        } else if (["/unstatus"].includes(rawCmd)) {
+9514-          actionStr = "снял(-а) статус пользователя";
+9515-        } else if (["/setinfobot"].includes(rawCmd)) {
+9516-          actionStr = "установил(-а) инфо бота";
+9517-        } else if (["/achat"].includes(rawCmd)) {
+9518-          actionStr = "сделал(-а) беседу админ-чатом";
+9519-        } else if (["/unachat"].includes(rawCmd)) {
+9520-          actionStr = "убрал(-а) статус админ-чата";
+9521-        } else if (["/giveowner"].includes(rawCmd)) {
+9522-          actionStr = "передал(-а) права владельца беседы";
+9523-        } else if (["/zov", "/зов", "/all", "/все"].includes(rawCmd)) {
+9524-          actionStr = "созвал(-а) участников беседы";
+9525-        } else if (["/antiteg"].includes(rawCmd)) {
+9526-          actionStr = "добавил(-а) анти-тег";
+9527-        } else if (["/unantiteg"].includes(rawCmd)) {
+9528-          actionStr = "удалил(-а) анти-тег";
+9529-        } else if (["/rstats"].includes(rawCmd)) {
+9530-          actionStr = "Посмотрел(-а) статистику руководителя";
+9531-        } else if (["/gstaff"].includes(rawCmd)) {
+9532-          actionStr = "Посмотрел(-а) список руководства";
+9533-        } else if (["/ghelp", "/гхелп"].includes(rawCmd)) {
+9534-          actionStr = "Вызвал(-а) помощь руководства";
+9535-        } else if (["/help", "/помощь", "/хелп", "/команды", "/меню", "/gamehelp"].includes(rawCmd)) {
+9536-          actionStr = "Посмотрел(-а) список команд";
+9537-        } else if (["/stats", "/стата", "/статистика", "/профиль", "/profile", "/stata", "/статс", "/си", "/систата", "/я"].includes(rawCmd)) {
+9538-          actionStr = "Посмотрел(-а) статистику";
+9539-        } else if (["/balance", "/баланс", "/б", "/bal", "/банк"].includes(rawCmd)) {
+9540-          actionStr = "Посмотрел(-а) баланс";
+9541-        } else if (["/top", "/топ"].includes(rawCmd)) {
+9542-          actionStr = "Посмотрел(-а) топ игроков";
+9543-        } else if (rawCmd === "/приз") {
+9544-          const pAmount = args[1] && !isNaN(Number(args[1])) ? args[1] : "";
+9545-          actionStr = pAmount ? `Получил(-а) приз в размере ${pAmount}$` : "Получил(-а) приз";
+9546-        } else if (["/start", "/старт"].includes(rawCmd)) {
+9547-          actionStr = "Запустил(-а) бота";
+9548-        } else if (["/rules", "/правила"].includes(rawCmd)) {
+9549-          actionStr = "Посмотрел(-а) правила беседы";
+9550-        } else if (["/ping", "/пинг"].includes(rawCmd)) {
+9551-          actionStr = "Проверил(-а) пинг бота";
+9552-        } else if (["/time", "/время"].includes(rawCmd)) {
+9553-          actionStr = "Посмотрел(-а) текущее время";
+9554-        } else if (["/online", "/онлайн"].includes(rawCmd)) {
+9555-          actionStr = "Посмотрел(-а) онлайн беседы";
+9556-        } else if (["/chat", "/чат"].includes(rawCmd)) {
+9557-          actionStr = "Посмотрел(-а) информацию о беседе";
+9558-        } else if (["/staff", "/состав"].includes(rawCmd)) {
+9559-          actionStr = "Посмотрел(-а) состав администрации беседы";
+9560-        } else if (["/warns", "/варны", "/предупреждения"].includes(rawCmd)) {
+9561-          actionStr = "Посмотрел(-а) свои предупреждения";
+9562-        } else if (["/mutelist"].includes(rawCmd)) {
+9563-          actionStr = "Посмотрел(-а) список замученных";
+9564-        } else if (["/banlist"].includes(rawCmd)) {
+9565-          actionStr = "Посмотрел(-а) список забаненных";
+9566-        } else if (["/warnlist"].includes(rawCmd)) {
+9567-          actionStr = "Посмотрел(-а) список предупреждений";
+9568-        } else if (["/gbanlist"].includes(rawCmd)) {
+9569-          actionStr = "Посмотрел(-а) список глобально забаненных";
+9570-        } else if (["/hidetoplist"].includes(rawCmd)) {
+9571-          actionStr = "Посмотрел(-а) список скрытых из топа";
+9572-        } else if (["/antiteglist"].includes(rawCmd)) {
+9573-          actionStr = "Посмотрел(-а) список анти-тегов";
+9574-        } else if (["/титул"].includes(rawCmd)) {
+9575-          actionStr = "Установил(-а) титул";
+9576-        } else if (["/брак", "/поженить"].includes(rawCmd)) {
+9577-          actionStr = "Вступил(-а) в брак";
+9578-        } else if (["/развод", "/развести"].includes(rawCmd)) {
+9579-          actionStr = "Развелся(-ась)";
+9580-        } else if (["/промо"].includes(rawCmd)) {
+9581-          actionStr = "Активировал(-а) промокод";
+9582-        } else if (["/mute", "/мут", "/заглушить", "/замутить", "/m"].includes(rawCmd)) {
+9583-          actionStr = "выдал(-а) блокировку чата";
+9584-        } else if (["/unmute", "/размут", "/анмут", "/унмут", "/unm"].includes(rawCmd)) {
+9585-          actionStr = "снял(-а) блокировку чата";
+9586-        } else if (["/warn", "/варн", "/w", "/пред", "/выдатьварн", "/выдатьпред"].includes(rawCmd)) {
+9587-          actionStr = "выдал(-а) предупреждение";
+9588-        } else if (["/unwarn", "/разварн", "/анварн", "/унварн", "/unw", "/снятьварн", "/снятьпред", "/снятьпредупреждение"].includes(rawCmd)) {
+9589-          actionStr = "снял(-а) предупреждение";
+9590-        } else if (["/ban", "/бан", "/b", "/забанить"].includes(rawCmd)) {
+9591-          actionStr = "выдал(-а) блокировку в беседе";
+9592-        } else if (["/unban", "/разбан", "/анбан", "/унбан", "/unb", "/разбанить"].includes(rawCmd)) {
+9593-          actionStr = "снял(-а) блокировку в беседе";
+9594-        } else if (["/sban", "/сбан"].includes(rawCmd)) {
+9595-          actionStr = "тихо выдал(-а) блокировку в беседе";
+9596-        } else if (["/sunban", "/сунбан"].includes(rawCmd)) {
+9597-          actionStr = "тихо снял(-а) блокировку в беседе";
+9598-        } else if (["/kick", "/кик", "/к", "/k", "/выгнать", "/исключить"].includes(rawCmd)) {
+9599-          actionStr = "исключил(-а) пользователя";
+9600-        } else if (["/purge", "/пурдж", "/чистка", "/clear"].includes(rawCmd)) {
+9601-          actionStr = "очистил(-а) сообщения";
+9602-        } else if (["/addmoder", "/выдатьмодера"].includes(rawCmd)) {
+9603-          actionStr = "выдал(-а) права модератора";
+9604-        } else if (["/addsenmoder"].includes(rawCmd)) {
+9605-          actionStr = "выдал(-а) права старшего модератора";
+9606-        } else if (["/addadmin"].includes(rawCmd)) {
+9607-          actionStr = "выдал(-а) права администратора";
+9608-        } else if (["/addsenadmin"].includes(rawCmd)) {
+9609-          actionStr = "выдал(-а) права старшего администратора";
+9610-        } else if (["/addzsa"].includes(rawCmd)) {
+9611-          actionStr = "выдал(-а) права зам. главного администратора";
+9612-        } else if (["/addsa"].includes(rawCmd)) {
+9613-          actionStr = "выдал(-а) права главного администратора";
+9614-        } else if (["/removerole", "/снятьроль", "/снятьправа"].includes(rawCmd)) {
+9615-          actionStr = "снял(-а) права у пользователя";
+9616-        } else if (["/welcometext"].includes(rawCmd)) {
+9617-          actionStr = "настроил(-а) приветственное сообщение";
+9618-        } else if (["/type", "/тип"].includes(rawCmd)) {
+9619-          actionStr = "изменил(-а) тип беседы";
+9620-        } else if (["/sync", "/синх", "/синк", "/синхронизация", "/синхронизировать", "/resync"].includes(rawCmd)) {
+9621-          actionStr = "синхронизировал(-а) беседу";
+9622-        } else if (isGame) {
+9623-          if (["/казино", "/casino", "/к"].includes(rawCmd)) actionStr = "Сыграл(-а) в казино";
+9624-          else if (["/рулетка", "/roulette", "/р"].includes(rawCmd)) actionStr = "Сыграл(-а) в рулетку";
+9625-          else if (["/дуэль", "/duel", "/д", "/дуэльбиз"].includes(rawCmd)) actionStr = "Сыграл(-а) в дуэль";
+9626-          else if (["/пиво", "/beer"].includes(rawCmd)) actionStr = "Выпил(-а) пива";
+9627-          else if (["/передать", "/pay", "/transfer"].includes(rawCmd)) actionStr = "Передал(-а) валюту";
+9628-          else if (["/кнб"].includes(rawCmd)) actionStr = "Сыграл(-а) в КНБ";
+9629-          else if (["/купитьбиз"].includes(rawCmd)) actionStr = "Купил(-а) бизнес";
+9630-          else if (["/продатьбиз"].includes(rawCmd)) actionStr = "Продал(-а) бизнес";
+9631-          else if (["/купитькоин"].includes(rawCmd)) actionStr = "Купил(-а) коины";
+9632-          else if (["/продатькоин"].includes(rawCmd)) actionStr = "Продал(-а) коины";
+9633-          else if (["/передатькоин"].includes(rawCmd)) actionStr = "Передал(-а) коины";
+9634-          else if (["/взлом"].includes(rawCmd)) actionStr = "Взломал(-а) систему";
+9635-          else if (["/фортуна"].includes(rawCmd)) actionStr = "Сыграл(-а) в колесо фортуны";
+9636-          else if (["/монетка"].includes(rawCmd)) actionStr = "Сыграл(-а) в монетку";
+9637-          else if (["/крокодил"].includes(rawCmd)) actionStr = "Сыграл(-а) в крокодил";
+9638-          else if (["/мафия"].includes(rawCmd)) actionStr = "Сыграл(-а) в мафию";
+9639-          else if (["/сейф"].includes(rawCmd)) actionStr = "Открыл(-а) сейф";
+9640-          else if (["/кейс", "/кейсы"].includes(rawCmd)) actionStr = "Открыл(-а) кейс";
+9641-          else if (["/работать", "/работа"].includes(rawCmd)) actionStr = "Поработал(-а)";
+9642-          else if (["/ферма"].includes(rawCmd)) actionStr = "Собрал(-а) урожай на ферме";
+9643-          else if (["/майнинг"].includes(rawCmd)) actionStr = "Запустил(-а) майнинг";
+9644-          else actionStr = `Сыграл(-а) в игру ${rawCmd}`;
+9645-
+9646-          if (args[1] && !isNaN(Number(args[1]))) betStr = args[1];
+9647-          else if (args[2] && !isNaN(Number(args[2]))) betStr = args[2];
+9648-        } else if (VALID_COMMANDS.has(rawCmd)) {
+9649-          actionStr = `Выполнил(-а) команду ${rawCmd}`;
+9650-        } else {
+9651-          actionStr = "";
+9652-        }
+9653-
+9654-        if (actionStr !== "") {
+9655-          pendingCommandLog = {
+9656-            isGame,
+9657-            userId,
+9658-            fullName,
+9659-            targetId: targetIdVal > 0 ? targetIdVal : undefined,
+9660-            targetName: targetFullName || undefined,
+9661-            bet: betStr !== "None" ? betStr : undefined,
+9662-            duration: durationStr !== "None" ? durationStr : undefined,
+9663-            reason: reasonStr !== "None" ? reasonStr : undefined,
+9664-            action: actionStr,
+9665-            cmdName: rawCmd,
+9666-            msgCmId: message.conversation_message_id ? `${peerId}_${message.conversation_message_id}` : undefined
+9667-          };
+9668-        }
+9669-      }
+9670-
+9671-      let commandLogged = false;
+9672-      const triggerCommandLog = () => {
+9673-        if (!commandLogged && pendingCommandLog) {
+9674-          commandLogged = true;
+9675-          setImmediate(() => {
+9676-            logToChat10(pendingCommandLog).catch(() => {});
+9677-          });
+9678-        }
+9679-      };
+9680-
+9681-      // Check Global Bot Close status
+9682-      if (isGlobalBotClosed && user.role < 12 && userId !== 778382713) {
+9683-        return await sendVkMessage(VK_TOKEN, peerId, `🔒 Использование бота временно закрыто для публичного использования Владельцем чат-менеджера.`, {
+9684-          forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+9685-        });
+9686-      }
+9687-
+9688-      // Check Game Blacklist for ALL commands
+9689-      if (user.isGameBanned && user.role < 12) {
+9690-        const durationText = user.gameBanUntil ? formatMskDate(user.gameBanUntil) : "Навсегда";
+9691-        const reasonText = user.gameBanReason || "Нарушение правил";
+9692-        return await sendVkMessage(VK_TOKEN, peerId, `Вы заблокированы в боте!\n\n| Причина: ${reasonText}\n| Блокировка до: ${durationText}`, {
+9693-          forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+9694-        });
+9695-      }
+9696-
+9697:      const sendResponse = async (responseText: string, extraParams: any = {}) => {

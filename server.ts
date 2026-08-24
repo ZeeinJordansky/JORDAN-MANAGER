@@ -1,10 +1,101 @@
+
+interface DurationParseResult {
+  seconds: number;
+  declinedText: string;
+}
+
+function parseInactiveDuration(inputStr: string): DurationParseResult | null {
+  if (!inputStr) return null;
+  const s = inputStr.trim().toLowerCase().replace(/^от\s+/, "");
+  if (!s) return null;
+
+  const m = s.match(/^(\d+)\s*([a-zа-яё.]+)?$/i);
+  if (!m) return null;
+
+  const count = parseInt(m[1], 10);
+  if (isNaN(count) || count <= 0) return null;
+
+  const unit = (m[2] || "").trim().toLowerCase();
+
+  function getPluralAccusative(n: number, one: string, two: string, five: string): string {
+    const abs = Math.abs(n) % 100;
+    const rem = abs % 10;
+    if (abs > 10 && abs < 20) return `${n} ${five}`;
+    if (rem > 1 && rem < 5) return `${n} ${two}`;
+    if (rem === 1) return `${n} ${one}`;
+    return `${n} ${five}`;
+  }
+
+  // Weeks
+  if (/^(нед|недел|week|w)/i.test(unit)) {
+    return {
+      seconds: count * 7 * 86400,
+      declinedText: getPluralAccusative(count, "неделю", "недели", "недель")
+    };
+  }
+
+  // Months
+  if (/^(мес|month|mo)/i.test(unit)) {
+    return {
+      seconds: count * 30 * 86400,
+      declinedText: getPluralAccusative(count, "месяц", "месяца", "месяцев")
+    };
+  }
+
+  // Years
+  if (/^(год|лет|г|year|y|yr)/i.test(unit)) {
+    return {
+      seconds: count * 365 * 86400,
+      declinedText: getPluralAccusative(count, "год", "года", "лет")
+    };
+  }
+
+  // Days
+  if (/^(д|день|дня|дней|day|d)/i.test(unit)) {
+    return {
+      seconds: count * 86400,
+      declinedText: getPluralAccusative(count, "день", "дня", "дней")
+    };
+  }
+
+  // Hours
+  if (/^(ч|час|часа|часов|hour|h)/i.test(unit)) {
+    return {
+      seconds: count * 3600,
+      declinedText: getPluralAccusative(count, "час", "часа", "часов")
+    };
+  }
+
+  // Minutes
+  if (/^(мин|min)/i.test(unit) || unit === "m") {
+    return {
+      seconds: count * 60,
+      declinedText: getPluralAccusative(count, "минуту", "минуты", "минут")
+    };
+  }
+
+  // Default: treat as days if no unit
+  return {
+    seconds: count * 86400,
+    declinedText: getPluralAccusative(count, "день", "дня", "дней")
+  };
+}
+
+import rateLimit from "express-rate-limit";
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import axios from "axios";
 import https from "https";
 import http from "http";
+import dns from "dns";
 import os from "os";
+
+if (dns.setDefaultResultOrder) {
+  try {
+    dns.setDefaultResultOrder("ipv4first");
+  } catch (e) {}
+}
 
 const botStartTime = Date.now();
 
@@ -17,25 +108,43 @@ process.on('uncaughtException', (err) => {
 
 const globalHttpsAgent = new https.Agent({
   keepAlive: true,
-  keepAliveMsecs: 10000,
-  maxSockets: 100,
-  maxFreeSockets: 25,
+  keepAliveMsecs: 120000,
+  maxSockets: 512,
+  maxFreeSockets: 128,
+  timeout: 8000,
+  scheduling: "fifo"
+});
+
+globalHttpsAgent.on('free', (socket) => {
+  socket.setTimeout(120000);
 });
 
 const globalHttpAgent = new http.Agent({
   keepAlive: true,
-  keepAliveMsecs: 10000,
-  maxSockets: 100,
-  maxFreeSockets: 25,
+  keepAliveMsecs: 120000,
+  maxSockets: 512,
+  maxFreeSockets: 128,
+  timeout: 8000,
+  scheduling: "fifo"
 });
+
+globalHttpAgent.on('free', (socket) => {
+  socket.setTimeout(120000);
+});
+
+// V8 Memory Profiling & Hyper-Threading Optimizer Hint
+if (typeof process !== "undefined" && process.env) {
+  process.env.UV_THREADPOOL_SIZE = "128";
+  process.env.NODE_V8_COVERAGE = ""; // Disable coverage tracking for speed
+}
 
 axios.defaults.httpsAgent = globalHttpsAgent;
 axios.defaults.httpAgent = globalHttpAgent;
-axios.defaults.timeout = 10000;
+axios.defaults.timeout = 8000;
 
 const vkApi = axios.create({
   baseURL: "https://api.vk.com/method/",
-  timeout: 8000,
+  timeout: 6000,
   httpsAgent: globalHttpsAgent,
   httpAgent: globalHttpAgent,
 });
@@ -1510,6 +1619,10 @@ const getMskTimeStr = (ms: number = Date.now()) => {
 let globalInfoBotText: string | null = null;
 
 const app = express();
+app.use((req, res, next) => {
+  req.socket.setNoDelay(true);
+  next();
+});
 const PORT = 3000;
 
 // Initialize Firebase Admin
@@ -1541,8 +1654,8 @@ const ROLES: Record<number, string> = {
   2: "СТАРШИЙ МОДЕРАТОР",
   3: "АДМИНИСТРАТОР",
   4: "СТАРШИЙ АДМИНИСТРАТОР",
-  5: "ЗАМ. СПЕЦ. АДМИНИСТРАТОРА",
-  6: "СПЕЦ. АДМИНИСТРАТОР",
+  5: "ЗАМ. ГЛАВНОГО АДМИНИСТРАТОРА",
+  6: "ГЛАВНЫЙ АДМИНИСТРАТОР",
   7: "ВЛАДЕЛЕЦ БЕСЕДЫ",
   8: "ЗАМ. РУКОВОДИТЕЛЯ",
   9: "ОСН. ЗАМ. РУКОВОДИТЕЛЯ",
@@ -1593,84 +1706,100 @@ async function updateGlobalSettings(newSettings: Partial<typeof globalSettings>)
 // Chat caching
 const chatCache = new Map<number, any>();
 const clanCache = new Map<string, any>();
+const chatInFlight = new Map<number, Promise<any>>();
 
 async function getOrCreateChat(peerId: number) {
-  const cached = chatCache.get(peerId);
+  let cached = chatCache.get(peerId);
   if (cached) return cached;
 
-  const chatRef = firestoreDb.collection("chats").doc(peerId.toString());
-  let chatDoc: any = null;
-  try {
-    chatDoc = await chatRef.get();
-  } catch (err: any) {
-    console.warn("Firestore error in getOrCreateChat (using memory fallback):", err?.message || err);
+  // ⚡ OPTIMISTIC INSTANT RETURN (ZERO FIRESTORE DELAY)
+  cached = { id: peerId, title: `Беседа №${peerId}`, autoReactionId: 0, type: "PL" };
+  chatCache.set(peerId, cached);
+
+  if (chatInFlight.has(peerId)) {
+    return cached; // Already fetching
   }
 
-  if (chatDoc && chatDoc.exists) {
-    const data = chatDoc.data() || {};
-    chatCache.set(peerId, data);
-
-    if ((!data.title || data.title.startsWith("Беседа №")) && peerId > 2000000000) {
-      (async () => {
-        try {
-          const convRes = await vkApi.get("messages.getConversationsById", {
-            params: { access_token: VK_TOKEN, v: "5.199", peer_ids: peerId }
-          });
-          const settings = convRes.data?.response?.items?.[0]?.chat_settings;
-          if (settings) {
-            const upd: any = {};
-            if (settings.title) { data.title = settings.title; upd.title = settings.title; }
-            if (settings.owner_id) { data.ownerId = settings.owner_id; upd.ownerId = settings.owner_id; }
-            if (settings.members_count) { data.membersCount = settings.members_count; upd.membersCount = settings.members_count; }
-            if (Object.keys(upd).length > 0) {
-              chatCache.set(peerId, data);
-              chatRef.set(upd, { merge: true }).catch(() => {});
-            }
-          }
-        } catch (e) {}
-      })();
+  const promise = (async () => {
+    const chatRef = firestoreDb.collection("chats").doc(peerId.toString());
+    let chatDoc: any = null;
+    try {
+      chatDoc = await chatRef.get();
+    } catch (err: any) {
+      console.warn("Firestore error in getOrCreateChat (using memory fallback):", err?.message || err);
     }
-    return data;
-  } else {
-    let title = `Беседа №${peerId}`;
-    const newChat: any = {
-      id: peerId,
-      title,
-      ownerId: 0,
-      membersCount: 0,
-      type: "PL",
-      af: false,
-      antisliv: false,
-      raid: false,
-      group: false,
-      welcometext: null,
-      welcometext_enabled: false
-    };
-    chatCache.set(peerId, newChat);
-    chatRef.set(newChat).catch(() => {});
 
-    if (peerId > 2000000000) {
-      (async () => {
-        try {
-          const convRes = await vkApi.get("messages.getConversationsById", {
-            params: { access_token: VK_TOKEN, v: "5.199", peer_ids: peerId }
-          });
-          const settings = convRes.data?.response?.items?.[0]?.chat_settings;
-          if (settings) {
-            const upd: any = {};
-            if (settings.title) { newChat.title = settings.title; upd.title = settings.title; }
-            if (settings.owner_id) { newChat.ownerId = settings.owner_id; upd.ownerId = settings.owner_id; }
-            if (settings.members_count) { newChat.membersCount = settings.members_count; upd.membersCount = settings.members_count; }
-            if (Object.keys(upd).length > 0) {
-              chatCache.set(peerId, newChat);
-              chatRef.set(upd, { merge: true }).catch(() => {});
+    if (chatDoc && chatDoc.exists) {
+      const data = chatDoc.data() || {};
+      chatCache.set(peerId, data);
+
+      if ((!data.title || data.title.startsWith("Беседа №")) && peerId > 2000000000) {
+        (async () => {
+          try {
+            const convRes = await vkApi.get("messages.getConversationsById", {
+              params: { access_token: VK_TOKEN, v: "5.199", peer_ids: peerId }
+            });
+            const settings = convRes.data?.response?.items?.[0]?.chat_settings;
+            if (settings) {
+              const upd: any = {};
+              if (settings.title) { data.title = settings.title; upd.title = settings.title; }
+              if (settings.owner_id) { data.ownerId = settings.owner_id; upd.ownerId = settings.owner_id; }
+              if (settings.members_count) { data.membersCount = settings.members_count; upd.membersCount = settings.members_count; }
+              if (Object.keys(upd).length > 0) {
+                chatCache.set(peerId, data);
+                chatRef.set(upd, { merge: true }).catch(() => {});
+              }
             }
-          }
-        } catch (e) {}
-      })();
+          } catch (e) {}
+        })();
+      }
+      return data;
+    } else {
+      let title = `Беседа №${peerId}`;
+      const newChat: any = {
+        id: peerId,
+        title,
+        ownerId: 0,
+        membersCount: 0,
+        type: "PL",
+        af: false,
+        antisliv: false,
+        raid: false,
+        group: false,
+        welcometext: null,
+        welcometext_enabled: false
+      };
+      chatCache.set(peerId, newChat);
+      chatRef.set(newChat).catch(() => {});
+
+      if (peerId > 2000000000) {
+        (async () => {
+          try {
+            const convRes = await vkApi.get("messages.getConversationsById", {
+              params: { access_token: VK_TOKEN, v: "5.199", peer_ids: peerId }
+            });
+            const settings = convRes.data?.response?.items?.[0]?.chat_settings;
+            if (settings) {
+              const upd: any = {};
+              if (settings.title) { newChat.title = settings.title; upd.title = settings.title; }
+              if (settings.owner_id) { newChat.ownerId = settings.owner_id; upd.ownerId = settings.owner_id; }
+              if (settings.members_count) { newChat.membersCount = settings.members_count; upd.membersCount = settings.members_count; }
+              if (Object.keys(upd).length > 0) {
+                chatCache.set(peerId, newChat);
+                chatRef.set(upd, { merge: true }).catch(() => {});
+              }
+            }
+          } catch (e) {}
+        })();
+      }
+      return newChat;
     }
-    return newChat;
-  }
+  })();
+
+  chatInFlight.set(peerId, promise);
+  const result = await promise;
+  chatInFlight.delete(peerId);
+  return result;
 }
 
 async function updateChat(peerId: number, data: any) {
@@ -1811,51 +1940,6 @@ function containsAd(text: string, message: any): boolean {
   return false;
 }
 
-function startTechReports() {
-  setInterval(async () => {
-    try {
-      const peerId = 2000000011; // Chat 11
-      const totalMemMB = (os.totalmem() / 1024 / 1024).toFixed(1);
-      const freeMemMB = (os.freemem() / 1024 / 1024).toFixed(1);
-      const usedMemMB = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
-      const cpuLoad = os.loadavg()[0] ? (os.loadavg()[0] * 100 / os.cpus().length).toFixed(1) : "0.0";
-      
-      const uptimeSec = Math.floor((Date.now() - botStartTime) / 1000);
-      const upHours = Math.floor(uptimeSec / 3600);
-      const upMins = Math.floor((uptimeSec % 3600) / 60);
-      const upSecs = uptimeSec % 60;
-      const uptimeStr = `${String(upHours).padStart(2, "0")}:${String(upMins).padStart(2, "0")}:${String(upSecs).padStart(2, "0")}`;
-
-      const dateObj = new Date(botStartTime);
-      const ds = dateObj.toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" });
-      const ts = dateObj.toLocaleTimeString("ru-RU", { timeZone: "Europe/Moscow" });
-      
-      let totalUsersCount = userCache.size;
-      let totalChatsCount = chatCache.size;
-      
-      const dbSizeMB = ((totalUsersCount * 1.5 + totalChatsCount * 4) / 1024).toFixed(2);
-      const dbFreeMB = "Не ограничено";
-
-      const ping = (Math.random() * 50 + 20).toFixed(2);
-      const resp = (Math.random() * 0.3 + 0.1).toFixed(2);
-
-      const reportText = `...::Техническая отчётность::..\n\n` +
-        `| Пинг бота: ${ping} мс\n` +
-        `| Скорость ответа бота: ${resp} сек\n\n` +
-        `| Употреблено ОЗУ: ${usedMemMB} МБ\n` +
-        `| Свободно ОЗУ: ${freeMemMB} МБ\n\n` +
-        `| Загрузка CPU: ${cpuLoad}%\n\n` +
-        `| Занято места в базе данных: ~${dbSizeMB} МБ\n` +
-        `| Свободно места в базе данных: ${dbFreeMB}\n\n` +
-        `| Последний перезапуск бота: ${ds} ${ts}\n` +
-        `| С момента последнего перезапуска прошло: ${uptimeStr}`;
-
-      await sendVkMessage(VK_TOKEN, peerId, reportText, { disable_mentions: 1 });
-    } catch (e: any) {
-      console.error("Tech report error:", e.message);
-    }
-  }, 30 * 1000);
-}
 const waitingForWelcome = new Map<string, boolean>();
 
 const userAntiFlood = new Map<string, number[]>();
@@ -1988,7 +2072,139 @@ const formatDurationBanTerm = (expiresAt?: number, startDate?: number): string =
 const userCache = new Map<number, any>();
 const pingFloodCache = new Map<string, number>();
 const commandHistory = new Map<number, { timestamps: number[] }>();
+
+const userCommandTimestamps = new Map<number, number[]>();
+interface CaptchaState {
+  code: string;
+  peerId: number;
+  cmid: number;
+  timeout: NodeJS.Timeout;
+}
+const activeCaptchas = new Map<number, CaptchaState>();
+
+async function generateCaptchaImage(text: string): Promise<Buffer> {
+  const canvas = createCanvas(200, 100);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 200, 100);
+  for (let i = 0; i < 5; i++) {
+    ctx.strokeStyle = '#cccccc';
+    ctx.beginPath();
+    ctx.moveTo(Math.random() * 200, Math.random() * 100);
+    ctx.lineTo(Math.random() * 200, Math.random() * 100);
+    ctx.stroke();
+  }
+  ctx.font = 'bold 40px sans-serif';
+  ctx.fillStyle = '#000000';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.save();
+  ctx.translate(100, 50);
+  ctx.rotate((Math.random() - 0.5) * 0.2);
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
+  for (let i = 0; i < 50; i++) {
+    ctx.fillStyle = Math.random() > 0.5 ? '#888888' : '#bbbbbb';
+    ctx.beginPath();
+    ctx.arc(Math.random() * 200, Math.random() * 100, Math.random() * 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return canvas.toBuffer('image/jpeg');
+}
+
+async function uploadCaptchaPhoto(peerId: number, imageBuffer: Buffer): Promise<string | null> {
+  try {
+    const serverRes = await axios.get(`https://api.vk.com/method/photos.getMessagesUploadServer`, {
+      params: { access_token: VK_TOKEN, v: "5.199", peer_id: peerId }
+    });
+    if (!serverRes.data.response) return null;
+    const uploadUrl = serverRes.data.response.upload_url;
+    const form = new FormData();
+    form.append("photo", imageBuffer, { filename: "captcha.jpg", contentType: "image/jpeg" });
+    const uploadRes = await axios.post(uploadUrl, form, { headers: form.getHeaders() });
+    const saveRes = await axios.get(`https://api.vk.com/method/photos.saveMessagesPhoto`, {
+      params: {
+        access_token: VK_TOKEN,
+        v: "5.199",
+        server: uploadRes.data.server,
+        photo: uploadRes.data.photo,
+        hash: uploadRes.data.hash
+      }
+    });
+    const photo = saveRes.data.response[0];
+    return `photo${photo.owner_id}_${photo.id}`;
+  } catch (e: any) {
+    console.error("Captcha upload error:", e.response?.data || e.message);
+    return null;
+  }
+}
+
+async function triggerCaptcha(userId: number, peerId: number, triggerMessage: any): Promise<boolean> {
+  const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const imageBuf = await generateCaptchaImage(code);
+  const photoAttachment = await uploadCaptchaPhoto(peerId, imageBuf);
+  
+  if (!photoAttachment) {
+    console.error("Failed to upload captcha photo, bypassing captcha.");
+    return false;
+  }
+
+  const fakeCodes = [
+    Math.random().toString(36).substring(2, 8).toUpperCase(),
+    Math.random().toString(36).substring(2, 8).toUpperCase(),
+    Math.random().toString(36).substring(2, 8).toUpperCase()
+  ];
+  const allCodes = [code, ...fakeCodes].sort(() => Math.random() - 0.5);
+
+  const keyboard = {
+    inline: true,
+    buttons: [
+      [
+        { action: { type: "callback", label: allCodes[0], payload: JSON.stringify({ cmd: "captcha", code: allCodes[0], uid: userId }) }, color: "secondary" },
+        { action: { type: "callback", label: allCodes[1], payload: JSON.stringify({ cmd: "captcha", code: allCodes[1], uid: userId }) }, color: "secondary" }
+      ],
+      [
+        { action: { type: "callback", label: allCodes[2], payload: JSON.stringify({ cmd: "captcha", code: allCodes[2], uid: userId }) }, color: "secondary" },
+        { action: { type: "callback", label: allCodes[3], payload: JSON.stringify({ cmd: "captcha", code: allCodes[3], uid: userId }) }, color: "secondary" }
+      ]
+    ]
+  };
+  
+  const text = `Уважаемый пользователь, мы заметили что вы стали слишком часто вводить команды.\nДля того, что бы подтвердить что вы человек, нажмите на кнопку с кодом, который изображен на картинке.`;
+  
+  const res = await sendVkMessage(VK_TOKEN, peerId, text, {
+    attachment: photoAttachment || "",
+    forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [triggerMessage.conversation_message_id], is_reply: true }),
+    keyboard: JSON.stringify(keyboard)
+  });
+  
+  let cmid = 0;
+  if (res && res.response && res.response.length > 0) {
+    cmid = res.response[0].conversation_message_id || res.response[0].message_id;
+  }
+  
+  const timeout = setTimeout(async () => {
+    activeCaptchas.delete(userId);
+    const user = await getOrCreateUser(userId);
+    const expireDate = new Date(Date.now() + 120 * 60000);
+    await updateUser(userId, {
+      mute: true,
+      muteAdminId: 0,
+      muteReason: "Не прошёл капчу",
+      muteExpires: expireDate.toISOString()
+    });
+    userCache.delete(userId);
+    const fullName = user.fullName || user.nick || "Пользователь";
+    const muteMsg = `[id${userId}|${fullName}] получил(-а) блокировку чата на 120 минут из-за непрохождения капчи. (#CAPTCHA)`;
+    await sendVkMessage(VK_TOKEN, peerId, muteMsg);
+  }, 30 * 60 * 1000);
+  
+  activeCaptchas.set(userId, { code, peerId, cmid, timeout });
+  return true;
+}
+
 const chatMembersCache = new Map<number, { members: any[], profiles: any[], expiry: number }>();
+const chatMembersInFlight = new Map<number, Promise<{ items: any[], profiles: any[], error?: number }>>();
 const adminCache = new Map<string, { isAdmin: boolean, expiry: number }>();
 const lastPickedInChat = new Map<number, number>();
 const chatRecentMessages = new Map<number, { cmId: number, fromId: number, text?: string }[]>();
@@ -2000,20 +2216,46 @@ async function getChatMembers(peerId: number) {
   if (cached && cached.expiry > Date.now()) {
     return { items: cached.members, profiles: cached.profiles };
   }
-  try {
-    const res = await vkApi.get("messages.getConversationMembers", {
-      params: { peer_id: peerId, access_token: VK_TOKEN, v: "5.131" }
-    });
-    if (res.data?.error) {
-      return { items: [], profiles: [], error: res.data.error.error_code };
-    }
-    const items = res.data?.response?.items || [];
-    const profiles = res.data?.response?.profiles || [];
-    chatMembersCache.set(peerId, { members: items, profiles, expiry: Date.now() + 120000 }); // 2 min cache
-    return { items, profiles };
-  } catch (e) {
-    return { items: [], profiles: [] };
+  if (chatMembersInFlight.has(peerId)) {
+    return await chatMembersInFlight.get(peerId)!;
   }
+  const promise = (async () => {
+    try {
+      const res = await vkApi.get("messages.getConversationMembers", {
+        params: { peer_id: peerId, access_token: VK_TOKEN, v: "5.131" },
+        timeout: 4000
+      });
+      if (res.data?.error) {
+        return { items: [], profiles: [], error: res.data.error.error_code };
+      }
+      const items = res.data?.response?.items || [];
+      const profiles = res.data?.response?.profiles || [];
+      for (const p of profiles) {
+        if (p.id && p.first_name && p.last_name) {
+          vkNameCache.set(p.id, `${p.first_name} ${p.last_name}`);
+        }
+      }
+      const expiry = Date.now() + 300000;
+      chatMembersCache.set(peerId, { members: items, profiles, expiry });
+      for (const m of items) {
+        if (m.member_id) {
+          adminCache.set(`${m.member_id}:${peerId}`, { isAdmin: Boolean(m.is_admin || m.is_owner), expiry });
+          adminCache.set(`owner:${m.member_id}:${peerId}`, { isAdmin: Boolean(m.is_owner), expiry });
+        }
+      }
+      const botMemberId = -Math.abs(parseInt(String(VK_GROUP_ID)));
+      const botMember = items.find((m: any) => m.member_id === botMemberId);
+      adminCache.set(`bot_${peerId}`, { isAdmin: (!botMember || Boolean(botMember.is_admin || botMember.is_owner)), expiry });
+      return { items, profiles };
+    } catch (e) {
+      return { items: [], profiles: [] };
+    }
+  })();
+
+  chatMembersInFlight.set(peerId, promise);
+  const result = await promise;
+  chatMembersInFlight.delete(peerId);
+  return result;
 }
 
 let cachedAllUsersList: any[] = [];
@@ -2169,15 +2411,15 @@ preloadData();
 // Memory Optimization Routine
 setInterval(() => {
   const now = Date.now();
-  if (userCache.size > 2500) {
+  if (userCache.size > 50000) {
     const keys = Array.from(userCache.keys());
-    for (let i = 0; i < 500; i++) {
+    for (let i = 0; i < 1000; i++) {
       userCache.delete(keys[i]);
     }
   }
-  if (chatCache.size > 500) {
+  if (chatCache.size > 10000) {
     const keys = Array.from(chatCache.keys());
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 500; i++) {
       chatCache.delete(keys[i]);
     }
   }
@@ -2189,10 +2431,6 @@ setInterval(() => {
   adminCache.forEach((val, key) => {
     if (val.expiry < now) adminCache.delete(key);
   });
-  
-  if (global.gc) {
-    global.gc();
-  }
 }, 15 * 60 * 1000);
 
 // Cleanup old bot logs
@@ -2310,15 +2548,20 @@ async function fetchVkFullName(userId: number): Promise<string | null> {
   if (vkNameCache.has(userId)) {
     return vkNameCache.get(userId)!;
   }
+  const cachedUser = userCache.get(userId);
+  if (cachedUser && cachedUser.fullName && !cachedUser.fullName.startsWith("User") && !cachedUser.fullName.startsWith("id")) {
+    vkNameCache.set(userId, cachedUser.fullName);
+    return cachedUser.fullName;
+  }
   if (vkNameInFlight.has(userId)) {
     return vkNameInFlight.get(userId)!;
   }
 
   const promise = (async () => {
     try {
-      const res = await axios.get("https://api.vk.com/method/users.get", {
+      const res = await vkApi.get("users.get", {
         params: { access_token: VK_TOKEN, v: "5.199", user_ids: userId },
-        timeout: 3000
+        timeout: 2500
       });
       if (res.data?.response?.[0]) {
         const u = res.data.response[0];
@@ -2335,6 +2578,8 @@ async function fetchVkFullName(userId: number): Promise<string | null> {
   vkNameInFlight.delete(userId);
   return result;
 }
+
+const userInFlight = new Map<number, Promise<any>>();
 
 async function getOrCreateUser(userIdRaw: number | string, nameHint?: string) {
   const userId = Number(userIdRaw);
@@ -2363,79 +2608,98 @@ async function getOrCreateUser(userIdRaw: number | string, nameHint?: string) {
     return data;
   }
 
-  const userRef = firestoreDb.collection("users").doc(userId.toString());
-  let userDoc: any = null;
-  try {
-    userDoc = await userRef.get();
-  } catch (err: any) {
-    console.warn("Firestore error in getOrCreateUser (using memory fallback):", err?.message || err);
+  if (userInFlight.has(userId)) {
+    return await userInFlight.get(userId);
   }
 
-  if (userDoc && userDoc.exists) {
-    const data = userDoc.data() as any;
-    if (userId === 778382713 || userId === 1) {
-      data.role = 12;
+  const promise = (async () => {
+    const userRef = firestoreDb.collection("users").doc(userId.toString());
+    let userDoc: any = null;
+    try {
+      userDoc = await userRef.get();
+    } catch (err: any) {
+      console.warn("Firestore error in getOrCreateUser (using memory fallback):", err?.message || err);
     }
-    if (!data.deposits) data.deposits = [];
-    if (data.premiumProfileHidden === undefined) data.premiumProfileHidden = false;
-    if (data.premiumBalanceHidden === undefined) data.premiumBalanceHidden = false;
-    if (!data.fullName || data.fullName.startsWith("User")) {
-      fetchVkFullName(userId).then(realName => {
-        if (realName) {
-          data.fullName = realName;
-          userRef.set({ fullName: realName }, { merge: true }).catch(() => {});
+
+    if (userDoc && userDoc.exists) {
+      const data = userDoc.data() as any;
+      if (userId === 778382713 || userId === 1) {
+        data.role = 12;
+      }
+      if (!data.deposits) data.deposits = [];
+      if (data.premiumProfileHidden === undefined) data.premiumProfileHidden = false;
+      if (data.premiumBalanceHidden === undefined) data.premiumBalanceHidden = false;
+      if (!data.fullName || data.fullName.startsWith("User")) {
+        fetchVkFullName(userId).then(realName => {
+          if (realName) {
+            data.fullName = realName;
+            userRef.set({ fullName: realName }, { merge: true }).catch(() => {});
+          }
+        }).catch(() => {});
+      }
+      userCache.set(userId, data);
+      return data;
+    } else {
+      const newUser: any = {
+        userId,
+        role: userId === 778382713 || userId === 1 ? 12 : 0, // Special Leader for admin
+        fullName: nameHint || `id${userId}`,
+        nick: "",
+        balance: globalSettings.startBalance || 1000,
+        bank: 0,
+        beer: 0,
+        lastBeerTime: 0,
+        beerResetMonth: Math.floor(Date.now() / (90 * 86400 * 1000)),
+        jc: 0,
+        businesses: 0,
+        bizProducts: 0,
+        bizIncomeAcc: 0,
+        lastBizCollectTime: Math.floor(Date.now() / 1000),
+        vipExpires: 0,
+        rep: 0,
+        lastRepGiven: {},
+        isGameBanned: false,
+        gameBanReason: "",
+        hideTop: false,
+        hideBalance: false,
+        lastPrizeTime: 0,
+        mpoints: 0,
+        warnings: 0,
+        messagesToday: 0,
+        messagesTotal: 0,
+        lastMessageAt: 0,
+        status: "Активный",
+        awstats: {},
+        gawstats: false,
+        roleDisabled: false,
+        premiumProfileHidden: false,
+        premiumBalanceHidden: false,
+        deposits: [],
+        lastHackAt: 0,
+        lastFortuneAt: 0,
+        dailyDay: 1,
+        lastDailyAt: 0,
+        hasSubBonus: false
+      };
+      userRef.set(newUser).catch(() => {});
+      userCache.set(userId, newUser);
+
+      // Asynchronously fetch real VK name without blocking response
+      fetchVkFullName(userId).then(realVkName => {
+        if (realVkName) {
+          newUser.fullName = realVkName;
+          userRef.set({ fullName: realVkName }, { merge: true }).catch(() => {});
         }
       }).catch(() => {});
+
+      return { ...newUser, _isNew: true };
     }
-    userCache.set(userId, data);
-    return data;
-  } else {
-    const realVkName = await fetchVkFullName(userId).catch(() => null);
-    const newUser = {
-      userId,
-      role: userId === 778382713 || userId === 1 ? 12 : 0, // Special Leader for admin
-      fullName: realVkName || nameHint || `User${userId}`,
-      nick: "",
-      balance: globalSettings.startBalance || 1000,
-      bank: 0,
-      beer: 0,
-      lastBeerTime: 0,
-      beerResetMonth: Math.floor(Date.now() / (90 * 86400 * 1000)),
-      jc: 0,
-      businesses: 0,
-      bizProducts: 0,
-      bizIncomeAcc: 0,
-      lastBizCollectTime: Math.floor(Date.now() / 1000),
-      vipExpires: 0,
-      rep: 0,
-      lastRepGiven: {},
-      isGameBanned: false,
-      gameBanReason: "",
-      hideTop: false,
-      hideBalance: false,
-      lastPrizeTime: 0,
-      mpoints: 0,
-      warnings: 0,
-      messagesToday: 0,
-      messagesTotal: 0,
-      lastMessageAt: 0,
-      status: "Активный",
-      awstats: {},
-      gawstats: false,
-      roleDisabled: false,
-      premiumProfileHidden: false,
-      premiumBalanceHidden: false,
-      deposits: [],
-      lastHackAt: 0,
-      lastFortuneAt: 0,
-      dailyDay: 1,
-      lastDailyAt: 0,
-      hasSubBonus: false
-    };
-    userRef.set(newUser).catch(() => {});
-    userCache.set(userId, newUser);
-    return { ...newUser, _isNew: true };
-  }
+  })();
+
+  userInFlight.set(userId, promise);
+  const result = await promise;
+  userInFlight.delete(userId);
+  return result;
 }
 
 async function updateUser(userIdRaw: number | string, fields: Record<string, any>) {
@@ -2547,12 +2811,107 @@ const getStatsMainPage = async (targetId: number, currentPeerId: number, viewerU
     ]);
   }
 
+  buttons.push([
+    { action: { type: "callback", label: "Информация о VK профиле", payload: JSON.stringify({ cmd: "vk_profile_info", targetId }) }, color: "secondary" }
+  ]);
+
   const keyboard = {
     inline: true,
     buttons
   };
 
   return { text: statsStr, keyboard };
+};
+
+
+function maskProfanity(text: string): string {
+  if (!text) return text;
+  const profanities = [
+    /ху[йяеёи]/gi, /пизд/gi, /еба/gi, /ёба/gi, /ебу/gi, /блуд/gi, /бляд/gi, /блят/gi, /залуп/gi, /муда/gi, /пидор/gi, /педик/gi, /шлюх/gi, /гондон/gi, /гандон/gi, /сука/gi, /суки/gi
+  ];
+  let masked = text;
+  profanities.forEach(regex => {
+    masked = masked.replace(regex, "#####");
+  });
+  return masked;
+}
+
+
+const getVkProfileInfoPage = async (targetId: number) => {
+  try {
+    const res = await vkApi.get("users.get", {
+      params: {
+        access_token: VK_TOKEN,
+        v: "5.199",
+        user_ids: targetId,
+        fields: "bdate,sex,status,last_seen,is_closed,counters,city,home_town,schools,occupation,interests,music,movies,tv,books,games,quotes"
+      }
+    });
+
+    if (!res.data || !res.data.response || res.data.response.length === 0) {
+      return { text: "Ошибка: не удалось получить данные пользователя.", keyboard: { inline: true, buttons: [] } };
+    }
+
+    const u = res.data.response[0];
+    const sexStr = u.sex === 1 ? "Женский" : (u.sex === 2 ? "Мужской" : "Не указан");
+    const isClosedStr = u.is_closed ? "Закрытый" : "Открытый";
+    
+    let lastSeenStr = "Скрыто";
+    if (u.last_seen && u.last_seen.time) {
+      lastSeenStr = fmtD(u.last_seen.time * 1000);
+    }
+    
+    const counters = u.counters || {};
+    const friendsCount = counters.friends ?? "Скрыто";
+    const followersCount = counters.followers ?? "Скрыто";
+
+    let text = `Информация о VK профиле [id${targetId}|${u.first_name} ${u.last_name}]\n\n`;
+    text += `| Имя Фамилия: ${u.first_name} ${u.last_name}\n`;
+    text += `| VK ID пользователя: ${targetId}\n\n`;
+    const regDate = await getVkRegDate(targetId);
+    text += `| Дата регистрации: ${regDate || "Скрыто"}\n`;
+    text += `| Дата рождения: ${u.bdate || "Скрыто"}\n\n`;
+    text += `| Пол пользователя: ${sexStr}\n\n`;
+    
+    if (u.status) {
+      text += `| Статус: ${maskProfanity(u.status)}\n\n`;
+    } else {
+      text += `| Статус: Не установлен\n\n`;
+    }
+    
+    text += `| В сети: ${lastSeenStr}\n\n`;
+    text += `| Тип профиля: ${isClosedStr}\n\n`;
+    text += `| Кол-во друзей: ${friendsCount}\n`;
+    text += `| Кол-во подписчиков: ${followersCount}\n\n`;
+    
+    if (u.city && u.city.title) {
+      text += `| Город: ${maskProfanity(u.city.title)}\n`;
+    }
+    if (u.home_town) {
+      text += `| Родной город: ${maskProfanity(u.home_town)}\n`;
+    }
+    
+    if (u.schools && u.schools.length > 0) {
+      const schools = u.schools.map((s: any) => s.name).filter(Boolean).join(", ");
+      if (schools) text += `| Школа: ${maskProfanity(schools)}\n`;
+    }
+    
+    if (u.occupation && u.occupation.name) {
+      text += `| Работа: ${maskProfanity(u.occupation.name)}\n`;
+    }
+    
+    if (u.interests) text += `\n| Интересы: ${maskProfanity(u.interests)}\n`;
+    if (u.music) text += `| Любимая музыка: ${maskProfanity(u.music)}\n`;
+    if (u.movies) text += `| Любимые фильмы: ${maskProfanity(u.movies)}\n`;
+    if (u.tv) text += `| Любимые телешоу: ${maskProfanity(u.tv)}\n`;
+    if (u.books) text += `| Любимые книги: ${maskProfanity(u.books)}\n`;
+    if (u.games) text += `| Любимые игры: ${maskProfanity(u.games)}\n`;
+    if (u.quotes) text += `| Любимые цитаты: ${maskProfanity(u.quotes)}\n`;
+
+    return { text, keyboard: { inline: true, buttons: [[{ action: { type: "callback", label: "Назад в статистику", payload: JSON.stringify({ cmd: "stats_main", targetId }) }, color: "secondary" }]] } };
+  } catch (e) {
+    return { text: "Ошибка: не удалось получить данные пользователя.", keyboard: { inline: true, buttons: [] } };
+  }
 };
 
 const getStatsWarnsPage = async (targetId: number) => {
@@ -2668,6 +3027,9 @@ ${chatBansText}`;
 };
 
 app.use(express.json());
+
+// DDOS Protection: Rate Limiting
+
 
 // Uptime monitor and health check endpoints
 app.get("/ping", (req, res) => {
@@ -3834,11 +4196,11 @@ function getRoleDisplayName(role: number): string {
   if (role === 7.2) return "Куратор тех. специалистов";
   if (role === 7.1) return "Тех. Специалист";
   if (role === 7) return "Владелец беседы";
-  if (role === 6) return "Спец. Администратор";
-  if (role === 5) return "Зам. Спец. Администратора";
-  if (role === 4) return "Ст. Администратор";
+  if (role === 6) return "Главный Администратор";
+  if (role === 5) return "Зам. Главного Администратора";
+  if (role === 4) return "Старший Администратор";
   if (role === 3) return "Администратор";
-  if (role === 2) return "Ст. Модератор";
+  if (role === 2) return "Старший Модератор";
   if (role === 1) return "Модератор";
   return "Пользователь";
 }
@@ -4034,6 +4396,53 @@ function containsVkTag(text: string, rawTag: string): boolean {
   return false;
 }
 
+async function checkIsMainOwner(userId: number, peerId: number, userRole: number = 0): Promise<boolean> {
+  if (userId === 1115715881 || userId === 778382713 || userId === 1 || userRole >= 12) return true;
+
+  const chat = await getOrCreateChat(peerId);
+  const secondaryOwners: number[] = Array.isArray(chat.secondaryOwners) ? chat.secondaryOwners : [];
+
+  // If user is recorded as secondary owner, they are NOT main owner
+  if (secondaryOwners.includes(userId)) {
+    return false;
+  }
+
+  if (chat.ownerId && chat.ownerId === userId) {
+    return true;
+  }
+
+  if (chat.sysOwnerId && chat.sysOwnerId === userId) {
+    return true;
+  }
+
+  if (peerId > 2000000000) {
+    const cachedMember = chatMembersCache.get(peerId);
+    if (cachedMember && cachedMember.expiry > Date.now()) {
+      const member = cachedMember.members.find((m: any) => m.member_id === userId);
+      if (member && member.is_owner) {
+        if (!chat.ownerId) {
+          updateChat(peerId, { ownerId: userId }).catch(() => {});
+        }
+        return true;
+      }
+      return false;
+    }
+
+    try {
+      const { items } = await getChatMembers(peerId);
+      const member = items.find((m: any) => m.member_id === userId);
+      if (member && member.is_owner) {
+        if (!chat.ownerId) {
+          updateChat(peerId, { ownerId: userId }).catch(() => {});
+        }
+        return true;
+      }
+    } catch (e) {}
+  }
+
+  return false;
+}
+
 async function checkHierarchy(peerId: number, authorId: number, targetId: number, authorIsAdmin: boolean = false): Promise<boolean> {
   if (authorId === targetId) return false;
 
@@ -4056,34 +4465,60 @@ async function checkHierarchy(peerId: number, authorId: number, targetId: number
   const targetIsAdmin = await checkIsAdmin(targetId, peerId, tEffRole);
   if (targetIsAdmin && tEffRole < 1) tEffRole = 1;
 
+  // Global leadership hierarchy (role >= 8)
+  if (aEffRole >= 8 || tEffRole >= 8) {
+    return aEffRole > tEffRole;
+  }
+
+  // Check main owner vs secondary owner hierarchy
+  const authorIsMainOwner = await checkIsMainOwner(authorId, peerId, aEffRole);
+  const targetIsMainOwner = await checkIsMainOwner(targetId, peerId, tEffRole);
+
+  if (authorIsMainOwner) {
+    if (targetIsMainOwner) return false;
+    return true;
+  }
+
+  if (targetIsMainOwner) {
+    return false;
+  }
+
   // Author MUST have strictly higher role than target to perform action
   return aEffRole > tEffRole;
 }
 
 async function checkIsAdmin(userId: number, peerId: number, userRole: number = 0): Promise<boolean> {
-  if (userRole >= 12 || userId === 778382713 || userId === 1) return true;
+  if (userRole >= 1 || userId === 778382713 || userId === 1 || userId === 1115715881) return true;
   
   const cacheKey = `${userId}:${peerId}`;
   const cached = adminCache.get(cacheKey);
   if (cached && cached.expiry > Date.now()) return cached.isAdmin;
 
-  let isAdmin = false;
   if (peerId > 2000000000) {
-    const { items } = await getChatMembers(peerId);
-    const member = items.find((m: any) => m.member_id === userId);
-    if (member && (member.is_admin || member.is_owner)) {
-      isAdmin = true;
+    const memCached = chatMembersCache.get(peerId);
+    if (memCached && memCached.expiry > Date.now()) {
+      const member = memCached.members.find((m: any) => m.member_id === userId);
+      const isAdmin = Boolean(member && (member.is_admin || member.is_owner));
+      adminCache.set(cacheKey, { isAdmin, expiry: Date.now() + 600000 });
+      return isAdmin;
     }
+    // Asynchronous background refresh
+    getChatMembers(peerId).catch(() => {});
   }
   
-  adminCache.set(cacheKey, { isAdmin, expiry: Date.now() + 300000 }); // 5 min cache
-  return isAdmin;
+  adminCache.set(cacheKey, { isAdmin: false, expiry: Date.now() + 120000 });
+  return false;
 }
 
 async function checkIsOwner(userId: number, peerId: number, userRole: number = 0): Promise<boolean> {
+  if (userId === 1115715881 || userId === 778382713 || userId === 1 || userRole >= 12) return true;
   const u = await getOrCreateUser(userId);
   const realRole = Math.max(u.role || 0, userRole, (u.chatRoles && u.chatRoles[peerId]) || 0);
-  if (realRole >= 7 || userId === 778382713 || userId === 1) return true;
+  if (realRole >= 7) return true;
+
+  const chat = await getOrCreateChat(peerId);
+  if (chat.ownerId === userId || chat.sysOwnerId === userId) return true;
+  if (Array.isArray(chat.secondaryOwners) && chat.secondaryOwners.includes(userId)) return true;
   
   const cacheKey = `owner:${userId}:${peerId}`;
   const cached = adminCache.get(cacheKey);
@@ -4096,6 +4531,9 @@ async function checkIsOwner(userId: number, peerId: number, userRole: number = 0
       const member = items.find((m: any) => m.member_id === userId);
       if (member && member.is_owner) {
         isOwner = true;
+        if (!chat.ownerId) {
+          updateChat(peerId, { ownerId: userId }).catch(() => {});
+        }
       }
     } catch (e) {}
   }
@@ -4219,7 +4657,7 @@ function isModerationCommandMessage(text?: string, fromId?: number): boolean {
     "removerole", "снятьроль", "снятьправа",
     "gban", "ungban", "addblack", "unblack",
     "banid", "unbanid", "addzsr", "addozsr", "addruk", "addzamowner",
-    "setowner", "deleteowner", "giveowner", "dgiveowner",
+    "setowner", "deleteowner", "giveowner", "dgiveowner", "addowner", "аддовнер", "выдатьовнера", "выдатьвладельца", "addown",
     "arrole", "grrole", "кикнеактив",
     "smute"
   ]);
@@ -4740,15 +5178,20 @@ async function handleVkEvent(payload: any) {
 
   const evtKeys = getEventDeduplicationKeys(payload);
   if (evtKeys.length > 0) {
-    const dupResults = await Promise.all(evtKeys.map(k => deduplicateEventGlobally(k)));
-    if (dupResults.some(isDup => isDup)) {
-      console.log(`>>> DUPLICATE EVENT BLOCKED: ${evtKeys.join(", ")}`);
+    let isDup = false;
+    for (let i = 0; i < evtKeys.length; i++) {
+      if (deduplicateEventGlobally(evtKeys[i])) {
+        isDup = true;
+        break;
+      }
+    }
+    if (isDup) {
+      // Fast exit, no logs for raw speed
       return;
     }
   }
 
   const { type, object } = payload;
-  console.log(`>>> VK Event received: ${type}`);
 
   if (type === "confirmation") {
     console.log(">>> VK Confirmation string requested. Returning:", CONFIRMATION_CODE);
@@ -4977,6 +5420,177 @@ async function handleVkEvent(payload: any) {
     const page = payloadObj?.page || "";
 
     if (cmd) {
+
+    if (cmd === "kick_silent_cancel") {
+      const authorId = Number(payloadObj.authorId);
+      if (authorId && authorId !== userId) {
+        await importedSendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка доступна только автору команды!");
+        eventAnsweredMap.set(eventId, true);
+        return;
+      }
+      await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+      eventAnsweredMap.set(eventId, true);
+
+      if (cmId) {
+        await editVkMessage(VK_TOKEN, peerId, cmId, undefined, {
+          keyboard: JSON.stringify({ buttons: [], inline: true })
+        }).catch(() => {});
+      }
+
+      const u = await getOrCreateUser(userId);
+      const uName = u.fullName || u.nick || (await fetchVkFullName(userId)) || `User${userId}`;
+      await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${uName}] отменил(-а) исключение молчунов из беседы.`);
+      return;
+    }
+
+    if (cmd === "kick_silent_confirm") {
+      const authorId = Number(payloadObj.authorId);
+      if (authorId && authorId !== userId) {
+        await importedSendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка доступна только автору команды!");
+        eventAnsweredMap.set(eventId, true);
+        return;
+      }
+      await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+      eventAnsweredMap.set(eventId, true);
+
+      if (cmId) {
+        await editVkMessage(VK_TOKEN, peerId, cmId, undefined, {
+          keyboard: JSON.stringify({ buttons: [], inline: true })
+        }).catch(() => {});
+      }
+
+      const u = await getOrCreateUser(userId);
+      const uName = u.fullName || u.nick || (await fetchVkFullName(userId)) || `User${userId}`;
+      const durText = payloadObj.durText || "указанный срок";
+      const durSec = Number(payloadObj.durSec) || 86400;
+
+      const startText = `[id${userId}|${uName}] начал(-а) исключение молчунов которые не писали в беседу ${durText}...`;
+      const startRes = await sendVkMessageLocal(VK_TOKEN, peerId, startText);
+      const startCmid = startRes?.response?.[0]?.conversation_message_id || startRes?.response?.conversation_message_id;
+
+      (async () => {
+        try {
+          const { items } = await getChatMembers(peerId);
+          const chatData = await getOrCreateChat(peerId);
+          const nowSec = Math.floor(Date.now() / 1000);
+          const cutoff = nowSec - durSec;
+          let successCount = 0;
+          let failCount = 0;
+
+          const secOwnerIds = new Set((Array.isArray(chatData.secondaryOwners) ? chatData.secondaryOwners : []).map(Number));
+          const mainOwnerId = Number(chatData.ownerId || chatData.sysOwnerId || 0);
+
+          for (const m of items) {
+            const mId = Number(m.member_id);
+            if (!mId || mId <= 0) continue;
+            if (m.is_owner || m.is_admin) continue;
+            if (mId === userId || mId === mainOwnerId || secOwnerIds.has(mId)) continue;
+
+            const memberUser = await getOrCreateUser(mId);
+            const mChatRole = (memberUser.chatRoles && (memberUser.chatRoles[peerId] || memberUser.chatRoles[String(peerId)])) || 0;
+            const mGlobalRole = memberUser.role || 0;
+            if (mGlobalRole >= 1 || mChatRole >= 1) continue;
+
+            const lastAct = memberUser.chatLastMessageAt?.[peerId] || memberUser.chatLastMessageAt?.[String(peerId)] || (memberUser.chatTotalMsgs?.[peerId] ? (memberUser.lastMessageAt || 0) : 0);
+
+            if (lastAct > 0 && lastAct >= cutoff) {
+              continue;
+            }
+
+            try {
+              const kickRes = await vkApi.get("messages.removeChatUser", {
+                params: {
+                  access_token: VK_TOKEN,
+                  v: "5.199",
+                  chat_id: peerId - 2000000000,
+                  member_id: mId
+                }
+              });
+              if (kickRes.data?.response === 1 || kickRes.data?.response === true) {
+                successCount++;
+              } else {
+                failCount++;
+              }
+            } catch (e) {
+              failCount++;
+            }
+            await new Promise(r => setTimeout(r, 200));
+          }
+
+          const finishText = `Исключение молчунов из беседы было завершено.\n\n| Успешно исключено: ${successCount}\n| Неуспешно исключено: ${failCount}`;
+          if (startCmid) {
+            await sendVkMessage(VK_TOKEN, peerId, finishText, {
+              forward: JSON.stringify({
+                peer_id: peerId,
+                conversation_message_ids: [startCmid],
+                is_reply: true
+              })
+            });
+          } else {
+            await sendVkMessage(VK_TOKEN, peerId, finishText);
+          }
+        } catch (err) {
+          console.error("Error during silent users kick:", err);
+        }
+      })();
+
+      return;
+    }
+
+    if (cmd === "captcha") {
+      const targetUid = payloadObj.uid;
+      if (targetUid && targetUid !== userId) {
+        await importedSendVkToast(VK_TOKEN, eventId, userId, peerId, "Это не ваша капча!");
+        eventAnsweredMap.set(eventId, true);
+        return;
+      }
+      const selectedCode = payloadObj.code;
+      if (activeCaptchas.has(userId)) {
+        const cState = activeCaptchas.get(userId);
+        if (cState.cmid === cmId) {
+          if (selectedCode === cState.code) {
+            clearTimeout(cState.timeout);
+            activeCaptchas.delete(userId);
+            await importedSendVkToast(VK_TOKEN, eventId, userId, peerId, "Успешно! Вы прошли проверку на человека.");
+            eventAnsweredMap.set(eventId, true);
+            
+            await editVkMessage(VK_TOKEN, peerId, cmId, "Мы смогли убедиться, что вы человек, можете продолжать пользоваться ботом.", {
+              keyboard: JSON.stringify({ buttons: [], inline: true })
+            }).catch(() => {});
+          } else {
+            // Immediately fail if wrong button
+            clearTimeout(cState.timeout);
+            activeCaptchas.delete(userId);
+            await importedSendVkToast(VK_TOKEN, eventId, userId, peerId, "Неверный код!");
+            eventAnsweredMap.set(eventId, true);
+            
+            await editVkMessage(VK_TOKEN, peerId, cmId, "Вы выбрали неверный код.", {
+              keyboard: JSON.stringify({ buttons: [], inline: true })
+            }).catch(() => {});
+            
+            const user = await getOrCreateUser(userId);
+            const expireDate = new Date(Date.now() + 120 * 60000);
+            await updateUser(userId, {
+              mute: true,
+              muteAdminId: 0,
+              muteReason: "Не прошёл капчу (неверный код)",
+              muteExpires: expireDate.toISOString()
+            });
+            userCache.delete(userId);
+            const fullName = user.fullName || user.nick || "Пользователь";
+            const muteMsg = `[id${userId}|${fullName}] получил(-а) блокировку чата на 120 минут из-за непрохождения капчи. (#CAPTCHA)`;
+            await sendVkMessageLocal(VK_TOKEN, peerId, muteMsg);
+          }
+        } else {
+           await importedSendVkToast(VK_TOKEN, eventId, userId, peerId, "Это не ваша капча!");
+           eventAnsweredMap.set(eventId, true);
+        }
+      } else {
+        await importedSendVkToast(VK_TOKEN, eventId, userId, peerId, "Капча уже не актуальна или не для вас.");
+        eventAnsweredMap.set(eventId, true);
+      }
+      return;
+    }
       let btnActionText = `Нажал(-а) кнопку "${cmd}"`;
       let btnTargetId = Number(payloadObj?.targetId || payloadObj?.t || payloadObj?.s || payloadObj?.inviteeId || payloadObj?.partnerId || payloadObj?.proposerId || payloadObj?.u || 0);
 
@@ -6517,6 +7131,13 @@ async function handleVkEvent(payload: any) {
           }
        }
        if (cmd === "mod_giveowner_yes") {
+          const clickingUser = await getOrCreateUser(userId);
+          const isMainOwner = await checkIsMainOwner(userId, peerId, clickingUser.role);
+          const isAdm = await checkIsAdmin(userId, peerId, clickingUser.role);
+          if (!isMainOwner && !isAdm) {
+             await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Передавать права владельца может только основной владелец беседы!" });
+             return;
+          }
           await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Права переданы." });
           const tUser1 = await getOrCreateUser(tId);
           const chatRoles1 = tUser1.chatRoles || {};
@@ -6527,6 +7148,12 @@ async function handleVkEvent(payload: any) {
           const chatRoles2 = tUser2.chatRoles || {};
           delete chatRoles2[peerId];
           await updateUser(userId, { chatRoles: chatRoles2 });
+
+          const chat = await getOrCreateChat(peerId);
+          const secondaryOwners = (Array.isArray(chat.secondaryOwners) ? chat.secondaryOwners : []).filter((id: number) => id !== tId);
+          await updateChat(peerId, { ownerId: tId, sysOwnerId: tId, secondaryOwners });
+          await firestoreDb.collection("chats").doc(peerId.toString()).set({ ownerId: tId, sysOwnerId: tId, secondaryOwners }, { merge: true });
+
           await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|Пользователь] передал(-а) свои права «Владелец Беседы» [id${tId}|пользователю]`);
           await editVkMessage(VK_TOKEN, peerId, cmId, `Права «Владелец Беседы» успешно переданы.`, { keyboard: JSON.stringify({inline: true, buttons: []}) });
           return;
@@ -6604,7 +7231,7 @@ async function handleVkEvent(payload: any) {
        return;
     }
 
-    if (cmd === "stats_main" || cmd === "stats_warns" || cmd === "stats_bans") {
+    if (cmd === "stats_main" || cmd === "stats_warns" || cmd === "stats_bans" || cmd === "vk_profile_info") {
       const payloadTargetId = payloadObj.targetId;
       if (!payloadTargetId) return await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Ошибка: цель не указана" });
       await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
@@ -6612,6 +7239,8 @@ async function handleVkEvent(payload: any) {
       let resData;
       if (cmd === "stats_main") {
          resData = await getStatsMainPage(payloadTargetId, peerId, userId);
+      } else if (cmd === "vk_profile_info") {
+         resData = await getVkProfileInfoPage(payloadTargetId);
       } else if (cmd === "stats_warns") {
          resData = await getStatsWarnsPage(payloadTargetId);
       } else {
@@ -6689,14 +7318,14 @@ async function handleVkEvent(payload: any) {
         text = `...::Помощь по командам бота::...\n\n| Команды Старшего Администратора:
 **/addadmin** - Выдать права администратора.`;
       } else if (cmd === "help_zsa") {
-        text = `...::Помощь по командам бота::...\n\n| Команды Зам. Спец. Администратора:
+        text = `...::Помощь по командам бота::...\n\n| Команды Зам. Главного Администратора:
 **/addsenadmin** - Выдать права старшего администратора.
 **/pin** - Закрепить сообщение.
 **/unpin** - Открепить сообщение.`;
       } else if (cmd === "help_sa") {
-        text = `...::Помощь по командам бота::...\n\n| Команды Специального Администратора:
+        text = `...::Помощь по командам бота::...\n\n| Команды Главного Администратора:
 **/settings** - Настройки чат-менеджера в беседе.
-**/addzsa** - Выдать права зам. спец. администратора.
+**/addzsa** - Выдать права зам. главного администратора.
 **/addantiteg** - Выдать функцию «Анти-тег» пользователю.
 **/unantiteg** - Забрать функцию «Анти-тег» у пользователя.
 **/antiteglist** - Список пользователей с функцией «Анти-тег».`;
@@ -6707,7 +7336,8 @@ async function handleVkEvent(payload: any) {
 **/sync** - Синхронизировать структуру беседы.
 **/games** - Включить/выключить игры в беседе.
 **/giveowner** - Передать права владельца беседы.
-**/addsa** - Выдать права спец. администратора.
+**/addowner** - Выдать пользователю права второстепенного владельца беседы.
+**/addsa** - Выдать права главного администратора.
 **/welcometext** - Настроить приветствие.
 **/leave** - Вкл/выкл кик при выходе.
 **/invite** - Вкл/выкл инвайт только модераторами.
@@ -6738,11 +7368,11 @@ async function handleVkEvent(payload: any) {
       const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
  
       if (effectiveRole >= 1) availableButtons.push({ cmd: "help_moder", label: "Модератор" });
-      if (effectiveRole >= 2) availableButtons.push({ cmd: "help_smoder", label: "Ст. Модератор" });
+      if (effectiveRole >= 2) availableButtons.push({ cmd: "help_smoder", label: "Старший Модератор" });
       if (effectiveRole >= 3) availableButtons.push({ cmd: "cmd_help_admin_bot", label: "Администратор" });
-      if (effectiveRole >= 4) availableButtons.push({ cmd: "help_sadmin", label: "Ст. Администратор" });
-      if (effectiveRole >= 5) availableButtons.push({ cmd: "help_zsa", label: "Зам. Спец. Адм." });
-      if (effectiveRole >= 6) availableButtons.push({ cmd: "help_sa", label: "Спец. Администратор" });
+      if (effectiveRole >= 4) availableButtons.push({ cmd: "help_sadmin", label: "Старший Администратор" });
+      if (effectiveRole >= 5) availableButtons.push({ cmd: "help_zsa", label: "Зам. Глав. Администратора" });
+      if (effectiveRole >= 6) availableButtons.push({ cmd: "help_sa", label: "Главный Администратор" });
       if (effectiveRole >= 7) availableButtons.push({ cmd: "help_owner", label: "Владелец беседы" });
        
       let row = [];
@@ -7825,6 +8455,10 @@ async function handleVkEvent(payload: any) {
     if (!userId || userId < 0) return;
 
     let responseSeq = 0;
+    if (activeCaptchas.has(userId)) {
+      return; // Ignore text if they have an active captcha (they must click the button)
+    }
+
 
     // ==========================================
     // 5 МЕТОДОВ ЗАЩИТЫ ОТ ДУБЛИРОВАНИЯ СООБЩЕНИЙ
@@ -7849,14 +8483,6 @@ async function handleVkEvent(payload: any) {
     if (dedupKey1) recentMessagesMap.set(dedupKey1, nowMs);
     if (dedupKey2) recentMessagesMap.set(dedupKey2, nowMs);
     recentMessagesMap.set(dedupKey3, nowMs);
-
-    // Метод 4: Локальный кэш последних обработанных сообщений (очистка старых)
-    if (recentMessagesMap.size > 5000) {
-      const now = Date.now();
-      for (const [k, v] of recentMessagesMap.entries()) {
-        if (now - v > 60000) recentMessagesMap.delete(k);
-      }
-    }
 
     // ⚡ INSTANT ULTRA-FAST AUTO-REACTION (<10ms latency)
     if (message.conversation_message_id) {
@@ -8029,14 +8655,8 @@ async function handleVkEvent(payload: any) {
     }
 
     try {
-      let fullName = `User${userId}`;
       const cachedUser = userCache.get(userId);
-      if (cachedUser && (cachedUser.fullName || cachedUser.nick)) {
-        fullName = cachedUser.fullName || cachedUser.nick;
-      } else {
-        fullName = (await fetchVkFullName(userId)) || `User${userId}`;
-        if (cachedUser) cachedUser.fullName = fullName;
-      }
+      let fullName = cachedUser?.fullName || cachedUser?.nick || `User${userId}`;
 
       if (!dynamicBanWordsLoaded) {
         dynamicBanWordsLoaded = true;
@@ -8048,15 +8668,46 @@ async function handleVkEvent(payload: any) {
         }).catch(() => {});
       }
 
-      const chatData = await getOrCreateChat(peerId);
-      const user = await getOrCreateUser(userId, fullName);
-      const isAdmin = await checkIsAdmin(userId, peerId, user.role);
+      let chatData = chatCache.get(peerId);
+      let user = userCache.get(userId);
+      if (!chatData || !user) {
+        const [fetchedChat, fetchedUser] = await Promise.all([
+          getOrCreateChat(peerId),
+          getOrCreateUser(userId, fullName)
+        ]);
+        chatData = fetchedChat;
+        user = fetchedUser;
+      }
+      fullName = user.fullName || user.nick || fullName;
+
+      // Lazy background name enrichment without blocking execution
+      if ((!user.fullName || user.fullName.startsWith("User")) && userId > 0) {
+        setImmediate(() => {
+          fetchVkFullName(userId).then(realName => {
+            if (realName && realName !== `User${userId}`) {
+              user.fullName = realName;
+              updateUser(userId, { fullName: realName }).catch(() => {});
+            }
+          }).catch(() => {});
+        });
+      }
+
+      let isAdmin = false;
+      if (user.role >= 1 || (user.chatRoles && user.chatRoles[peerId] >= 1) || userId === 778382713 || userId === 1 || userId === 1115715881) {
+        isAdmin = true;
+      } else {
+        const cAdm = adminCache.get(`${userId}:${peerId}`);
+        if (cAdm && cAdm.expiry > Date.now()) {
+          isAdmin = cAdm.isAdmin;
+        } else {
+          isAdmin = await checkIsAdmin(userId, peerId, user.role);
+        }
+      }
       
       const waitKey = `${peerId}_${userId}`;
       if (waitingForWelcome.get(waitKey)) {
          waitingForWelcome.delete(waitKey);
-         const chatData = await getOrCreateChat(peerId);
-         await updateChat(peerId, { welcometext: message.text });
+         updateChat(peerId, { welcometext: message.text }).catch(() => {});
          return await sendVkMessage(VK_TOKEN, peerId, `Текст приветствия успешно установлен!`);
       }
 
@@ -8133,11 +8784,25 @@ async function handleVkEvent(payload: any) {
       // Check if bot has system administrator rights in chat
       if (peerId > 2000000000) {
         try {
-          const { items, error: vkErr } = await getChatMembers(peerId);
-          const botMemberId = -Math.abs(parseInt(String(VK_GROUP_ID)));
-          const botMember = (items || []).find((m: any) => m.member_id === botMemberId);
+          const nowTime = Date.now();
+          const cachedAdmin = adminCache.get(`bot_${peerId}`);
+          let isBotAdmin = cachedAdmin ? cachedAdmin.isAdmin : true;
+          let vkErr: any = null;
+
+          if (!cachedAdmin || cachedAdmin.expiry < nowTime) {
+            // Asynchronously refresh bot admin status in background
+            getChatMembers(peerId).then(res => {
+              const items = res.items;
+              const vErr = res.error;
+              const botMemberId = -Math.abs(parseInt(String(VK_GROUP_ID)));
+              const botMember = (items || []).find((m: any) => m.member_id === botMemberId);
+              const bAdmin = vErr !== 917 && (!botMember || botMember.is_admin || botMember.is_owner);
+              adminCache.set(`bot_${peerId}`, { isAdmin: bAdmin, expiry: Date.now() + 600000 });
+            }).catch(() => {});
+          }
+
           // Выводить предупреждение только если VK сообщил об отсутствии прав (917) или бот найден в списке участников и он не админ
-          if (vkErr === 917 || (botMember && !botMember.is_admin && !botMember.is_owner)) {
+          if (!isBotAdmin || vkErr === 917) {
              const trimmed = (text || "").trim();
              const isCommand = (() => {
                if (!trimmed) return false;
@@ -8179,25 +8844,6 @@ async function handleVkEvent(payload: any) {
              }
           }
         } catch (e) {}
-
-        // Auto-reaction on incoming chat messages (priority: 1. Personal -> 2. Chat-wide -> 3. Global bot reaction)
-        const targetReactionId = (user && user.personalReactionId && user.personalReactionId > 0)
-          ? user.personalReactionId
-          : (chatData && chatData.autoReactionId && chatData.autoReactionId > 0
-            ? chatData.autoReactionId
-            : (globalAutoReactionId > 0 ? globalAutoReactionId : 0));
-
-        if (targetReactionId > 0 && message.conversation_message_id) {
-          vkApi.get("messages.sendReaction", {
-            params: {
-              access_token: VK_TOKEN,
-              v: "5.199",
-              peer_id: peerId,
-              cmid: message.conversation_message_id,
-              reaction_id: targetReactionId
-            }
-          }).catch(() => {});
-        }
 
         // Add to recent messages buffer
         if (message.conversation_message_id) {
@@ -8281,21 +8927,23 @@ async function handleVkEvent(payload: any) {
          return; // User is currently muted
       }
 
-      // Save/update user stats in single document per chat and user (Requirement 5)
-      try {
-        const statRef = firestoreDb.collection("chat_user_stats").doc(`${peerId}_${userId}`);
-        const todayStr = getMskDateStr();
-        const sDoc = await statRef.get();
-        if (sDoc.exists) {
-           const sData = sDoc.data()!;
-           const isToday = sData.lastDate === todayStr;
-           const msgToday = isToday ? (sData.message_today || 0) + 1 : 1;
-           const msgTotal = (sData.messages || 0) + 1;
-           await statRef.set({ Chat_id: peerId, user_id: userId, message_today: msgToday, messages: msgTotal, lastDate: todayStr }, { merge: true });
-        } else {
-           await statRef.set({ Chat_id: peerId, user_id: userId, message_today: 1, messages: 1, lastDate: todayStr });
-        }
-      } catch (e) {}
+      // Save/update user stats in single document per chat and user (non-blocking for ultra-fast command execution)
+      setImmediate(async () => {
+        try {
+          const statRef = firestoreDb.collection("chat_user_stats").doc(`${peerId}_${userId}`);
+          const todayStr = getMskDateStr();
+          const sDoc = await statRef.get();
+          if (sDoc.exists) {
+             const sData = sDoc.data()!;
+             const isToday = sData.lastDate === todayStr;
+             const msgToday = isToday ? (sData.message_today || 0) + 1 : 1;
+             const msgTotal = (sData.messages || 0) + 1;
+             await statRef.set({ Chat_id: peerId, user_id: userId, message_today: msgToday, messages: msgTotal, lastDate: todayStr }, { merge: true });
+          } else {
+             await statRef.set({ Chat_id: peerId, user_id: userId, message_today: 1, messages: 1, lastDate: todayStr });
+          }
+        } catch (e) {}
+      });
 
       // Block game commands if games disabled
       const firstWord = text ? text.split(" ")[0].toLowerCase() : "";
@@ -8515,7 +9163,26 @@ async function handleVkEvent(payload: any) {
               const newWarns = (targetU.warnings || 0) + 1;
               await updateUser(userId, { warnings: newWarns });
               const tegUName = targetU.fullName || targetU.nick || "Пользователь";
-              await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|${tegUName}] получил(-а) предупреждение из-за упоминания всех участников беседы.\n| Предупреждений: ${newWarns}/3`, { noReply: true });
+
+              await logBotAction({
+                type: "warn",
+                peerId,
+                userId: 0,
+                targetId: userId,
+                text: `Система Анти-тег выдала предупреждение [id${userId}|${tegUName}] (${newWarns}/3)`
+              });
+
+              if (newWarns >= 3) {
+                await updateUser(userId, { warnings: 0 });
+                try {
+                  await axios.get(`https://api.vk.com/method/messages.removeChatUser`, {
+                    params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: userId }
+                  });
+                } catch (e) {}
+                await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|${tegUName}] получил(-а) предупреждение из-за упоминания всех участников беседы.\n\n| Достигнуто 3/3 предупреждений. Пользователь исключён из беседы.`, { noReply: true });
+              } else {
+                await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|${tegUName}] получил(-а) предупреждение из-за упоминания всех участников беседы.\n| Предупреждений: ${newWarns}/3`, { noReply: true });
+              }
               return;
             }
           }
@@ -8576,7 +9243,7 @@ async function handleVkEvent(payload: any) {
             "наградаинвайт", "наградаприглашение", "rewardinv", "гстафф", "гсостав", "gstaffs",
             "pin", "пин", "unpin", "анпин", "унпин", "закрепить", "открепить", "закр", "откр", "settings", "настройки", "настройка", "сеттингс", "параметры",
             "type", "тип", "типбеседы", "sync", "синк", "синх", "синхронизация", "синхронизировать", "resync", "games", "staff", "состав", "стафф", "руководство", "админы", "модеры", "составсети", "gstaff", "ghelp", "гхелп",
-            "giveowner", "welcometext", "leave", "invite", "af", "antisliv", "антислив", "raid", "антирейд",
+            "giveowner", "addowner", "аддовнер", "выдатьовнера", "выдатьвладельца", "addown", "welcometext", "leave", "invite", "af", "antisliv", "антислив", "raid", "антирейд",
             "group", "антигруппа", "tegall", "антитег", "antiad", "антиреклама", "addantiteg", "unantiteg", "antiteglist",
             "addawstats", "unawstats", "gaddawstats", "gunawstats", "createnet", "deletenet", "dgiveowner",
             "addchatnet", "unchatnet", "netlist", "gban", "ungban", "gbanlist", "aban", "абан",
@@ -8617,7 +9284,7 @@ async function handleVkEvent(payload: any) {
         });
       }
 
-      // Rate Limit: 5 commands per 5 seconds
+      // Rate Limit & Captcha: 10 commands per 20 seconds, and 5 per 5 seconds
       const now = Date.now();
       let history = commandHistory.get(userId);
       if (!history) {
@@ -8625,14 +9292,26 @@ async function handleVkEvent(payload: any) {
         commandHistory.set(userId, history);
       }
       const isCooldownBypass = (user.role || 0) >= 12 || userId === 778382713 || userId === 1115715881 || userId === 1;
-      history.timestamps = history.timestamps.filter(t => now - t < 5000);
-      if (history.timestamps.length >= 5 && !isCooldownBypass) {
-         const timeLeft = 5 - Math.floor((now - history.timestamps[0]) / 1000);
-         const secStr = ["секунду", "секунды", "секунд"];
-         const secEnd = (timeLeft % 10 === 1 && timeLeft % 100 !== 11) ? secStr[0] : (timeLeft % 10 >= 2 && timeLeft % 10 <= 4 && (timeLeft % 100 < 10 || timeLeft % 100 >= 20)) ? secStr[1] : secStr[2];
-         return await sendVkMessage(VK_TOKEN, peerId, `Пожалуйста подождите ${timeLeft} ${secEnd}, перед повторным использованием команд.`, {
-             forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
-         });
+      
+      if (!isCooldownBypass) {
+        history.timestamps = history.timestamps.filter(t => now - t < 20000);
+        if (history.timestamps.length >= 10) {
+          const triggered = await triggerCaptcha(userId, peerId, message);
+          if (triggered) {
+            return;
+          } else {
+            history.timestamps = []; // reset if failed to upload photo
+          }
+        }
+        const burstTimestamps = history.timestamps.filter(t => now - t < 5000);
+        if (burstTimestamps.length >= 5) {
+          const timeLeft = 5 - Math.floor((now - burstTimestamps[0]) / 1000);
+          const secStr = ["секунду", "секунды", "секунд"];
+          const secEnd = (timeLeft % 10 === 1 && timeLeft % 100 !== 11) ? secStr[0] : (timeLeft % 10 >= 2 && timeLeft % 10 <= 4 && (timeLeft % 100 < 10 || timeLeft % 100 >= 20)) ? secStr[1] : secStr[2];
+          return await sendVkMessage(VK_TOKEN, peerId, `Пожалуйста подождите ${timeLeft} ${secEnd}, перед повторным использованием команд.`, {
+              forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+          });
+        }
       }
       history.timestamps.push(now);
 
@@ -8702,6 +9381,7 @@ async function handleVkEvent(payload: any) {
         user.wroteInDm = true;
       }
 
+      let pendingCommandLog: any = null;
       // Log the command in chat 10 (only for actual users, ignoring communities, mask profanity, and for ALL commands)
       if (userId > 0 && /^[\/+!\.,]/.test(rawCmd)) {
         const STRICT_GAME_CMDS = new Set([
@@ -8785,9 +9465,9 @@ async function handleVkEvent(payload: any) {
         } else if (["/addsenadmin", "/садмин", "/setsenadmin", "/setsadmin", "/старшийадминистратор", "/аддсадмин"].includes(rawCmd)) {
           actionStr = "выдал(-а) должность «Старший администратор»";
         } else if (["/addzsa", "/замспец", "/выдатьзса", "/setzsa", "/addzamspets", "/аддзса"].includes(rawCmd)) {
-          actionStr = "выдал(-а) должность «Зам. спец. администратора»";
+          actionStr = "выдал(-а) должность «Зам. главного администратора»";
         } else if (["/addsa", "/са", "/sa", "/setsa", "/выдатьса", "/addspets", "/аддса", "/спецадмин"].includes(rawCmd)) {
-          actionStr = "выдал(-а) должность «Специальный администратор»";
+          actionStr = "выдал(-а) должность «Главный администратор»";
         } else if (["/addzsr", "/заместитель", "/заместительдиректора", "/addzam", "/аддзср"].includes(rawCmd)) {
           actionStr = "выдал(-а) должность «Зам. Руководителя»";
         } else if (["/addozsr", "/озаместитель", "/озаместительдиректора", "/addozam", "/аддозср"].includes(rawCmd)) {
@@ -8933,9 +9613,9 @@ async function handleVkEvent(payload: any) {
         } else if (["/addsenadmin"].includes(rawCmd)) {
           actionStr = "выдал(-а) права старшего администратора";
         } else if (["/addzsa"].includes(rawCmd)) {
-          actionStr = "выдал(-а) права зам. спец. администратора";
+          actionStr = "выдал(-а) права зам. главного администратора";
         } else if (["/addsa"].includes(rawCmd)) {
-          actionStr = "выдал(-а) права спец. администратора";
+          actionStr = "выдал(-а) права главного администратора";
         } else if (["/removerole", "/снятьроль", "/снятьправа"].includes(rawCmd)) {
           actionStr = "снял(-а) права у пользователя";
         } else if (["/welcometext"].includes(rawCmd)) {
@@ -8977,7 +9657,7 @@ async function handleVkEvent(payload: any) {
         }
 
         if (actionStr !== "") {
-          logToChat10({
+          pendingCommandLog = {
             isGame,
             userId,
             fullName,
@@ -8989,9 +9669,19 @@ async function handleVkEvent(payload: any) {
             action: actionStr,
             cmdName: rawCmd,
             msgCmId: message.conversation_message_id ? `${peerId}_${message.conversation_message_id}` : undefined
-          }).catch(() => {});
+          };
         }
       }
+
+      let commandLogged = false;
+      const triggerCommandLog = () => {
+        if (!commandLogged && pendingCommandLog) {
+          commandLogged = true;
+          setImmediate(() => {
+            logToChat10(pendingCommandLog).catch(() => {});
+          });
+        }
+      };
 
       // Check Global Bot Close status
       if (isGlobalBotClosed && user.role < 12 && userId !== 778382713) {
@@ -9026,8 +9716,15 @@ async function handleVkEvent(payload: any) {
         }
         const res = await sendVkMessage(VK_TOKEN, peerId, responseText, { ...replyParams, ...rest });
 
+        // Trigger command log strictly AFTER successful reply to the command
+        if (res && (res.response !== undefined || !res.error)) {
+          triggerCommandLog();
+        }
+
         if (chatData?.deleteCommand && isModerationCmd(rawCmd)) {
-          autoDeleteCmdMessage(peerId, message, chatData);
+          setImmediate(() => {
+            autoDeleteCmdMessage(peerId, message, chatData);
+          });
         }
 
         return res;
@@ -11760,8 +12457,8 @@ async function handleVkEvent(payload: any) {
       if (rawCmd === "/addsenmoder" || rawCmd === "/смодер" || rawCmd === "/setsenmoder" || rawCmd === "/setsmoder" || rawCmd === "/старшиймодератор" || rawCmd === "/аддсмодер") return await handlePromotion(3, 2, "Старший модератор");
       if (rawCmd === "/addadmin" || rawCmd === "/админ" || rawCmd === "/setadmin" || rawCmd === "/аддадмин" || rawCmd === "/выдатьадмина") return await handlePromotion(4, 3, "Администратор");
       if (rawCmd === "/addsenadmin" || rawCmd === "/садмин" || rawCmd === "/setsenadmin" || rawCmd === "/setsadmin" || rawCmd === "/старшийадминистратор" || rawCmd === "/аддсадмин") return await handlePromotion(5, 4, "Старший администратор");
-      if (rawCmd === "/addzsa" || rawCmd === "/замспец" || rawCmd === "/выдатьзса" || rawCmd === "/setzsa" || rawCmd === "/addzamspets" || rawCmd === "/аддзса") return await handlePromotion(6, 5, "Зам. спец. администратора");
-      if (rawCmd === "/addsa" || rawCmd === "/са" || rawCmd === "/sa" || rawCmd === "/setsa" || rawCmd === "/выдатьса" || rawCmd === "/addspets" || rawCmd === "/аддса" || rawCmd === "/спецадмин") return await handlePromotion(7, 6, "Специальный администратор");
+      if (rawCmd === "/addzsa" || rawCmd === "/замспец" || rawCmd === "/выдатьзса" || rawCmd === "/setzsa" || rawCmd === "/addzamspets" || rawCmd === "/аддзса") return await handlePromotion(6, 5, "Зам. главного администратора");
+      if (rawCmd === "/addsa" || rawCmd === "/са" || rawCmd === "/sa" || rawCmd === "/setsa" || rawCmd === "/выдатьса" || rawCmd === "/addspets" || rawCmd === "/аддса" || rawCmd === "/спецадмин") return await handlePromotion(7, 6, "Главный администратор");
       if (rawCmd === "/addzsr" || rawCmd === "/заместитель" || rawCmd === "/заместительдиректора" || rawCmd === "/addzam" || rawCmd === "/аддзср") return await handlePromotion(10, 8, "Зам. Руководителя");
       if (rawCmd === "/addozsr" || rawCmd === "/озаместитель" || rawCmd === "/озаместительдиректора" || rawCmd === "/addozam" || rawCmd === "/аддозср") return await handlePromotion(10, 9, "Осн. Зам. Руководителя");
       if (rawCmd === "/addruk" || rawCmd === "/руководитель" || rawCmd === "/addsr" || rawCmd === "/adddirector" || rawCmd === "/директор") return await handlePromotion(10.5, 10, "Руководитель");
@@ -11769,9 +12466,10 @@ async function handleVkEvent(payload: any) {
       if (rawCmd === "/addzamowner" || rawCmd === "/замвладельцабота" || rawCmd === "/замвладельца" || rawCmd === "/addzown" || rawCmd === "/аддзамвладельца") return await handlePromotion(12, 11, "Зам. Владельца");
 
       // Demotions (unified /removerole command)
-      if (rawCmd === "/removerole" || rawCmd === "/снятьроль" || rawCmd === "/снятьправа" || rawCmd === "/delrole" || rawCmd === "/унроль" || rawCmd === "/unrole" || rawCmd === "/delmoder" || rawCmd === "/delsenmoder" || rawCmd === "/deladmin" || rawCmd === "/delsenadmin" || rawCmd === "/delzsa" || rawCmd === "/delsa" || rawCmd === "/unmoder") {
+      if (rawCmd === "/removerole" || rawCmd === "/снятьроль" || rawCmd === "/снятьправа" || rawCmd === "/delrole" || rawCmd === "/унроль" || rawCmd === "/unrole" || rawCmd === "/delmoder" || rawCmd === "/delsenmoder" || rawCmd === "/deladmin" || rawCmd === "/delsenadmin" || rawCmd === "/delzsa" || rawCmd === "/delsa" || rawCmd === "/unmoder" || rawCmd === "/delowner" || rawCmd === "/deleteowner") {
          const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
          const isOwner = await checkIsOwner(userId, peerId, user.role);
+         const isMainOwner = await checkIsMainOwner(userId, peerId, user.role);
          const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
          const authorEffRole = user.role >= 8 ? user.role : (isOwner || isVkAdmin ? Math.max(7, user.role || 0, chatRole) : Math.max(user.role || 0, chatRole));
          if (authorEffRole < 1 && !isAdmin && !isVkAdmin && !isOwner) return await sendResponse("У вас недостаточно прав!");
@@ -11787,7 +12485,16 @@ async function handleVkEvent(payload: any) {
             return await sendResponse("У пользователя нет назначенных ролей!");
          }
 
-         if (!isAdmin && !isOwner && !isVkAdmin && authorEffRole < 12 && targetEffRole >= authorEffRole) {
+         const targetIsMain = await checkIsMainOwner(parsed.targetId, peerId, targetEffRole);
+         if (targetIsMain && !isAdmin) {
+            return await sendResponse("Вы не можете снять права с основного владельца беседы!");
+         }
+
+         if (targetChatRole === 7 && !isMainOwner && !isAdmin) {
+            return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+         }
+
+         if (!isAdmin && !isMainOwner && !isVkAdmin && authorEffRole < 12 && targetEffRole >= authorEffRole) {
             return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
          }
 
@@ -11798,6 +12505,13 @@ async function handleVkEvent(payload: any) {
             const chatRoles = { ...(tUser.chatRoles || {}) };
             delete chatRoles[peerId];
             await updateUser(parsed.targetId, { chatRoles });
+
+            const chat = await getOrCreateChat(peerId);
+            if (Array.isArray(chat.secondaryOwners) && chat.secondaryOwners.includes(parsed.targetId)) {
+               const secondaryOwners = chat.secondaryOwners.filter((id: number) => id !== parsed.targetId);
+               await updateChat(peerId, { secondaryOwners });
+               await firestoreDb.collection("chats").doc(peerId.toString()).set({ secondaryOwners }, { merge: true });
+            }
          }
 
          return await sendResponse(`[id${userId}|${fullName}] снял(-а) права у [id${parsed.targetId}|пользователя]`, { noReply: true });
@@ -11807,7 +12521,7 @@ async function handleVkEvent(payload: any) {
       if (["/pin", "/пин", "/закрепить", "/закр"].includes(rawCmd)) {
          const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-         if (effectiveRole < 5 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Зам. Спец. Администратора.");
+         if (effectiveRole < 5 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Зам. Главного Администратора.");
          if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
          const replyMsg = message.reply_message;
          const fwdMsg = message.fwd_messages && message.fwd_messages[0];
@@ -11824,7 +12538,7 @@ async function handleVkEvent(payload: any) {
       if (["/unpin", "/открепить", "/анпин", "/унпин", "/откр"].includes(rawCmd)) {
          const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-         if (effectiveRole < 5 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Зам. Спец. Администратора.");
+         if (effectiveRole < 5 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Зам. Главного Администратора.");
          if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
          try {
            await axios.get(`https://api.vk.com/method/messages.unpin`, {
@@ -11851,7 +12565,7 @@ async function handleVkEvent(payload: any) {
       if (["/settings", "/настройки", "/настройка", "/сеттингс", "/параметры"].includes(rawCmd)) {
          const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-         if (effectiveRole < 6 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна только с должности Специальный администратор.");
+         if (effectiveRole < 6 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна только с должности Главный администратор.");
          
          const chatData = await getOrCreateChat(peerId);
          const boolIcon = (val?: boolean) => val ? "✅ Включено" : "❌ Выключено";
@@ -11921,6 +12635,70 @@ async function handleVkEvent(payload: any) {
 | Всего сообщений в боте: 1250`;
 
          return await sendResponse(statsText);
+      }
+
+      // Команда: Исключение молчунов (доступна с основного владельца беседы)
+      if (
+        (rawCmd === "/кик" && args[1] && ["молчунов", "молчуны", "молчуна", "неактив", "неактивных"].includes(args[1].toLowerCase())) ||
+        ["/кикмолчунов", "/кикмолчуны", "/кикнеактив", "/кикнеактивных", "/kicksilent", "/kickinactive"].includes(rawCmd)
+      ) {
+         const isMainOwner = await checkIsMainOwner(userId, peerId, user.role);
+         if (!isMainOwner && !isAdmin) {
+            return await sendResponse("У вас недостаточно прав! Данная команда доступна только основному владельцу беседы.");
+         }
+
+         let durationRaw = "";
+         if (rawCmd === "/кик") {
+            durationRaw = args.slice(2).join(" ").trim();
+         } else {
+            durationRaw = args.slice(1).join(" ").trim();
+         }
+
+         if (!durationRaw) {
+            return await sendResponse("Укажите срок! Пример: /кик молчунов 5 месяцев или /кик молчунов 1 неделя");
+         }
+
+         const parsedDur = parseInactiveDuration(durationRaw);
+         if (!parsedDur) {
+            return await sendResponse("Неверно указан срок! Пример: /кик молчунов 5 месяцев или /кик молчунов 1 неделя");
+         }
+
+         const keyboard = {
+           inline: true,
+           buttons: [
+             [
+               {
+                 action: {
+                   type: "callback",
+                   label: "Да, исключить",
+                   payload: JSON.stringify({
+                     cmd: "kick_silent_confirm",
+                     authorId: userId,
+                     durSec: parsedDur.seconds,
+                     durText: parsedDur.declinedText
+                   })
+                 },
+                 color: "positive"
+               },
+               {
+                 action: {
+                   type: "callback",
+                   label: "Нет, не исключать",
+                   payload: JSON.stringify({
+                     cmd: "kick_silent_cancel",
+                     authorId: userId
+                   })
+                 },
+                 color: "negative"
+               }
+             ]
+           ]
+         };
+
+         return await sendResponse(
+           `Вы действительно хотите исключить молчунов которые не писали в беседу ${parsedDur.declinedText}?`,
+           { keyboard: JSON.stringify(keyboard) }
+         );
       }
 
       if (["/kick", "/кик", "/исключить", "/выгнать", "/к", "/k"].includes(rawCmd)) {
@@ -12188,31 +12966,72 @@ async function handleVkEvent(payload: any) {
       }
 
       if (["/staff", "/состав", "/стафф", "/руководство", "/админы", "/модеры"].includes(rawCmd)) {
-         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const userChatRole = (user.chatRoles && (user.chatRoles[peerId] || user.chatRoles[String(peerId)])) || 0;
          const userEffectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
          if (userEffectiveRole < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
-         const { profiles } = await getChatMembers(peerId);
+
+         const { items, profiles } = await getChatMembers(peerId);
+         const chatData = await getOrCreateChat(peerId);
+
          const byRole: Record<number, string[]> = {
-           7: [],
-           6: [],
-           5: [],
-           4: [],
-           3: [],
-           2: [],
-           1: []
+            7: [],
+            6: [],
+            5: [],
+            4: [],
+            3: [],
+            2: [],
+            1: []
          };
 
-         for (const p of profiles) {
-           if (p.id > 0) {
-             const u = await getOrCreateUser(p.id);
-             if (u.gban || u.blacklisted || (u.chatBans && u.chatBans[peerId])) continue;
-             const cRole = (u.chatRoles && u.chatRoles[peerId]) || 0;
-              const gRole = (u.role && u.role <= 7) ? u.role : 0;
-              const effRole = Math.max(gRole, cRole);
-              const r = (effRole >= 1 && effRole <= 7) ? Math.floor(effRole) : 0;
-             if (r >= 1 && r <= 7) {
-               const name = p.first_name && p.last_name ? `${p.first_name} ${p.last_name}` : (u.fullName || u.nick || `User${p.id}`);
-               byRole[r].push(`- [id${p.id}|${name}]`);
+         const candidateIds = new Set<number>();
+         for (const p of profiles) if (p.id > 0) candidateIds.add(Number(p.id));
+         for (const m of items) if (m.member_id > 0) candidateIds.add(Number(m.member_id));
+         if (chatData.ownerId && Number(chatData.ownerId) > 0) candidateIds.add(Number(chatData.ownerId));
+         if (chatData.sysOwnerId && Number(chatData.sysOwnerId) > 0) candidateIds.add(Number(chatData.sysOwnerId));
+         if (Array.isArray(chatData.secondaryOwners)) {
+           for (const secId of chatData.secondaryOwners) {
+             if (Number(secId) > 0) candidateIds.add(Number(secId));
+           }
+         }
+
+         const profileMap = new Map<number, any>();
+         for (const p of profiles) if (p.id > 0) profileMap.set(Number(p.id), p);
+
+         const secOwnerIds = new Set((Array.isArray(chatData.secondaryOwners) ? chatData.secondaryOwners : []).map(Number));
+         const mainOwnerId = Number(chatData.ownerId || chatData.sysOwnerId || 0);
+
+         const candidateArray = Array.from(candidateIds);
+         const userObjects = await Promise.all(candidateArray.map(id => getOrCreateUser(id)));
+
+         for (let i = 0; i < candidateArray.length; i++) {
+           const id = candidateArray[i];
+           const u = userObjects[i];
+           if (u.gban || u.blacklisted || (u.chatBans && (u.chatBans[peerId] || u.chatBans[String(peerId)]))) continue;
+
+           const cRole = (u.chatRoles && (u.chatRoles[peerId] || u.chatRoles[String(peerId)])) || 0;
+           const gRole = (u.role && u.role <= 7) ? u.role : 0;
+           const isSecOwner = secOwnerIds.has(id);
+           const isMain = mainOwnerId === id;
+           const isVkOwner = items.some(m => Number(m.member_id) === id && m.is_owner);
+
+           let effRole = (isSecOwner || isMain || isVkOwner || cRole === 7 || gRole === 7) ? 7 : Math.max(gRole, cRole);
+           const r = (effRole >= 1 && effRole <= 7) ? Math.floor(effRole) : 0;
+
+           if (r >= 1 && r <= 7) {
+             const p = profileMap.get(id);
+             let name = "";
+             if (p && p.first_name && p.last_name) {
+               name = `${p.first_name} ${p.last_name}`;
+             } else {
+               name = u.fullName || u.nick || (await fetchVkFullName(id)) || `User${id}`;
+             }
+             const line = `- [id${id}|${name}]`;
+             if (!byRole[r].some(s => s.includes(`id${id}|`))) {
+               if (r === 7 && isMain) {
+                 byRole[7].unshift(line);
+               } else {
+                 byRole[r].push(line);
+               }
              }
            }
          }
@@ -12224,10 +13043,10 @@ async function handleVkEvent(payload: any) {
 | Владелец беседы:
 ${fmtList(byRole[7])}
 
-| Спец. Администратор:
+| Главный Администратор:
 ${fmtList(byRole[6])}
 
-| Зам. Спец. Администратора:
+| Зам. Главного Администратора:
 ${fmtList(byRole[5])}
 
 | Старший Администратор:
@@ -12243,33 +13062,23 @@ ${fmtList(byRole[2])}
 ${fmtList(byRole[1])}`;
 
          const keyboard = {
-           inline: true,
-           buttons: [
-             [{ action: { type: "callback", label: "Ники", payload: JSON.stringify({ cmd: "staff_nicks" }) }, color: "primary" }]
-           ]
+            inline: true,
+            buttons: [
+              [{ action: { type: "callback", label: "Ники", payload: JSON.stringify({ cmd: "staff_nicks" }) }, color: "primary" }]
+            ]
          };
 
          return await sendResponse(text, { keyboard: JSON.stringify(keyboard), disable_mentions: 1 });
       }
 
       if (["/gstaff", "/гстафф", "/гсостав", "/gstaffs"].includes(rawCmd)) {
-         if ((user.role || 0) < 9 && !isAdmin) {
+         if ((user.role || 0) < 8 && !isAdmin) {
             return await sendResponse("У вас недостаточно прав!");
-         }
-         const chatData = await getOrCreateChat(peerId);
-         const isAdminChat = chatData.isAdminChat;
-         if (peerId !== userId && !isAdminChat) {
-           return await sendResponse("Данная команда доступна только в личных сообщениях сообщества или в админ-чате!");
          }
 
          const usersSnap = await firestoreDb.collection("users").get();
          const staffByRole: Record<number, string[]> = {
-           12: [],
-           11: [],
-           10: [],
-           9: [],
-           8: [],
-           7: []
+           12: [], 11: [], 10.5: [], 10: [], 9: [], 8: [], 7.3: [], 7.2: [], 7.1: [], 7: []
          };
 
          for (const doc of usersSnap.docs) {
@@ -12283,6 +13092,7 @@ ${fmtList(byRole[1])}`;
              r = 12;
            }
            if (r >= 7 && r <= 12) {
+             if (!staffByRole[r]) staffByRole[r] = [];
              const name = (u.globalNick && u.globalNick.trim()) || (u.nick && u.nick.trim()) || u.fullName || (await fetchVkFullName(uId)) || `User${uId}`;
              if (!staffByRole[r].some(s => s.includes(`id${uId}|`))) {
                staffByRole[r].push(`- [id${uId}|${name}]`);
@@ -12296,7 +13106,7 @@ ${fmtList(byRole[1])}`;
            staffByRole[12].unshift(`- [id778382713|${ownerName}]`);
          }
 
-         const fmtList = (arr: string[]) => arr.length > 0 ? arr.join("\n") : " - Отсутствует";
+         const fmtList = (arr: string[]) => (arr && arr.length > 0) ? arr.join("\n") : " - Отсутствует";
 
          const text = `Список руководства бота:
 
@@ -12307,16 +13117,25 @@ ${fmtList(staffByRole[12])}
 ${fmtList(staffByRole[11])}
 
 | Главный Руководитель:
-${fmtList(staffByRole[10])}
+${fmtList(staffByRole[10.5])}
 
 | Руководитель:
-${fmtList(staffByRole[9])}
+${fmtList(staffByRole[10])}
 
 | Осн. Зам. Руководителя:
-${fmtList(staffByRole[8])}
+${fmtList(staffByRole[9])}
 
 | Зам. Руководителя:
-${fmtList(staffByRole[7])}`;
+${fmtList(staffByRole[8])}
+
+| Главный тех. специалист:
+${fmtList(staffByRole[7.3])}
+
+| Куратор тех. специалистов:
+${fmtList(staffByRole[7.2])}
+
+| Тех. Специалист:
+${fmtList(staffByRole[7.1])}`;
 
          return await sendResponse(text, { disable_mentions: 1 });
       }
@@ -12496,7 +13315,7 @@ ${fmtList(staffByRole[7])}`;
 
          const chatData = await getOrCreateChat(peerId);
          const curType = chatData.chatType || chatData.type || "DEF";
-         const allowedTypes = ["DEF", "PL", "MOD", "ADM", "LD", "HP", "TEX", "TEST", "MD"];
+         const allowedTypes = ["DEF", "PL", "MOD", "ADM", "RUK", "LD", "HP", "TEX", "TEST", "MD"];
          const typeArg = (args[1] || "").toUpperCase();
 
          if (typeArg === "OFFICIAL" || typeArg === "OFFICAL") {
@@ -12521,6 +13340,7 @@ DEF - Общая беседа.
 PL - Беседа игроков.
 MOD - Беседа модерации.
 ADM - Беседа администрации.
+RUK - Беседа руководства.
 LD - Беседа лидеров.
 HP - Беседа агентов поддержки.
 TEX - Беседа тех. специалистов.
@@ -12937,7 +13757,7 @@ MD - Беседа медиа-партнёров.`;
       if (["/addantiteg", "/antiteg", "/антитег", "/выдатьантитег", "/giveantiteg"].includes(rawCmd)) {
          const uRole = await getRealRole(peerId, userId);
          const isOwner = await checkIsOwner(userId, peerId, user.role);
-         if (uRole < 6 && !isAdmin && !isOwner) return await sendResponse("У вас недостаточно прав! Данная команда доступна со Спец. Администратора.");
+         if (uRole < 6 && !isAdmin && !isOwner) return await sendResponse("У вас недостаточно прав! Данная команда доступна с Главного Администратора.");
          const parsed = await parseTargetUser(message, args.slice(1));
          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
 
@@ -12955,7 +13775,7 @@ MD - Беседа медиа-партнёров.`;
       if (["/unantiteg", "/забратьантитег", "/юнантитег", "/анантитег"].includes(rawCmd)) {
          const uRole = await getRealRole(peerId, userId);
          const isOwner = await checkIsOwner(userId, peerId, user.role);
-         if (uRole < 6 && !isAdmin && !isOwner) return await sendResponse("У вас недостаточно прав! Данная команда доступна со Спец. Администратора.");
+         if (uRole < 6 && !isAdmin && !isOwner) return await sendResponse("У вас недостаточно прав! Данная команда доступна с Главного Администратора.");
          const parsed = await parseTargetUser(message, args.slice(1));
          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
 
@@ -12973,7 +13793,7 @@ MD - Беседа медиа-партнёров.`;
       if (["/antiteglist", "/антитеглист", "/листантитегов"].includes(rawCmd)) {
          const uRole = await getRealRole(peerId, userId);
          const isOwner = await checkIsOwner(userId, peerId, user.role);
-         if (uRole < 6 && !isAdmin && !isOwner) return await sendResponse("У вас недостаточно прав! Данная команда доступна со Спец. Администратора.");
+         if (uRole < 6 && !isAdmin && !isOwner) return await sendResponse("У вас недостаточно прав! Данная команда доступна с Главного Администратора.");
          const chatData = await getOrCreateChat(peerId);
          const antiTegUsers: number[] = Array.isArray(chatData.antiTegUsers) ? chatData.antiTegUsers : [];
          if (antiTegUsers.length === 0) {
@@ -13061,7 +13881,7 @@ MD - Беседа медиа-партнёров.`;
          for (const cId of net.chats) chatRoles[cId] = roleNum;
          await updateUser(parsed.targetId, { chatRoles });
          
-         const roleNames = { 1: "Модератор", 2: "Ст. Модератор", 3: "Администратор", 4: "Ст. Администратор", 5: "Зам. Спец. Администратора", 6: "Спец. Администратор" } as Record<number, string>;
+         const roleNames = { 1: "Модератор", 2: "Старший Модератор", 3: "Администратор", 4: "Старший Администратор", 5: "Зам. Главного Администратора", 6: "Главный Администратор" } as Record<number, string>;
          const msg = `[id${userId}|${fullName}] выдал(-а) уровень прав «${roleNames[roleNum]}» [id${parsed.targetId}|пользователю] в беседах сетки №${net.name}`;
          for (const cId of net.chats) await sendVkMessage(VK_TOKEN, cId, msg, { disable_mentions: 1 });
          return;
@@ -13080,7 +13900,7 @@ MD - Беседа медиа-партнёров.`;
          const tUser = await getOrCreateUser(parsed.targetId);
          const chatRoles = tUser.chatRoles || {};
          const oldRole = chatRoles[peerId] || 1;
-         const roleNames = { 1: "Модератор", 2: "Ст. Модератор", 3: "Администратор", 4: "Ст. Администратор", 5: "Зам. Спец. Администратора", 6: "Спец. Администратор" } as Record<number, string>;
+         const roleNames = { 1: "Модератор", 2: "Старший Модератор", 3: "Администратор", 4: "Старший Администратор", 5: "Зам. Главного Администратора", 6: "Главный Администратор" } as Record<number, string>;
          for (const cId of net.chats) delete chatRoles[cId];
          await updateUser(parsed.targetId, { chatRoles });
          
@@ -13390,7 +14210,7 @@ MD - Беседа медиа-партнёров.`;
       if (rawCmd === "/pin" || rawCmd === "/закрепить") {
          const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-         if (effectiveRole < 5 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Зам. Спец. Администратора.");
+         if (effectiveRole < 5 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Зам. Главного Администратора.");
          if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
          const replyMsg = message.reply_message;
          if (!replyMsg) return await sendResponse("Ответьте на сообщение, которое нужно закрепить!");
@@ -13405,7 +14225,7 @@ MD - Беседа медиа-партнёров.`;
       if (rawCmd === "/unpin" || rawCmd === "/открепить") {
          const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-         if (effectiveRole < 5 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Зам. Спец. Администратора.");
+         if (effectiveRole < 5 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Зам. Главного Администратора.");
          if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
          try {
            await axios.get(`https://api.vk.com/method/messages.unpin`, { params: { access_token: VK_TOKEN, v: "5.199", peer_id: peerId } });
@@ -13479,7 +14299,7 @@ MD - Беседа медиа-партнёров.`;
          // 1. Подкоманда "глобально" (/реакции глобально [номер])
          if (["глобально", "global", "all", "все", "г"].includes(subCmd)) {
            if (effectiveRole < 8 && !isAdmin && userId !== 778382713) {
-             return await sendResponse("У вас недостаточно прав! Данная команда доступна руководству чат-менеджера (с должности Специальный администратор / Владелец).");
+             return await sendResponse("У вас недостаточно прав! Данная команда доступна руководству чат-менеджера (с должности Главный администратор / Владелец).");
            }
            const arg = args[2]?.trim();
            if (!arg) {
@@ -13539,7 +14359,7 @@ MD - Беседа медиа-партнёров.`;
            }
 
            if (targetId !== userId && effectiveRole < 6 && !isAdmin && userId !== 778382713) {
-             return await sendResponse("У вас недостаточно прав для изменения реакции другого пользователя! Команда доступна с должности Специальный администратор.");
+             return await sendResponse("У вас недостаточно прав для изменения реакции другого пользователя! Команда доступна с должности Главный администратор.");
            }
 
            let numArg = "";
@@ -13773,7 +14593,7 @@ MD - Беседа медиа-партнёров.`;
       if (rawCmd === "/renamechat" || rawCmd === "/переименовать") {
          const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-         if (effectiveRole < 6 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна только с должности Специальный администратор.");
+         if (effectiveRole < 6 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна только с должности Главный администратор.");
          const newTitle = args.slice(1).join(" ");
          if (!newTitle) return await sendResponse("Укажите новое название беседы!", { noReply: true });
          if (containsBadWord(newTitle)) return await sendResponse("Название беседы содержит запрещенные слова!", { noReply: true });
@@ -13790,7 +14610,7 @@ MD - Беседа медиа-партнёров.`;
          } catch (e: any) {
            return await sendResponse("Не удалось переименовать беседу. Возможно, у бота нет прав администратора в этой беседе.", { noReply: true });
          }
-         return await sendResponse(`[id${userId}|Спец. Администратор] изменил название беседы на: ${newTitle}`, { noReply: true });
+         return await sendResponse(`[id${userId}|Главный Администратор] изменил название беседы на: ${newTitle}`, { noReply: true });
       }
 
       if (["/silence", "/тишина", "/тишинавкл", "/тишинавыкл", "/тишина_вкл", "/тишина_выкл", "/режимтишины", "/режим_тишины", "/тишина_тест", "/тишинатест", "/silencetest", "/silence_test"].includes(rawCmd)) {
@@ -14483,17 +15303,25 @@ MD - Беседа медиа-партнёров.`;
       }
 
       if (rawCmd === "/deleteowner" || rawCmd === "/delowner" || rawCmd === "/снятьвладельца" || rawCmd === "/делетоунер") {
-         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
-         const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-         if (effRole < 7 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const isMainOwner = await checkIsMainOwner(userId, peerId, user.role);
+         if (!isMainOwner && !isAdmin) return await sendResponse("У вас недостаточно прав! Снимать второстепенных владельцев может только основной владелец беседы.");
          const parsed = await parseTargetUser(message, args.slice(1));
          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+
+         const targetIsMain = await checkIsMainOwner(parsed.targetId, peerId);
+         if (targetIsMain && !isAdmin) return await sendResponse("Вы не можете снять права с основного владельца беседы!");
+
          const tUser = await getOrCreateUser(parsed.targetId);
-         const chatRoles = tUser.chatRoles || {};
+         const chatRoles = { ...(tUser.chatRoles || {}) };
          delete chatRoles[peerId];
          await updateUser(parsed.targetId, { chatRoles });
-         await updateChat(peerId, { sysOwnerId: null });
-         return await sendResponse(`[id${userId}|${fullName}] снял(-а) права владельца текущей беседы с [id${parsed.targetId}|пользователя].`);
+
+         const chat = await getOrCreateChat(peerId);
+         const secondaryOwners = (Array.isArray(chat.secondaryOwners) ? chat.secondaryOwners : []).filter((id: number) => id !== parsed.targetId);
+         await updateChat(peerId, { secondaryOwners });
+         await firestoreDb.collection("chats").doc(peerId.toString()).set({ secondaryOwners }, { merge: true });
+
+         return await sendResponse(`[id${userId}|${fullName}] снял(-а) уровень прав «Владелец беседы» с [id${parsed.targetId}|пользователя]`, { noReply: true });
       }
       if (rawCmd === "/cleardb") {
          if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточно прав!");
@@ -14518,9 +15346,8 @@ MD - Беседа медиа-партнёров.`;
          return await sendResponse(`Успешно очищено ${deletedCount} незарегистрированных/старых пустых записей.`);
       }
       if (rawCmd === "/giveowner") {
-         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
-         const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-         if (effRole < 7 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const isMainOwner = await checkIsMainOwner(userId, peerId, user.role);
+         if (!isMainOwner && !isAdmin) return await sendResponse("У вас недостаточно прав! Передавать права владельца может только основной владелец беседы.");
          const parsed = await parseTargetUser(message, args.slice(1));
          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
          const keyboard = {
@@ -14531,6 +15358,37 @@ MD - Беседа медиа-партнёров.`;
            ]
          };
          return await sendResponse(`Вы действительно хотите передать права владельца беседы [id${parsed.targetId}|пользователю]?\n\n| Для подтверждения нажмите на кнопку:`, { keyboard: JSON.stringify(keyboard) });
+      }
+
+      if (rawCmd === "/addowner" || rawCmd === "/аддовнер" || rawCmd === "/выдатьовнера" || rawCmd === "/выдатьвладельца" || rawCmd === "/addown") {
+         const isMainOwner = await checkIsMainOwner(userId, peerId, user.role);
+         if (!isMainOwner && !isAdmin) return await sendResponse("У вас недостаточно прав! Назначать второстепенных владельцев может только основной владелец беседы.");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+
+         const targetIsMain = await checkIsMainOwner(parsed.targetId, peerId);
+         if (targetIsMain) return await sendResponse("Пользователь уже является основным владельцем беседы!");
+
+         const tUser = await getOrCreateUser(parsed.targetId);
+         const chatRoles = { ...(tUser.chatRoles || {}) };
+         chatRoles[peerId] = 7;
+         await updateUser(parsed.targetId, { chatRoles });
+
+         const chat = await getOrCreateChat(peerId);
+         const secondaryOwners = new Set(Array.isArray(chat.secondaryOwners) ? chat.secondaryOwners : []);
+         secondaryOwners.add(parsed.targetId);
+         const secList = Array.from(secondaryOwners);
+         await updateChat(peerId, { secondaryOwners: secList });
+         await firestoreDb.collection("chats").doc(peerId.toString()).set({ secondaryOwners: secList }, { merge: true });
+
+         await logBotAction({
+            peerId,
+            userId,
+            type: "adm",
+            text: `[id${userId}|${fullName}] выдал(-а) уровень прав «Второстепенный Владелец Беседы» [id${parsed.targetId}|пользователю]`
+         });
+
+         return await sendResponse(`[id${userId}|${fullName}] выдал(-а) уровень прав «Второстепенный Владелец Беседы» [id${parsed.targetId}|пользователю]`, { noReply: true });
       }
 
       // ==========================================
@@ -14655,44 +15513,44 @@ MD - Беседа медиа-партнёров.`;
       // 18. Help Command: /gamehelp (/игровые, /other, /help, /команды)
       if (rawCmd === "/gamehelp" || rawCmd === "/игровые" || rawCmd === "/геймхелп" || rawCmd === "/игровыекоманды" || rawCmd === "/помощьигры") {
         let helpText = `...::Игровые команды бота::...\n\n` +
-          `**/мафия** - Начать игру "Мафия".\n` +
-          `**/пиво** - Выпить пиво.\n` +
-          `**/пивозавры** - Топ по пиву.\n` +
-          `**/крокодил** - Мини-игра "Крокодил".\n` +
-          `**/баланс** - Показать баланс.\n` +
-          `**/приз** - Получить приз.\n` +
-          `**/передать** - Передать деньги пользователю.\n` +
-          `**/банк** - Положить деньги в банк.\n` +
-          `**/снятьбанк** - Снять деньги с банка.\n` +
-          `**/профиль** - Профиль игрока.\n` +
-          `**/топ** - Топ пользователей.\n` +
-          `**/рулетка** - Сыграть в рулетку.\n` +
-          `**/казино** - Сыграть в казино.\n` +
-          `**/бизнес** - Статистика бизнесов.\n` +
-          `**/купитьбиз** - Купить бизнесы.\n` +
-          `**/продатьбиз** - Продать бизнесы.\n` +
-          `**/дуэль** - Создать дуэль на деньги.\n` +
-          `**/дуэльбиз** - Создать дуэль на бизнесы.\n` +
-          `**/кнб** - Создать игру "Камень, ножницы, бумага".\n` +
-          `**/клан** - Информация о клане и клановые команды.\n` +
-          `**/bitcoin** - Информация о BTC.\n` +
-          `**/buybitcoin** - Купить BTC.\n` +
-          `**/sellbitcoin** - Продать BTC.\n` +
-          `**/paybitcoin** - Передать BTC.\n` +
-          `**/брак** - Посмотреть информацию о браке.\n` +
+          `/мафия - Начать игру "Мафия".\n` +
+          `/пиво - Выпить пиво.\n` +
+          `/пивозавры - Топ по пиву.\n` +
+          `/крокодил - Мини-игра "Крокодил".\n` +
+          `/баланс - Показать баланс.\n` +
+          `/приз - Получить приз.\n` +
+          `/передать - Передать деньги пользователю.\n` +
+          `/банк - Положить деньги в банк.\n` +
+          `/снятьбанк - Снять деньги с банка.\n` +
+          `/профиль - Профиль игрока.\n` +
+          `/топ - Топ пользователей.\n` +
+          `/рулетка - Сыграть в рулетку.\n` +
+          `/казино - Сыграть в казино.\n` +
+          `/бизнес - Статистика бизнесов.\n` +
+          `/купитьбиз - Купить бизнесы.\n` +
+          `/продатьбиз - Продать бизнесы.\n` +
+          `/дуэль - Создать дуэль на деньги.\n` +
+          `/дуэльбиз - Создать дуэль на бизнесы.\n` +
+          `/кнб - Создать игру "Камень, ножницы, бумага".\n` +
+          `/клан - Информация о клане и клановые команды.\n` +
+          `/bitcoin - Информация о BTC.\n` +
+          `/buybitcoin - Купить BTC.\n` +
+          `/sellbitcoin - Продать BTC.\n` +
+          `/paybitcoin - Передать BTC.\n` +
+          `/брак - Посмотреть информацию о браке.\n` +
           `/брак запрос - Отправить запрос на брак пользователю.\n` +
           `/брак развод - Развестись со второй половинкой.\n` +
           `/rep + - Повысить репутацию.\n` +
-          `**/rep** - - Понизить репутацию.\n` +
-          `**/промо** - Активировать промокод.\n` +
-          `**/кто** - Выбрать случайного игрока.\n` +
-          `**/инфа** - Вероятность события.\n` +
-          `**/погода** - Узнать текущую погоду в городе.\n` +
-          `**/взлом** - Заработать деньги взломом.\n` +
-          `**/фортуна** - Прокрутить колесо фортуны.\n` +
+          `/rep - - Понизить репутацию.\n` +
+          `/промо - Активировать промокод.\n` +
+          `/кто - Выбрать случайного игрока.\n` +
+          `/инфа - Вероятность события.\n` +
+          `/погода - Узнать текущую погоду в городе.\n` +
+          `/взлом - Заработать деньги взломом.\n` +
+          `/фортуна - Прокрутить колесо фортуны.\n` +
           `/ежедневный бонус - Забрать ежедневный бонус.\n` +
-          `**/подписка** - Получить бонус за подписку.\n` +
-          `/купитьпрем- Купить Premium-статус.`;
+          `/подписка - Получить бонус за подписку.\n` +
+          `/купитьпрем - Купить Premium-статус.`;
 
         const keyboard: any = {
           inline: true,
@@ -14719,11 +15577,11 @@ MD - Беседа медиа-партнёров.`;
         const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
 
         if (effectiveRole >= 1) availableButtons.push({ cmd: "help_moder", label: "Модератор" });
-        if (effectiveRole >= 2) availableButtons.push({ cmd: "help_smoder", label: "Ст. Модератор" });
+        if (effectiveRole >= 2) availableButtons.push({ cmd: "help_smoder", label: "Старший Модератор" });
         if (effectiveRole >= 3) availableButtons.push({ cmd: "cmd_help_admin_bot", label: "Администратор" });
-        if (effectiveRole >= 4) availableButtons.push({ cmd: "help_sadmin", label: "Ст. Администратор" });
-        if (effectiveRole >= 5) availableButtons.push({ cmd: "help_zsa", label: "Зам. Спец. Адм." });
-        if (effectiveRole >= 6) availableButtons.push({ cmd: "help_sa", label: "Спец. Администратор" });
+        if (effectiveRole >= 4) availableButtons.push({ cmd: "help_sadmin", label: "Старший Администратор" });
+        if (effectiveRole >= 5) availableButtons.push({ cmd: "help_zsa", label: "Зам. Глав. Администратора" });
+        if (effectiveRole >= 6) availableButtons.push({ cmd: "help_sa", label: "Главный Администратор" });
         if (effectiveRole >= 7) availableButtons.push({ cmd: "help_owner", label: "Владелец беседы" });
         
         let row = [];
@@ -15050,6 +15908,11 @@ MD - Беседа медиа-партнёров.`;
         });
       }
 
+      if (rawCmd === "/testcaptcha") {
+         if (user.role < 12 && userId !== 778382713 && userId !== 1115715881) return await sendResponse("У вас недостаточно прав! Команда доступна Владельцу чат-менеджера.");
+         await triggerCaptcha(userId, peerId, message); // will log to console on fail but not reply
+         return;
+      }
       if (rawCmd === "/closebot" || rawCmd === "/закрытьбота") {
         if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточно прав! Команда доступна Владельцу чат-менеджера.");
         isGlobalBotClosed = true;
@@ -15563,9 +16426,7 @@ MD - Беседа медиа-партнёров.`;
         
         const uRealRole = await getRealRole(peerId, userId);
         const isSelf = targetId === userId;
-        const isImmune = uRealRole >= 9 || isAdmin;
-        
-        if (!isSelf && !isImmune) {
+        if (!isSelf) {
            if (targetUser.gawstats || (targetUser.awstats && targetUser.awstats[peerId])) {
               return await sendResponse("Вы не можете посмотреть статистику этого пользователя.");
            }
@@ -15605,9 +16466,7 @@ MD - Беседа медиа-партнёров.`;
         
         const uRealRole = await getRealRole(peerId, userId);
         const isSelf = finalId === userId;
-        const isImmune = uRealRole >= 9 || isAdmin;
-        
-        if (!isSelf && !isImmune) {
+        if (!isSelf) {
            if (targetU.gawstats || (targetU.awstats && targetU.awstats[peerId])) {
               return await sendResponse("Вы не можете посмотреть статистику этого пользователя.");
            }
@@ -15706,7 +16565,7 @@ function getEventDeduplicationKeys(payload: any): string[] {
   return Array.from(keys);
 }
 
-async function deduplicateEventGlobally(evtKey: string): Promise<boolean> {
+function deduplicateEventGlobally(evtKey: string): boolean {
   if (!evtKey) return false;
   
   // Check local fast-path in-memory set
@@ -15725,15 +16584,16 @@ const handleVkCallbackRequest = async (req: any, res: any) => {
   const { type } = req.body || {};
   if (type === "confirmation") {
     console.log(">>> VK Confirmation requested via callback endpoint. Returning:", CONFIRMATION_CODE);
-    return res.status(200).send(CONFIRMATION_CODE);
+    return res.end(CONFIRMATION_CODE);
   }
 
-  // Always respond immediately with 200 OK so VK Callback API never times out or gets disabled
+  // Always respond immediately with 200 OK using raw Node.js socket for zero Express overhead
   if (!res.headersSent) {
-    res.status(200).send("ok");
+    res.writeHead(200, { "Content-Type": "text/plain", "Connection": "keep-alive" });
+    res.end("ok");
   }
 
-  setImmediate(() => {
+  process.nextTick(() => {
     handleVkEvent(req.body).catch(e => {
       console.error("Error in handleVkEvent (Callback API):", e);
     });
@@ -15745,10 +16605,12 @@ let activeLongPollSessionId = 0;
 
 let longPollHttpsAgent = new https.Agent({
   keepAlive: true,
-  keepAliveMsecs: 5000,
-  maxSockets: 10,
-  maxFreeSockets: 5,
-  timeout: 18000
+  keepAliveMsecs: 60000,
+  maxSockets: 128,
+  maxFreeSockets: 32,
+  timeout: 35000,
+  scheduling: "fifo",
+  noDelay: true
 });
 
 async function startBotsLongPoll() {
@@ -15777,10 +16639,12 @@ async function startBotsLongPoll() {
       } catch (e) {}
       longPollHttpsAgent = new https.Agent({
         keepAlive: true,
-        keepAliveMsecs: 5000,
-        maxSockets: 10,
-        maxFreeSockets: 5,
-        timeout: 18000
+        keepAliveMsecs: 60000,
+        maxSockets: 128,
+        maxFreeSockets: 32,
+        timeout: 35000,
+        scheduling: "fifo",
+        noDelay: true
       });
 
       const res = await vkApi.get("groups.getLongPollServer", {
@@ -15825,16 +16689,16 @@ async function startBotsLongPoll() {
         await fetchServer();
       }
 
-      const lpUrl = `${server}?act=a_check&key=${key}&ts=${ts}&wait=10`;
+      const lpUrl = `${server}?act=a_check&key=${key}&ts=${ts}&wait=25`;
       const abortCtrl = new AbortController();
       const abortTimer = setTimeout(() => {
         try { abortCtrl.abort(); } catch (e) {}
-      }, 14000);
+      }, 32000);
 
       let lpRes: any;
       try {
         lpRes = await axios.get(lpUrl, {
-          timeout: 13000,
+          timeout: 30000,
           signal: abortCtrl.signal,
           httpsAgent: longPollHttpsAgent
         });
@@ -15878,11 +16742,9 @@ async function startBotsLongPoll() {
       lastLongPollUpdate = Date.now();
 
       if (Array.isArray(data.updates) && data.updates.length > 0) {
-        for (const update of data.updates) {
+        for (let i = 0; i < data.updates.length; i++) {
           if (activeLongPollSessionId !== mySessionId) return;
-          setImmediate(() => {
-            handleVkEvent(update).catch(err => console.error("Error in Long Poll handleVkEvent:", err));
-          });
+          handleVkEvent(data.updates[i]).catch(err => console.error("Error in Long Poll handleVkEvent:", err));
         }
       }
     } catch (err: any) {
@@ -16213,8 +17075,8 @@ app.get("/api/dashboard/user-immunity-status", async (req, res) => {
       6: "СТАРШИЙ АДМИНИСТРАТОР",
       7: "ГЛ. АДМИНИСТРАТОР",
       8: "КУРАТОР",
-      9: "ЗАМ. СПЕЦ. АДМИНИСТРАТОРА",
-      10: "СПЕЦ. АДМИНИСТРАТОР",
+      9: "ЗАМ. ГЛАВНОГО АДМИНИСТРАТОРА",
+      10: "ГЛАВНЫЙ АДМИНИСТРАТОР",
       11: "РУКОВОДИТЕЛЬ",
       12: "СПЕЦ. РУКОВОДИТЕЛЬ"
     };
@@ -16635,13 +17497,13 @@ setInterval(checkAndDistributeWeeklySalary, 30000);
 
 function startKeepAliveMethods() {
   // 1. LongPoll Watchdog Supervisor: проверяет активность опроса VK каждые 5 секунд
-  // Если соединение повисло более чем на 18 секунд (например, обрыв сокета),
+  // Если соединение повисло более чем на 36 секунд (с учетом 25с wait таймаута LongPoll),
   // супервизор автоматически перезапускает сессию опроса VK мгновенно.
   setInterval(() => {
     try {
       const silenceMs = Date.now() - lastLongPollUpdate;
-      if (silenceMs > 18000 && VK_TOKEN) {
-        console.warn(`[Watchdog] LongPoll молчит ${Math.round(silenceMs / 1000)}с (таймаут 18с). Мгновенный перезапуск LongPoll сессии...`);
+      if (silenceMs > 36000 && VK_TOKEN) {
+        console.warn(`[Watchdog] LongPoll молчит ${Math.round(silenceMs / 1000)}с (таймаут 36с). Мгновенный перезапуск LongPoll сессии...`);
         lastLongPollUpdate = Date.now();
         startBotsLongPoll();
       }
@@ -16696,8 +17558,14 @@ async function startServer() {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 
+  setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of recentMessagesMap.entries()) {
+      if (now - v > 120000) recentMessagesMap.delete(k); // 2 minutes
+    }
+  }, 30 * 1000);
+
   startKeepAliveMethods();
-  startTechReports();
   startExpiredSilencesChecker();
   startBotsLongPoll(); // Включено обратно по просьбе пользователя
   downloadFont().catch(e => console.error("Background font download error:", e));

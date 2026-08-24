@@ -97434,4 +97434,5 @@ export const badWordsList: string[] = [
   "proebatnitse",
   "proebatnice",
   "proyebatnytzye",
-  "proebatnits
+  "proebatnitsa"
+];

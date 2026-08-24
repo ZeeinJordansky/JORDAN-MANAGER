@@ -1,17 +1,64 @@
 import axios from "axios";
 import https from "https";
+import http from "http";
+import dns from "dns";
 import russianWordsJson from "./russianWords.json";
+
+if (dns.setDefaultResultOrder) {
+  try {
+    dns.setDefaultResultOrder("ipv4first");
+  } catch (e) {}
+}
+
+const fastHttpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 300000,
+  maxSockets: 1024,
+  maxFreeSockets: 256,
+  timeout: 6000,
+  scheduling: "fifo"
+});
+
+// TLS Multi-Socket Warmup & Hot Connection Pool (Mega-Accelerator)
+// Keeps multiple TCP/TLS sockets continuously warm to eliminate DNS and SSL handshake latency
+function warmSockets() {
+  for (let i = 0; i < 3; i++) {
+    const req = https.request({
+      hostname: 'api.vk.com',
+      path: '/method/utils.getServerTime?v=5.199&access_token=1', 
+      method: 'GET',
+      agent: fastHttpsAgent
+    }, (res) => {
+      res.on('data', () => {}); 
+    });
+    req.on('socket', (socket) => {
+      socket.setNoDelay(true);
+    });
+    req.on('error', () => {});
+    req.end();
+  }
+}
+setInterval(warmSockets, 8000); // Every 8s
+warmSockets();
+
+const fastHttpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 120000,
+  maxSockets: 512,
+  maxFreeSockets: 128,
+  timeout: 8000,
+  scheduling: "fifo",
+  noDelay: true
+});
 
 const vkApi = axios.create({
   baseURL: "https://api.vk.com/method/",
-  timeout: 8000,
-  httpsAgent: new https.Agent({ 
-    keepAlive: true,
-    keepAliveMsecs: 10000,
-    maxSockets: 100,
-    maxFreeSockets: 25,
-  }),
+  timeout: 6000,
+  httpsAgent: fastHttpsAgent,
+  httpAgent: fastHttpAgent,
 });
+
+import querystring from "querystring";
 
 export const CROCODILE_WORDS: string[] = russianWordsJson as string[];
 export const RUSSIAN_WORDS: string[] = russianWordsJson as string[];
@@ -26,46 +73,71 @@ function generateDeterministicRandomId(seedStr: string): number {
   return (Math.abs(hash) % 2147483600) + 1;
 }
 
-export async function sendVkMessage(vkToken: string, peerId: number, text: string, extraParams: any = {}) {
-  text = formatVkText(text);
-  try {
+export function sendVkMessage(vkToken: string, peerId: number, text: string, extraParams: any = {}): Promise<any> {
+  return new Promise((resolve) => {
+    text = formatVkText(text);
     let randomId = extraParams.random_id;
     if (!randomId) {
       if (extraParams.dedup_key) {
         randomId = generateDeterministicRandomId(String(extraParams.dedup_key));
       } else {
-        randomId = Math.floor(Math.random() * 1000000000);
+        randomId = (Math.random() * 1000000000) | 0;
       }
     }
     const { dedup_key, ...cleanedParams } = extraParams;
 
-    const params: any = {
-      peer_ids: peerId, // using peer_ids to get cmid in response
+    const bodyObj: Record<string, string | number> = {
+      peer_id: peerId,
       message: text,
       random_id: randomId,
       access_token: vkToken,
       v: "5.199",
-      disable_mentions: 1,
-      ...cleanedParams
+      disable_mentions: 1
     };
-    if (params.peer_id) delete params.peer_id; // remove peer_id if it got merged from cleanedParams
 
-    const searchParams = new URLSearchParams();
-    for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined && v !== null) {
-        searchParams.append(k, typeof v === "object" ? JSON.stringify(v) : String(v));
+    if (cleanedParams) {
+      for (const [k, v] of Object.entries(cleanedParams)) {
+        if (k !== "peer_id" && k !== "peer_ids" && v !== undefined && v !== null) {
+          bodyObj[k] = typeof v === "object" ? JSON.stringify(v) : (v as string | number);
+        }
       }
     }
 
-    const res = await vkApi.post("messages.send", searchParams);
-    if (res.data?.error) {
-      console.error(`[VK API ERROR] messages.send for peer ${peerId}:`, res.data.error);
-    }
-    return res.data;
-  } catch (e: any) {
-    console.error("sendVkMessage network/request error:", e.message);
-    return null;
-  }
+    const postData = querystring.stringify(bodyObj);
+    const req = https.request({
+      hostname: 'api.vk.com',
+      path: '/method/messages.send',
+      method: 'POST',
+      agent: fastHttpsAgent,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed);
+        } catch {
+          resolve({ response: 1 });
+        }
+      });
+    });
+    
+    req.on('socket', (socket) => {
+      socket.setNoDelay(true);
+    });
+
+    req.on('error', (e) => {
+      console.error("sendVkMessage network/request error:", e.message);
+      resolve(null);
+    });
+    
+    req.write(postData);
+    req.end();
+  });
 }
 
 export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: any, text?: string, extraParams: any = {}) {
@@ -117,8 +189,8 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
       params.message = text;
     }
 
-    // Preserve existing attachments & text if not explicitly provided, to prevent VK messages.edit from wiping attachments on button clicks
-    if (extraParams.attachment === undefined) {
+    // Only lookup existing message if preserveAttachment is explicitly requested and no attachment provided
+    if (extraParams.preserveAttachment === true && extraParams.attachment === undefined) {
       try {
         let existingMsg: any = null;
         if (targetCmid && peerId > 2000000000) {
@@ -167,13 +239,15 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
 
     const tryEdit = async (editParams: any) => {
       try {
-        const searchParams = new URLSearchParams();
+        const bodyObj: Record<string, string | number> = {};
         for (const [k, v] of Object.entries(editParams)) {
           if (v !== undefined && v !== null) {
-            searchParams.append(k, typeof v === "object" ? JSON.stringify(v) : String(v));
+            bodyObj[k] = typeof v === "object" ? JSON.stringify(v) : (v as string | number);
           }
         }
-        const res = await vkApi.post("messages.edit", searchParams);
+        const res = await vkApi.post("messages.edit", querystring.stringify(bodyObj), {
+          headers: { "Content-Type": "application/x-www-form-urlencoded" }
+        });
         if (res.data?.response === 1 || res.data?.response) return res.data;
         return null;
       } catch (e) {
