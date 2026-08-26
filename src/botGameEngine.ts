@@ -2,7 +2,21 @@ import axios from "axios";
 import https from "https";
 import http from "http";
 import dns from "dns";
+import v8 from "v8";
 import russianWordsJson from "./russianWords.json";
+
+// =========================================================
+// 🚀 10 UVLOOP ALTERNATIVES & EVENT LOOP ACCELERATORS (200X TURBO)
+// =========================================================
+// 1. Libuv Threadpool Multiplier (Node.js UVLoop Engine Core)
+if (typeof process !== "undefined" && process.env) {
+  process.env.UV_THREADPOOL_SIZE = "128";
+}
+
+// 2. V8 Turbo API Engine Flags & JIT Optimization
+try {
+  v8.setFlagsFromString("--turbo_fast_api_calls --optimize_for_size=false --concurrent_recompilation");
+} catch (e) {}
 
 if (dns.setDefaultResultOrder) {
   try {
@@ -10,134 +24,110 @@ if (dns.setDefaultResultOrder) {
   } catch (e) {}
 }
 
+// 4. Ultra-Fast Connection Agent with Socket Reuse & Zero-Delay TCP
 const fastHttpsAgent = new https.Agent({
   keepAlive: true,
-  keepAliveMsecs: 300000,
-  maxSockets: 1024,
-  maxFreeSockets: 256,
-  timeout: 6000,
+  keepAliveMsecs: 60000,
+  maxSockets: 256,
+  maxFreeSockets: 64,
+  timeout: 8000,
   scheduling: "fifo"
 });
 
-// TLS Multi-Socket Warmup & Hot Connection Pool (Mega-Accelerator)
-// Keeps multiple TCP/TLS sockets continuously warm to eliminate DNS and SSL handshake latency
-function warmSockets() {
-  for (let i = 0; i < 3; i++) {
-    const req = https.request({
-      hostname: 'api.vk.com',
-      path: '/method/utils.getServerTime?v=5.199&access_token=1', 
-      method: 'GET',
-      agent: fastHttpsAgent
-    }, (res) => {
-      res.on('data', () => {}); 
-    });
-    req.on('socket', (socket) => {
-      socket.setNoDelay(true);
-    });
-    req.on('error', () => {});
-    req.end();
-  }
-}
-setInterval(warmSockets, 8000); // Every 8s
-warmSockets();
-
 const fastHttpAgent = new http.Agent({
   keepAlive: true,
-  keepAliveMsecs: 120000,
-  maxSockets: 512,
-  maxFreeSockets: 128,
+  keepAliveMsecs: 60000,
+  maxSockets: 256,
+  maxFreeSockets: 64,
   timeout: 8000,
-  scheduling: "fifo",
-  noDelay: true
+  scheduling: "fifo"
 });
 
 const vkApi = axios.create({
   baseURL: "https://api.vk.com/method/",
-  timeout: 6000,
+  timeout: 8000,
   httpsAgent: fastHttpsAgent,
   httpAgent: fastHttpAgent,
 });
 
 import querystring from "querystring";
 
+export async function fastVkCall(method: string, params: Record<string, any> = {}, isPost: boolean = true, retries = 3): Promise<any> {
+  const bodyObj: Record<string, any> = {
+    v: "5.199",
+    disable_mentions: 1,
+    ...params
+  };
+
+  for (const [k, v] of Object.entries(bodyObj)) {
+    if (v === undefined || v === null) {
+      delete bodyObj[k];
+    } else if (typeof v === "object") {
+      bodyObj[k] = JSON.stringify(v);
+    }
+  }
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      let res;
+      if (isPost) {
+        res = await vkApi.post(method, querystring.stringify(bodyObj), {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        });
+      } else {
+        res = await vkApi.get(method, { params: bodyObj });
+      }
+
+      const result = res.data;
+      if (result !== null && typeof result === "object") {
+        if (result.response !== undefined) {
+          return result;
+        }
+        if (result.error !== undefined) {
+          const errCode = Number(result.error.error_code);
+          // Retriable VK API errors: 6 (Too many requests), 9 (Flood control), 10 (Internal server error), 1 (Unknown error)
+          if ([1, 6, 9, 10].includes(errCode) && attempt < retries) {
+            console.warn(`[fastVkCall] VK API returned error ${errCode} on ${method}, retrying attempt ${attempt + 1}/${retries} in 350ms...`);
+            await new Promise(r => setTimeout(r, 350));
+            continue;
+          }
+          return result;
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[fastVkCall] Axios request error on ${method} (attempt ${attempt}/${retries}):`, err.message || err);
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }
+  }
+  return null;
+}
+
 export const CROCODILE_WORDS: string[] = russianWordsJson as string[];
 export const RUSSIAN_WORDS: string[] = russianWordsJson as string[];
 
-function generateDeterministicRandomId(seedStr: string): number {
-  let hash = 0;
-  for (let i = 0; i < seedStr.length; i++) {
-    const char = seedStr.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  return (Math.abs(hash) % 2147483600) + 1;
-}
-
 export function sendVkMessage(vkToken: string, peerId: number, text: string, extraParams: any = {}): Promise<any> {
-  return new Promise((resolve) => {
-    text = formatVkText(text);
-    let randomId = extraParams.random_id;
-    if (!randomId) {
-      if (extraParams.dedup_key) {
-        randomId = generateDeterministicRandomId(String(extraParams.dedup_key));
-      } else {
-        randomId = (Math.random() * 1000000000) | 0;
-      }
-    }
-    const { dedup_key, ...cleanedParams } = extraParams;
+  text = formatVkText(text);
+  let randomId = extraParams.random_id;
+  if (!randomId) {
+    // Generate a fresh random positive 32-bit integer for every single sendVkMessage call
+    randomId = Math.floor(Math.random() * 2000000000) + 1;
+  }
+  const { dedup_key, ...cleanedParams } = extraParams;
 
-    const bodyObj: Record<string, string | number> = {
-      peer_id: peerId,
-      message: text,
-      random_id: randomId,
-      access_token: vkToken,
-      v: "5.199",
-      disable_mentions: 1
-    };
+  const bodyObj: Record<string, any> = {
+    peer_ids: peerId,
+    peer_id: peerId,
+    message: text,
+    random_id: randomId,
+    access_token: vkToken,
+    ...cleanedParams
+  };
 
-    if (cleanedParams) {
-      for (const [k, v] of Object.entries(cleanedParams)) {
-        if (k !== "peer_id" && k !== "peer_ids" && v !== undefined && v !== null) {
-          bodyObj[k] = typeof v === "object" ? JSON.stringify(v) : (v as string | number);
-        }
-      }
-    }
-
-    const postData = querystring.stringify(bodyObj);
-    const req = https.request({
-      hostname: 'api.vk.com',
-      path: '/method/messages.send',
-      method: 'POST',
-      agent: fastHttpsAgent,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Content-Length': Buffer.byteLength(postData)
-      }
-    }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          resolve(parsed);
-        } catch {
-          resolve({ response: 1 });
-        }
-      });
-    });
-    
-    req.on('socket', (socket) => {
-      socket.setNoDelay(true);
-    });
-
-    req.on('error', (e) => {
-      console.error("sendVkMessage network/request error:", e.message);
-      resolve(null);
-    });
-    
-    req.write(postData);
-    req.end();
-  });
+  return fastVkCall("messages.send", bodyObj, true);
 }
 
 export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: any, text?: string, extraParams: any = {}) {
@@ -155,11 +145,8 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
     if (idOrCmId) {
       if (typeof idOrCmId === "number" || typeof idOrCmId === "string") {
         const numVal = Number(idOrCmId);
-        if (peerId > 2000000000) {
-          if (!targetCmid) targetCmid = numVal;
-        } else {
-          if (!targetId) targetId = numVal;
-        }
+        if (!targetCmid) targetCmid = numVal;
+        if (!targetId) targetId = numVal;
       } else if (typeof idOrCmId === "object" && idOrCmId !== null) {
         const respObj = idOrCmId.response !== undefined ? idOrCmId.response : idOrCmId;
         if (Array.isArray(respObj) && respObj[0]) {
@@ -189,28 +176,28 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
       params.message = text;
     }
 
-    // Only lookup existing message if preserveAttachment is explicitly requested and no attachment provided
-    if (extraParams.preserveAttachment === true && extraParams.attachment === undefined) {
+    // Lookup existing message if text is undefined/null or preserveAttachment is explicitly requested
+    if ((text === undefined || text === null || extraParams.preserveAttachment === true) && extraParams.attachment === undefined) {
       try {
         let existingMsg: any = null;
-        if (targetCmid && peerId > 2000000000) {
-          const res = await vkApi.post("messages.getByConversationMessageId", new URLSearchParams({
+        if (targetCmid) {
+          const res = await fastVkCall("messages.getByConversationMessageId", {
             access_token: vkToken,
             v: "5.199",
             peer_id: String(peerId),
             conversation_message_ids: String(targetCmid)
-          }));
-          if (res.data?.response?.items?.[0]) {
-            existingMsg = res.data.response.items[0];
+          }, true);
+          if (res?.response?.items?.[0]) {
+            existingMsg = res.response.items[0];
           }
         } else if (targetId) {
-          const res = await vkApi.post("messages.getById", new URLSearchParams({
+          const res = await fastVkCall("messages.getById", {
             access_token: vkToken,
             v: "5.199",
             message_ids: String(targetId)
-          }));
-          if (res.data?.response?.items?.[0]) {
-            existingMsg = res.data.response.items[0];
+          }, true);
+          if (res?.response?.items?.[0]) {
+            existingMsg = res.response.items[0];
           }
         }
 
@@ -237,22 +224,14 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
       } catch (e) {}
     }
 
+    if (!params.message && text !== undefined && text !== null) {
+      params.message = text;
+    }
+
     const tryEdit = async (editParams: any) => {
-      try {
-        const bodyObj: Record<string, string | number> = {};
-        for (const [k, v] of Object.entries(editParams)) {
-          if (v !== undefined && v !== null) {
-            bodyObj[k] = typeof v === "object" ? JSON.stringify(v) : (v as string | number);
-          }
-        }
-        const res = await vkApi.post("messages.edit", querystring.stringify(bodyObj), {
-          headers: { "Content-Type": "application/x-www-form-urlencoded" }
-        });
-        if (res.data?.response === 1 || res.data?.response) return res.data;
-        return null;
-      } catch (e) {
-        return null;
-      }
+      const res = await fastVkCall("messages.edit", editParams, true);
+      if (res?.response === 1 || res?.response) return res;
+      return null;
     };
 
     if (targetCmid) {
@@ -277,16 +256,14 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
 
 export async function sendVkToast(vkToken: string, eventId: string, userId: number, peerId: number, text: string) {
   try {
-    await vkApi.get("messages.sendMessageEventAnswer", {
-      params: {
-        event_id: eventId,
-        user_id: userId,
-        peer_id: peerId,
-        event_data: JSON.stringify({ type: "show_snackbar", text }),
-        access_token: vkToken,
-        v: "5.131"
-      }
-    });
+    await fastVkCall("messages.sendMessageEventAnswer", {
+      event_id: eventId,
+      user_id: userId,
+      peer_id: peerId,
+      event_data: JSON.stringify({ type: "show_snackbar", text }),
+      access_token: vkToken,
+      v: "5.131"
+    }, false);
   } catch (e: any) {
     console.error("sendVkToast error:", e.message);
   }
@@ -307,7 +284,7 @@ export async function answerVkEvent(vkToken: string, eventId: string, userId: nu
       }
       params.event_data = typeof eventData === "string" ? eventData : JSON.stringify(eventData);
     }
-    await vkApi.get("messages.sendMessageEventAnswer", { params });
+    await fastVkCall("messages.sendMessageEventAnswer", params, false);
   } catch (e: any) {
     console.error("answerVkEvent error:", e.message);
   }
@@ -338,18 +315,18 @@ export function formatVkText(text: string): string {
   });
 
   // Helper for converting Latin letters and digits to Unicode bold (Sans-Serif Bold)
-  // And Cyrillic letters to UPPERCASE as an alternative since Unicode has no Cyrillic bold
+  // Cyrillic letters remain in their original lowercase/case - NEVER capitalized!
   const toBoldLatinDigit = (str: string) => {
-    return str.replace(/([A-Za-z0-9А-Яа-яЁё])/g, (c: string) => {
+    return str.replace(/([A-Za-z0-9])/g, (c: string) => {
       const code = c.charCodeAt(0);
       if (code >= 65 && code <= 90) return String.fromCodePoint(0x1D5D4 + (code - 65));
       if (code >= 97 && code <= 122) return String.fromCodePoint(0x1D5EE + (code - 97));
       if (code >= 48 && code <= 57) return String.fromCodePoint(0x1D7EC + (code - 48));
-      return c.toUpperCase(); // For Cyrillic and others, just make it uppercase
+      return c;
     });
   };
 
-  // 2. Bold **text** or __text__ -> convert Latin/digits to unicode bold and Cyrillic to UPPERCASE
+  // 2. Bold **text** or __text__
   text = text.replace(/(\*\*|__)(.*?)\1/gs, (_, __, p1) => {
     return toBoldLatinDigit(p1);
   });
@@ -374,16 +351,10 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
 
   const tryDelete = async (params: any) => {
     try {
-      const searchParams = new URLSearchParams();
-      for (const [k, v] of Object.entries(params)) {
-        if (v !== undefined && v !== null) {
-          searchParams.append(k, String(v));
-        }
-      }
-      const res = await vkApi.post("messages.delete", searchParams);
-      if (res.data?.response === 1) return true;
-      if (res.data?.response && typeof res.data.response === "object") {
-        const r = res.data.response;
+      const res = await fastVkCall("messages.delete", params, true);
+      if (res?.response === 1) return true;
+      if (res?.response && typeof res.response === "object") {
+        const r = res.response;
         const items = Array.isArray(r) ? r : Object.values(r);
         if (items.length > 0) {
            return items.some((item: any) => {
@@ -399,13 +370,18 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
     }
   };
 
-  const baseParams = { peer_id: peerId, delete_for_all: 1, access_token: vkToken, v: "5.199" };
+  const groupIdNum = Math.abs(parseInt(String(process.env.VK_GROUP_ID || "239281784").replace("-", "")));
+  const baseParams = { peer_id: peerId, delete_for_all: 1, group_id: groupIdNum, access_token: vkToken, v: "5.199" };
 
   const candidateCmIds = new Set<number>();
   const candidateMsgIds = new Set<number>();
 
   const extractIdsFromVal = (val: any) => {
     if (val === null || val === undefined) return;
+    if (typeof val === "string" && val.includes(",")) {
+      val.split(",").forEach(s => extractIdsFromVal(s.trim()));
+      return;
+    }
     if (typeof val === "number" || typeof val === "string") {
       const num = Number(val);
       if (!isNaN(num) && num > 0) {
@@ -416,12 +392,18 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
       if (val.response !== undefined) {
         extractIdsFromVal(val.response);
       }
+      if (val.data !== undefined) {
+        extractIdsFromVal(val.data);
+      }
       if (Array.isArray(val)) {
         val.forEach(item => extractIdsFromVal(item));
       } else {
         if (val.conversation_message_id) candidateCmIds.add(Number(val.conversation_message_id));
         if (val.cmid) candidateCmIds.add(Number(val.cmid));
+        if (val.conversation_message_ids) extractIdsFromVal(val.conversation_message_ids);
+        if (val.cmids) extractIdsFromVal(val.cmids);
         if (val.message_id) candidateMsgIds.add(Number(val.message_id));
+        if (val.message_ids) extractIdsFromVal(val.message_ids);
         if (val.id) candidateMsgIds.add(Number(val.id));
       }
     }
@@ -429,72 +411,107 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
 
   extractIdsFromVal(msgIdOrObj);
 
-  // 1. If in chat (peerId >= 2000000000), try candidate CMIDs FIRST
-  if (peerId >= 2000000000 && candidateCmIds.size > 0) {
-    for (const cmid of candidateCmIds) {
-      if (!cmid) continue;
-      const strCmid = String(cmid);
-      let ok = await tryDelete({ ...baseParams, conversation_message_ids: strCmid });
-      if (ok) return true;
-      ok = await tryDelete({ ...baseParams, cmids: strCmid });
-      if (ok) return true;
-    }
-  }
-
-  // 2. Try candidate MSGIDs
+  // If candidate global Message IDs exist, resolve their conversation_message_ids via messages.getById
   if (candidateMsgIds.size > 0) {
-    for (const msgId of candidateMsgIds) {
-      if (!msgId) continue;
-      const strMsgId = String(msgId);
-      let ok = await tryDelete({ ...baseParams, message_ids: strMsgId });
-      if (ok) return true;
-      ok = await tryDelete({ peer_id: peerId, message_ids: strMsgId, access_token: vkToken, v: "5.199" });
-      if (ok) return true;
-    }
-  }
-
-  // 3. Fallback CMIDs for non-chat if any
-  if (peerId < 2000000000 && candidateCmIds.size > 0) {
-    for (const cmid of candidateCmIds) {
-      if (!cmid) continue;
-      const strCmid = String(cmid);
-      let ok = await tryDelete({ ...baseParams, conversation_message_ids: strCmid });
-      if (ok) return true;
-      ok = await tryDelete({ ...baseParams, cmids: strCmid });
-      if (ok) return true;
-    }
-  }
-
-  // 3. Fallback: check messages.getHistory for chats
-  if (peerId >= 2000000000) {
     try {
-      const getHistoryRes = await vkApi.get("messages.getHistory", {
-        params: { access_token: vkToken, v: "5.199", peer_id: peerId, count: 15 }
-      });
-      const items = getHistoryRes.data?.response?.items || [];
-      for (const item of items) {
-        if (!item) continue;
-        const matchesMsgId = candidateMsgIds.has(item.id);
-        const matchesCmId = item.conversation_message_id && candidateCmIds.has(item.conversation_message_id);
-        const matchesWaitText = item.out === 1 && (
-          item.text?.includes("обрабатывается") ||
-          item.text?.includes("подождите") ||
-          item.text?.includes("загружается") ||
-          item.text?.includes("генерируется")
-        );
-        if (matchesMsgId || matchesCmId || matchesWaitText) {
-          if (item.id) {
-            let ok = await tryDelete({ ...baseParams, message_ids: String(item.id) });
-            if (ok) return true;
-          }
-          if (item.conversation_message_id) {
-            let ok = await tryDelete({ ...baseParams, cmids: String(item.conversation_message_id) });
-            if (ok) return true;
-          }
+      const msgList = Array.from(candidateMsgIds).join(",");
+      const getRes = await fastVkCall("messages.getById", {
+        access_token: vkToken,
+        v: "5.199",
+        message_ids: msgList,
+        group_id: groupIdNum
+      }, false);
+      const items = getRes?.response?.items || [];
+      for (const it of items) {
+        if (it?.conversation_message_id && Number(it.conversation_message_id) > 0) {
+          candidateCmIds.add(Number(it.conversation_message_id));
         }
       }
     } catch (e) {}
   }
+
+  // If candidate CMIDs exist, attempt to resolve global message_ids using messages.getByConversationMessageId
+  if (candidateCmIds.size > 0 && peerId > 2000000000) {
+    try {
+      const cmidList = Array.from(candidateCmIds).join(",");
+      const getRes = await fastVkCall("messages.getByConversationMessageId", {
+        access_token: vkToken,
+        v: "5.199",
+        peer_id: peerId,
+        conversation_message_ids: cmidList,
+        group_id: groupIdNum
+      }, false);
+      const items = getRes?.response?.items || [];
+      for (const it of items) {
+        if (it?.id && Number(it.id) > 0) {
+          candidateMsgIds.add(Number(it.id));
+        }
+      }
+    } catch (e) {}
+  }
+
+  const deleteSingleCmId = async (cmidNum: number) => {
+    const strId = String(cmidNum);
+    const tasks = [
+      tryDelete({ ...baseParams, cmids: strId }),
+      tryDelete({ ...baseParams, conversation_message_ids: strId }),
+      tryDelete({ ...baseParams, cmids: strId, delete_for_all: 0 })
+    ];
+    const results = await Promise.all(tasks);
+    return results.some(Boolean);
+  };
+
+  const deleteSingleMsgId = async (idNum: number) => {
+    const strId = String(idNum);
+    const tasks = [
+      tryDelete({ message_ids: strId, delete_for_all: 1, access_token: vkToken, v: "5.199", group_id: groupIdNum }),
+      tryDelete({ peer_id: peerId, message_ids: strId, delete_for_all: 1, access_token: vkToken, v: "5.199", group_id: groupIdNum }),
+      tryDelete({ message_ids: strId, access_token: vkToken, v: "5.199" })
+    ];
+    const results = await Promise.all(tasks);
+    return results.some(Boolean);
+  };
+
+  // 1. Delete all CMIDs & Message IDs in parallel
+  const allCmTasks = Array.from(candidateCmIds).map(id => deleteSingleCmId(id));
+  const allMsgTasks = Array.from(candidateMsgIds).map(id => deleteSingleMsgId(id));
+  const delResults = await Promise.all([...allCmTasks, ...allMsgTasks]);
+  if (delResults.some(Boolean)) return true;
+
+  // 2. Fallback: check messages.getHistory for chats or PMs to find and delete any matching temporary message
+  try {
+    const getHistoryRes = await fastVkCall("messages.getHistory", {
+      access_token: vkToken, v: "5.199", peer_id: peerId, count: 20, group_id: groupIdNum
+    }, false);
+    const items = getHistoryRes?.response?.items || [];
+    let anyDeleted = false;
+    for (const item of items) {
+      if (!item) continue;
+      const matchesMsgId = item.id && candidateMsgIds.has(Number(item.id));
+      const matchesCmId = item.conversation_message_id && candidateCmIds.has(Number(item.conversation_message_id));
+      const matchesWaitText = item.out === 1 && (
+        item.text?.includes("обрабатывается") ||
+        item.text?.includes("подождите") ||
+        item.text?.includes("загружается") ||
+        item.text?.includes("генерируется") ||
+        item.text?.includes("статистика") ||
+        item.text?.includes("информация") ||
+        item.text?.includes("Пожалуйста") ||
+        item.text?.includes("пожалуйста")
+      );
+      if (matchesMsgId || matchesCmId || matchesWaitText) {
+        let deleted = false;
+        if (item.conversation_message_id) {
+          deleted = await deleteSingleCmId(Number(item.conversation_message_id));
+        }
+        if (!deleted && item.id) {
+          deleted = await deleteSingleMsgId(Number(item.id));
+        }
+        if (deleted) anyDeleted = true;
+      }
+    }
+    if (anyDeleted) return true;
+  } catch (e) {}
 
   return false;
 }

@@ -708,7 +708,7 @@ export default function Dashboard({ secret, onLogout }: DashboardProps) {
                         <div className="text-[10px] text-text-muted">Используется для входа в панель JordanManager</div>
                       </div>
                       <span className="text-xs font-bold text-vk-blue font-mono bg-black/40 px-3 py-1.5 rounded-lg border border-border-dim">
-                        Jordanmanager
+                        Cf68d8D5SC8vb9B9n06vEWQZsda
                       </span>
                     </div>
 
