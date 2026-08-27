@@ -112,6 +112,15 @@ export const RUSSIAN_WORDS: string[] = russianWordsJson as string[];
 export function sendVkMessage(vkToken: string, peerId: number, text: string, extraParams: any = {}): Promise<any> {
   text = formatVkText(text);
   let randomId = extraParams.random_id;
+  if (!randomId && extraParams.dedup_key) {
+    let hash = 0;
+    const str = String(extraParams.dedup_key);
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    randomId = (Math.abs(hash) % 2000000000) + 1;
+  }
   if (!randomId) {
     // Generate a fresh random positive 32-bit integer for every single sendVkMessage call
     randomId = Math.floor(Math.random() * 2000000000) + 1;
@@ -119,7 +128,6 @@ export function sendVkMessage(vkToken: string, peerId: number, text: string, ext
   const { dedup_key, ...cleanedParams } = extraParams;
 
   const bodyObj: Record<string, any> = {
-    peer_ids: peerId,
     peer_id: peerId,
     message: text,
     random_id: randomId,
@@ -359,7 +367,7 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
         if (items.length > 0) {
            return items.some((item: any) => {
              if (typeof item === "number") return item === 1;
-             if (typeof item === "object" && item !== null) return !item.error && (item.response === 1 || item.status === 1 || !item.error_code);
+             if (typeof item === "object" && item !== null) return !item.error && (item.response === 1 || item.status === 1 || item.response === true || !item.error_code);
              return false;
            });
         }
@@ -371,7 +379,6 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
   };
 
   const groupIdNum = Math.abs(parseInt(String(process.env.VK_GROUP_ID || "239281784").replace("-", "")));
-  const baseParams = { peer_id: peerId, delete_for_all: 1, group_id: groupIdNum, access_token: vkToken, v: "5.199" };
 
   const candidateCmIds = new Set<number>();
   const candidateMsgIds = new Set<number>();
@@ -411,26 +418,38 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
 
   extractIdsFromVal(msgIdOrObj);
 
-  // If candidate global Message IDs exist, resolve their conversation_message_ids via messages.getById
-  if (candidateMsgIds.size > 0) {
-    try {
-      const msgList = Array.from(candidateMsgIds).join(",");
-      const getRes = await fastVkCall("messages.getById", {
-        access_token: vkToken,
-        v: "5.199",
-        message_ids: msgList,
-        group_id: groupIdNum
-      }, false);
-      const items = getRes?.response?.items || [];
-      for (const it of items) {
-        if (it?.conversation_message_id && Number(it.conversation_message_id) > 0) {
-          candidateCmIds.add(Number(it.conversation_message_id));
-        }
-      }
-    } catch (e) {}
-  }
+  const deleteSingleCmId = async (cmidNum: number) => {
+    const strId = String(cmidNum);
+    const tasks = [
+      tryDelete({ peer_id: peerId, cmids: strId, delete_for_all: 1, access_token: vkToken, v: "5.199" }),
+      tryDelete({ peer_id: peerId, cmids: strId, delete_for_all: 1, group_id: groupIdNum, access_token: vkToken, v: "5.199" }),
+      tryDelete({ peer_id: peerId, conversation_message_ids: strId, delete_for_all: 1, access_token: vkToken, v: "5.199" }),
+      tryDelete({ peer_id: peerId, conversation_message_ids: strId, delete_for_all: 1, group_id: groupIdNum, access_token: vkToken, v: "5.199" }),
+      tryDelete({ peer_id: peerId, cmids: strId, delete_for_all: 0, access_token: vkToken, v: "5.199" })
+    ];
+    const results = await Promise.all(tasks);
+    return results.some(Boolean);
+  };
 
-  // If candidate CMIDs exist, attempt to resolve global message_ids using messages.getByConversationMessageId
+  const deleteSingleMsgId = async (idNum: number) => {
+    const strId = String(idNum);
+    const tasks = [
+      tryDelete({ message_ids: strId, delete_for_all: 1, access_token: vkToken, v: "5.199" }),
+      tryDelete({ message_ids: strId, delete_for_all: 1, access_token: vkToken, v: "5.199", group_id: groupIdNum }),
+      tryDelete({ peer_id: peerId, message_ids: strId, delete_for_all: 1, access_token: vkToken, v: "5.199" }),
+      tryDelete({ peer_id: peerId, message_ids: strId, delete_for_all: 1, access_token: vkToken, v: "5.199", group_id: groupIdNum })
+    ];
+    const results = await Promise.all(tasks);
+    return results.some(Boolean);
+  };
+
+  // 1. Direct delete immediately with all candidates
+  const allCmTasks = Array.from(candidateCmIds).map(id => deleteSingleCmId(id));
+  const allMsgTasks = Array.from(candidateMsgIds).map(id => deleteSingleMsgId(id));
+  const delResults = await Promise.all([...allCmTasks, ...allMsgTasks]);
+  if (delResults.some(Boolean)) return true;
+
+  // 2. Fallback: check messages.getByConversationMessageId if in a chat
   if (candidateCmIds.size > 0 && peerId > 2000000000) {
     try {
       const cmidList = Array.from(candidateCmIds).join(",");
@@ -440,49 +459,22 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
         peer_id: peerId,
         conversation_message_ids: cmidList,
         group_id: groupIdNum
-      }, false);
+      }, false, 1);
       const items = getRes?.response?.items || [];
       for (const it of items) {
         if (it?.id && Number(it.id) > 0) {
           candidateMsgIds.add(Number(it.id));
+          await deleteSingleMsgId(Number(it.id));
         }
       }
     } catch (e) {}
   }
 
-  const deleteSingleCmId = async (cmidNum: number) => {
-    const strId = String(cmidNum);
-    const tasks = [
-      tryDelete({ ...baseParams, cmids: strId }),
-      tryDelete({ ...baseParams, conversation_message_ids: strId }),
-      tryDelete({ ...baseParams, cmids: strId, delete_for_all: 0 })
-    ];
-    const results = await Promise.all(tasks);
-    return results.some(Boolean);
-  };
-
-  const deleteSingleMsgId = async (idNum: number) => {
-    const strId = String(idNum);
-    const tasks = [
-      tryDelete({ message_ids: strId, delete_for_all: 1, access_token: vkToken, v: "5.199", group_id: groupIdNum }),
-      tryDelete({ peer_id: peerId, message_ids: strId, delete_for_all: 1, access_token: vkToken, v: "5.199", group_id: groupIdNum }),
-      tryDelete({ message_ids: strId, access_token: vkToken, v: "5.199" })
-    ];
-    const results = await Promise.all(tasks);
-    return results.some(Boolean);
-  };
-
-  // 1. Delete all CMIDs & Message IDs in parallel
-  const allCmTasks = Array.from(candidateCmIds).map(id => deleteSingleCmId(id));
-  const allMsgTasks = Array.from(candidateMsgIds).map(id => deleteSingleMsgId(id));
-  const delResults = await Promise.all([...allCmTasks, ...allMsgTasks]);
-  if (delResults.some(Boolean)) return true;
-
-  // 2. Fallback: check messages.getHistory for chats or PMs to find and delete any matching temporary message
+  // 3. Fallback: check messages.getHistory for chats or PMs to find and delete any matching temporary message
   try {
     const getHistoryRes = await fastVkCall("messages.getHistory", {
       access_token: vkToken, v: "5.199", peer_id: peerId, count: 20, group_id: groupIdNum
-    }, false);
+    }, false, 1);
     const items = getHistoryRes?.response?.items || [];
     let anyDeleted = false;
     for (const item of items) {
@@ -497,7 +489,8 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
         item.text?.includes("статистика") ||
         item.text?.includes("информация") ||
         item.text?.includes("Пожалуйста") ||
-        item.text?.includes("пожалуйста")
+        item.text?.includes("пожалуйста") ||
+        item.text?.includes("Начинаю генерацию")
       );
       if (matchesMsgId || matchesCmId || matchesWaitText) {
         let deleted = false;
