@@ -1,35 +1,11 @@
 
-function getVkPlatformName(profile: any): string {
-  const p = profile?.last_seen?.platform;
-  switch (p) {
-    case 1: return "Мобильная версия";
-    case 2: return "iPhone";
-    case 3: return "iPad";
-    case 4: return "Android";
-    case 5: return "Windows Phone";
-    case 6: return "Windows 10";
-    case 7: return "Веб-версия (ПК)";
-    default: return profile?.online_mobile ? "Мобильное устройство" : "Компьютер";
-  }
-}
+let isX2WeekendActive = false;
 
-function formatMskDateAmPm(timestamp?: number | null): string {
-  if (!timestamp || isNaN(Number(timestamp))) return "Никогда";
-  const d = new Date(Number(timestamp) + 3 * 3600 * 1000);
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const year = d.getUTCFullYear();
-  let hoursRaw = d.getUTCHours();
-  const mins = String(d.getUTCMinutes()).padStart(2, "0");
-  const secs = String(d.getUTCSeconds()).padStart(2, "0");
-  const ampm = hoursRaw >= 12 ? "PM" : "AM";
-  const hours = String(hoursRaw % 12 === 0 ? 12 : hoursRaw % 12).padStart(2, "0");
-  return `${day}.${month}.${year} ${hours}:${mins}:${secs} ${ampm}`;
-}
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import axios from "axios";
+import Redis from "ioredis";
 import https from "https";
 import http from "http";
 import os from "os";
@@ -237,7 +213,7 @@ const VALID_COMMANDS = new Set([
 "/addozam",
 "/addozsr",
 "/addruk",
-"/addsa",
+"/addga",
 "/addsenadmin",
 "/addsenmoder",
 "/addspets",
@@ -248,7 +224,7 @@ const VALID_COMMANDS = new Set([
 "/addzamowner",
 "/addzamspets",
 "/addzown",
-"/addzsa",
+"/addzga",
 "/addzsr",
 "/af",
 "/ai",
@@ -837,8 +813,37 @@ const getRawArgText = (rawMessageText: string) => {
   return "";
 };
 
-const fmtD = (ms?: number) => {
-  if (!ms) return "Отсутствует.";
+
+const sendBanAlert = async (peerId: number, targetId: number, type: 'ban' | 'gban' | 'gbanpl', reason: string, date: number, expiresAt: number) => {
+  const targetUser = await getOrCreateUser(targetId);
+  const targetName = targetUser.fullName || targetUser.nick || (await fetchVkFullName(targetId)) || `id${targetId}`;
+  const dateStr = formatMskDateAmPm(date);
+  const endStr = (expiresAt === 0 || !expiresAt) ? "Никогда" : formatMskDateAmPm(expiresAt);
+  
+  let text = "";
+  if (type === 'gban' || type === 'gbanpl') {
+    text = `[id${targetId}|${targetName}] занесён(-а) в глобальную блокировку во всех беседах в которых есть Orion!\n\n| Причина: ${reason}\n| Дата выдачи: ${dateStr}\n| Дата окончания: ${endStr}`;
+  } else {
+    text = `[id${targetId}|${targetName}] заблокирован(-а) в этой беседе!\n\n| Причина: ${reason}\n| Дата выдачи: ${dateStr}\n| Дата окончания: ${endStr}`;
+  }
+
+  const kb = {
+    inline: true,
+    buttons: [
+      [{ action: { type: "callback", label: "Вынести из блокировки", payload: JSON.stringify({ cmd: "unban_alert_action", targetId, type }) }, color: "positive" }],
+      [{ action: { type: "callback", label: "Информация о блокировках", payload: JSON.stringify({ cmd: "info_alert_action", targetId }) }, color: "default" }]
+    ]
+  };
+
+  return await sendVkMessage(VK_TOKEN, peerId, text, { keyboard: JSON.stringify(kb) });
+};
+
+export const getMskDate = (ms: number = Date.now()) => {
+  return new Date(ms + (new Date().getTimezoneOffset() * 60 * 1000) + (3 * 3600 * 1000));
+};
+
+export const formatMskDateAmPm = (ms?: number | null) => {
+  if (!ms || ms <= 0) return "Отсутствует.";
   const d = new Date(ms + (new Date().getTimezoneOffset() * 60 * 1000) + (3 * 3600 * 1000));
   const day = String(d.getDate()).padStart(2, "0");
   const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -849,23 +854,66 @@ const fmtD = (ms?: number) => {
   const hours = String(displayHour).padStart(2, "0");
   const mins = String(d.getMinutes()).padStart(2, "0");
   const secs = String(d.getSeconds()).padStart(2, "0");
-  return `${day}.${month}.${year} ${hours}:${mins}:${secs} ${ampm}`;
+  return `${hours}:${mins}:${secs} ${ampm} | ${day}.${month}.${year}`;
 };
+export const fmtD = formatMskDateAmPm;
+export const formatDateRstats = formatMskDateAmPm;
 
-const getMskDate = (ms: number = Date.now()) => {
-  return new Date(ms + (new Date().getTimezoneOffset() * 60 * 1000) + (3 * 3600 * 1000));
-};
+function formatLitersRu(litersNum: number | string): string {
+  const str = typeof litersNum === "number" ? litersNum.toFixed(1) : litersNum;
+  const num = parseFloat(str);
+  const intPart = Math.floor(num);
+  const fracPart = Math.round((num - intPart) * 10);
+  if (fracPart > 0) {
+    return `${str} литра`;
+  }
+  if (intPart % 10 === 1 && intPart % 100 !== 11) return `${str} литр`;
+  if ([2, 3, 4].includes(intPart % 10) && ![12, 13, 14].includes(intPart % 100)) return `${str} литра`;
+  return `${str} литров`;
+}
 
-const formatDateRstats = (ms?: number) => {
-  if (!ms) ms = Date.now();
-  const d = new Date(ms + (new Date().getTimezoneOffset() * 60 * 1000) + (3 * 3600 * 1000));
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const year = d.getFullYear();
-  const hours = String(d.getHours()).padStart(2, "0");
-  const mins = String(d.getMinutes()).padStart(2, "0");
-  return `${day}.${month}.${year} ${hours}:${mins}`;
-};
+const RUSSIAN_GRAMMAR_QUIZ = [
+  { correct: "Пиво", wrong: ["Биво", "Пево", "Пива"] },
+  { correct: "Агентство", wrong: ["Агенство", "Агенства", "Агентсво"] },
+  { correct: "Лестница", wrong: ["Лесница", "Лесницо", "Лестнеца"] },
+  { correct: "Чувство", wrong: ["Чювство", "Чуство", "Чусво"] },
+  { correct: "Коридор", wrong: ["Калидор", "Колидор", "Каридор"] },
+  { correct: "Парашют", wrong: ["Парашут", "Порошют", "Парошут"] },
+  { correct: "Жюри", wrong: ["Жури", "Жири", "Журри"] },
+  { correct: "Брошюра", wrong: ["Брошура", "Брашюра", "Брошуро"] },
+  { correct: "Цыплёнок", wrong: ["Циплёнок", "Цыпленокъ", "Цеплёнок"] },
+  { correct: "Солнце", wrong: ["Сонце", "Солнцо", "Санце"] },
+  { correct: "Праздник", wrong: ["Празник", "Празднек", "Проздник"] },
+  { correct: "Здравствуйте", wrong: ["Здраствуйте", "Здраствуйти", "Здравствуйти"] },
+  { correct: "Вкусный", wrong: ["Вкустный", "Вкусной", "Фкусный"] },
+  { correct: "Интересный", wrong: ["Интерестный", "Интиресный", "Интересней"] },
+  { correct: "Опасный", wrong: ["Опастный", "Апасный", "Опасний"] },
+  { correct: "Чересчур", wrong: ["Черезчур", "Черсчур", "Черезчюр"] },
+  { correct: "Искусство", wrong: ["Искуство", "Искуссво", "Исскуство"] },
+  { correct: "Интеллигент", wrong: ["Интелигент", "Интелегент", "Интиллигент"] },
+  { correct: "Дрожжи", wrong: ["Дрожи", "Дрожьжи", "Дрожжы"] },
+  { correct: "Бассейн", wrong: ["Басейн", "Боссейн", "Басеин"] },
+  { correct: "Белорусский", wrong: ["Белоруский", "Беларусский", "Беларуский"] },
+  { correct: "Превосходный", wrong: ["Привосходный", "Превасходный", "Привасходный"] },
+  { correct: "Колоссальный", wrong: ["Колосальный", "Калоссальный", "Калосальный"] },
+  { correct: "Рассвет", wrong: ["Расвет", "Россвет", "Росвет"] },
+  { correct: "Аккуратный", wrong: ["Акуратный", "Акоратный", "Аккуратней"] },
+  { correct: "Симпатичный", wrong: ["Семпатичный", "Симпотичный", "Семпотичный"] },
+  { correct: "Грамотный", wrong: ["Громотный", "Граматный", "Громатный"] },
+  { correct: "Сверстник", wrong: ["Сверсник", "Сверстнек", "Сверсникъ"] },
+  { correct: "Участвовать", wrong: ["Учавствовать", "Учавствывать", "Участвоват"] },
+  { correct: "Девчонка", wrong: ["Девчёнка", "Девчонко", "Дивчонка"] },
+  { correct: "Шёпот", wrong: ["Шопот", "Шепотъ", "Шёпат"] },
+  { correct: "Винегрет", wrong: ["Венигрет", "Винигрет", "Венегрет"] },
+  { correct: "Бутерброд", wrong: ["Бутерброт", "Бутырброд", "Бутербротъ"] },
+  { correct: "Терраса", wrong: ["Тераса", "Тирраса", "Тираса"] },
+  { correct: "Апелляция", wrong: ["Аппеляция", "Апеляция", "Аппеляцыя"] },
+  { correct: "Привилегия", wrong: ["Превилегия", "Привелегия", "Превелегия"] },
+  { correct: "Обаяние", wrong: ["Обояние", "Абаяние", "Абояние"] },
+  { correct: "Обоняние", wrong: ["Абоняние", "Обаняние", "Абаняние"] }
+];
+
+export const formatMskDate = formatMskDateAmPm;
 
 const recentLogsMap = new Map<string, number>();
 
@@ -914,8 +962,12 @@ const logToChat10 = async (params: {
 
   let targetFullName = params.targetName;
   if (!targetFullName && params.targetId && params.targetId > 0) {
-    const tu = await getOrCreateUser(params.targetId);
-    targetFullName = tu.fullName || tu.nick || (await fetchVkFullName(params.targetId)) || `User${params.targetId}`;
+    try {
+      const tu = await getOrCreateUser(params.targetId);
+      targetFullName = tu.fullName || tu.nick || (await fetchVkFullName(params.targetId)) || `User${params.targetId}`;
+    } catch(e) {
+      targetFullName = `User${params.targetId}`;
+    }
   }
 
   const targetLink = params.targetId && params.targetId > 0 && targetFullName
@@ -1016,8 +1068,8 @@ function isModerationCmd(cmd: string): boolean {
     "/addsenmoder", "/смодер", "/delsenmoder", "/setsenmoder", "/setsmoder", "/старшиймодератор", "/аддсмодер",
     "/addadmin", "/админ", "/deladmin", "/setadmin", "/аддадмин",
     "/addsenadmin", "/садмин", "/delsenadmin", "/setsenadmin", "/setsadmin", "/аддсадмин",
-    "/addzsa", "/замспец", "/delzsa", "/выдатьзса", "/setzsa", "/addzamspets", "/аддзса",
-    "/addsa", "/са", "/sa", "/delsa", "/setsa", "/выдатьса", "/addspets", "/аддса",
+    "/addzga", "/замспец", "/delzsa", "/выдатьзса", "/setzsa", "/addzamspets", "/аддзса",
+    "/addga", "/са", "/sa", "/delsa", "/setsa", "/выдатьса", "/addspets", "/аддса",
     "/removerole", "/снятьроль", "/снятьправа", "/arrole", "/grrole",
     "/addstatus", "/unstatus",
     "/quiet", "/тихий", "/unquiet", "/снятьтихий", "/тишина",
@@ -1298,7 +1350,9 @@ async function generateUserStatsImage(targetUser: any, targetId: number, current
   const customStatus = targetUser.customStatus || targetUser.statusText || "Не установлен";
   
   let lastActivityStr = "отсутствует";
-  const rawAct = targetUser.lastActivity || (targetUser.lastMessageAt && (targetUser.messagesTotal > 0 || (targetUser.chatTotalMsgs && Object.values(targetUser.chatTotalMsgs).some((v: any) => v > 0))) ? targetUser.lastMessageAt * 1000 : 0);
+  const lastActMs = targetUser.lastActivity && targetUser.lastActivity > 1000000000000 ? targetUser.lastActivity : 0;
+  const lastMsgMs = targetUser.lastMessageAt ? (targetUser.lastMessageAt > 10000000000 ? targetUser.lastMessageAt : targetUser.lastMessageAt * 1000) : 0;
+  const rawAct = Math.max(lastActMs, lastMsgMs);
   if (rawAct && rawAct > 0) {
     const dAct = new Date(rawAct);
     const dDay = String(dAct.getDate()).padStart(2, "0");
@@ -1395,6 +1449,11 @@ const firebaseConfig = JSON.parse(fs.readFileSync("./firebase-applet-config.json
 import { getFirestoreWrapper, FieldValue } from "./firestore-wrapper";
 // ...
 const firestoreDb = getFirestoreWrapper();
+const redis = new Redis("rediss://default:gQAAAAAAA3PoAAIgcDFiYjA4YmUwZDFlMTU0YTVhODJmZDVkOTYxODBmYzYxYQ@content-gnat-226280.upstash.io:6379");
+if (redis) {
+  redis.on("error", (err) => console.error("Redis Error:", err));
+}
+
 
 try {
   firestoreDb.collection("system").doc("bot_config").get().then(doc => {
@@ -1463,102 +1522,8 @@ async function updateGlobalSettings(newSettings: Partial<typeof globalSettings>)
 
 
 // Chat caching
+const userCache = new Map<number, any>();
 const chatCache = new Map<number, any>();
-const clanCache = new Map<string, any>();
-
-async function getOrCreateChat(peerId: number) {
-  const cached = chatCache.get(peerId);
-  if (cached && cached.title) return cached;
-
-  const chatRef = firestoreDb.collection("chats").doc(peerId.toString());
-  let chatDoc: any = null;
-  try {
-    chatDoc = await chatRef.get();
-  } catch (err: any) {
-    console.warn("Firestore error in getOrCreateChat (using memory fallback):", err?.message || err);
-  }
-
-  if (chatDoc && chatDoc.exists) {
-    const data = chatDoc.data() || {};
-    if (!data.title && peerId > 2000000000) {
-      try {
-        const convRes = await axios.get("https://api.vk.com/method/messages.getConversationsById", {
-          params: { access_token: VK_TOKEN, v: "5.199", peer_ids: peerId }
-        });
-        const settings = convRes.data?.response?.items?.[0]?.chat_settings;
-        if (settings) {
-          const upd: any = {};
-          if (settings.title) { data.title = settings.title; upd.title = settings.title; }
-          if (settings.owner_id) { data.ownerId = settings.owner_id; upd.ownerId = settings.owner_id; }
-          if (settings.members_count) { data.membersCount = settings.members_count; upd.membersCount = settings.members_count; }
-          if (settings.acl?.can_get_invite_link && !data.inviteLink) {
-             try {
-                const linkRes = await axios.get("https://api.vk.com/method/messages.getInviteLink", {
-                   params: { access_token: VK_TOKEN, v: "5.199", peer_id: peerId }
-                });
-
-                if (linkRes.data?.response?.link) {
-                   data.inviteLink = linkRes.data.response.link;
-                   upd.inviteLink = data.inviteLink;
-                }
-             } catch (e) {}
-          }
-          if (Object.keys(upd).length > 0) {
-            chatRef.set(upd, { merge: true }).catch(() => {});
-          }
-        }
-      } catch (e) {}
-    }
-    chatCache.set(peerId, data);
-    return data;
-  } else {
-    let title = `Беседа №${peerId}`;
-    let ownerId = 0;
-    let membersCount = 0;
-    if (peerId > 2000000000) {
-      try {
-        const convRes = await axios.get("https://api.vk.com/method/messages.getConversationsById", {
-          params: { access_token: VK_TOKEN, v: "5.199", peer_ids: peerId }
-        });
-        const settings = convRes.data?.response?.items?.[0]?.chat_settings;
-        if (settings) {
-          if (settings.title) title = settings.title;
-          ownerId = settings.owner_id || 0;
-          membersCount = settings.members_count || 0;
-        }
-      } catch (e) {}
-    }
-    const newChat: any = {
-      id: peerId,
-      title,
-      ownerId,
-      membersCount,
-      type: "PL",
-      af: false,
-      antisliv: false,
-      raid: false,
-      group: false,
-      welcometext: null,
-      welcometext_enabled: false
-    };
-    chatRef.set(newChat).catch(() => {});
-    chatCache.set(peerId, newChat);
-    return newChat;
-  }
-}
-
-async function updateChat(peerId: number, data: any) {
-  let cached = chatCache.get(peerId);
-  if (!cached) {
-    cached = await getOrCreateChat(peerId);
-  }
-  Object.assign(cached, data);
-  chatCache.set(peerId, cached);
-
-  const chatRef = firestoreDb.collection("chats").doc(peerId.toString());
-  chatRef.set(data, { merge: true }).catch(() => {});
-}
-
 interface ChatNetwork {
   id: string; // Network name
   name: string; // Network display name
@@ -1567,153 +1532,30 @@ interface ChatNetwork {
   createdAt: number;
 }
 
-const networkCache = new Map<string, ChatNetwork>();
+const formatDurationBanTerm = (expiresAt?: number, startDate?: number): string => {
+  if (!expiresAt || expiresAt === 0) return "Навсегда";
+  const start = startDate || Date.now();
+  const diffMs = expiresAt - start;
+  if (diffMs <= 0) return "Истёк";
+  const days = Math.round(diffMs / (24 * 3600 * 1000));
+  if (days >= 1) return `${days} дн.`;
+  const hours = Math.round(diffMs / (3600 * 1000));
+  if (hours >= 1) return `${hours} ч.`;
+  const mins = Math.max(1, Math.round(diffMs / (60 * 1000)));
+  return `${mins} мин.`;
+};
 
-async function getChatNetwork(name: string): Promise<ChatNetwork | null> {
-  const key = name.trim().toLowerCase();
-  if (networkCache.has(key)) return networkCache.get(key) || null;
-  try {
-    const doc = await firestoreDb.collection("networks").doc(key).get();
-    if (doc.exists) {
-      const data = doc.data() as ChatNetwork;
-      networkCache.set(key, data);
-      return data;
-    }
-  } catch (e) {}
-  return null;
-}
+const checkFlood = (peerId, userId, chatData) => {
+      if (!chatData.antiFlood) return false;
+      const key = `${peerId}_${userId}`;
+      const now = Date.now();
+      let times = userAntiFlood.get(key) || [];
+      times = times.filter(t => now - t < 5000); // 5 messages in 5 seconds
+      times.push(now);
+      userAntiFlood.set(key, times);
+      return times.length > 5;
+    };
 
-async function saveChatNetwork(network: ChatNetwork): Promise<void> {
-  const key = network.name.trim().toLowerCase();
-  networkCache.set(key, network);
-  await firestoreDb.collection("networks").doc(key).set(network, { merge: true });
-}
-
-async function deleteChatNetwork(name: string): Promise<void> {
-  const key = name.trim().toLowerCase();
-  networkCache.delete(key);
-  await firestoreDb.collection("networks").doc(key).delete();
-}
-
-async function findChatNetworkByPeerId(peerId: number): Promise<ChatNetwork | null> {
-  for (const net of networkCache.values()) {
-    if (net.chats && net.chats.includes(peerId)) return net;
-  }
-  try {
-    const snap = await firestoreDb.collection("networks").where("chats", "array-contains", peerId).limit(1).get();
-    if (!snap.empty) {
-      const net = snap.docs[0].data() as ChatNetwork;
-      networkCache.set(net.name.trim().toLowerCase(), net);
-      return net;
-    }
-  } catch (e) {}
-  return null;
-}
-
-async function getAllChatNetworks(): Promise<ChatNetwork[]> {
-  try {
-    const snap = await firestoreDb.collection("networks").get();
-    const list: ChatNetwork[] = [];
-    snap.forEach(doc => {
-      const net = doc.data() as ChatNetwork;
-      networkCache.set(net.name.trim().toLowerCase(), net);
-      list.push(net);
-    });
-    return list;
-  } catch (e) {
-    return [];
-  }
-}
-
-async function deleteUserRecentMessages(peerId: number, userId: number, count: number = 5) {
-  try {
-    const recent = chatRecentMessages.get(peerId) || [];
-    const userCmIds = recent.filter(m => m.fromId === userId).slice(-count).map(m => m.cmId);
-    if (userCmIds.length > 0) {
-      await vkApi.get("messages.delete", {
-        params: {
-          peer_id: peerId,
-          cmids: userCmIds.join(","),
-          delete_for_all: 1,
-          access_token: VK_TOKEN,
-          v: "5.131"
-        }
-      });
-    }
-  } catch (e) {}
-}
-
-function containsTagAll(text: string): boolean {
-  if (!text) return false;
-  const lower = text.toLowerCase();
-  const patterns = [
-    /@all\b/, /@все\b/, /@online\b/, /@онлайн\b/, /@everyone\b/,
-    /\*all\b/, /\*все\b/, /\*online\b/, /\*онлайн\b/, /\*everyone\b/,
-    /\[all\|/, /\[все\|/, /\[online\|/, /\[онлайн\|/, /\[everyone\|/
-  ];
-  return patterns.some(p => p.test(lower));
-}
-
-function containsAd(text: string, message: any): boolean {
-  if (!text && (!message?.attachments || message.attachments.length === 0)) return false;
-  const linkRegex = /(https?:\/\/[^\s]+|t\.me\/[^\s]+|discord\.gg\/[^\s]+|vk\.me\/join\/[^\s]+|vk\.com\/[a-zA-Z0-9_.]+\?[^\s]+)/gi;
-  if (linkRegex.test(text || "")) return true;
-  if (message?.attachments && message.attachments.some((a: any) => a.type === "wall" || a.type === "link")) {
-    return true;
-  }
-  return false;
-}
-
-function startTechReports() {
-  setInterval(async () => {
-    try {
-      const peerId = 2000000011; // Chat 11
-      const totalMemMB = (os.totalmem() / 1024 / 1024).toFixed(1);
-      const freeMemMB = (os.freemem() / 1024 / 1024).toFixed(1);
-      const usedMemMB = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
-      const cpuLoad = os.loadavg()[0] ? (os.loadavg()[0] * 100 / os.cpus().length).toFixed(1) : "0.0";
-      
-      const uptimeSec = Math.floor((Date.now() - botStartTime) / 1000);
-      const upHours = Math.floor(uptimeSec / 3600);
-      const upMins = Math.floor((uptimeSec % 3600) / 60);
-      const upSecs = uptimeSec % 60;
-      const uptimeStr = `${String(upHours).padStart(2, "0")}:${String(upMins).padStart(2, "0")}:${String(upSecs).padStart(2, "0")}`;
-
-      const dateObj = new Date(botStartTime);
-      const ds = dateObj.toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" });
-      const ts = dateObj.toLocaleTimeString("ru-RU", { timeZone: "Europe/Moscow" });
-      
-      let totalUsersCount = userCache.size;
-      let totalChatsCount = chatCache.size;
-      
-      const dbSizeMB = ((totalUsersCount * 1.5 + totalChatsCount * 4) / 1024).toFixed(2);
-      const dbFreeMB = "Не ограничено";
-
-      const ping = (Math.random() * 50 + 20).toFixed(2);
-      const resp = (Math.random() * 0.3 + 0.1).toFixed(2);
-
-      const reportText = `...::Техническая отчётность::..\n\n` +
-        `| Пинг бота: ${ping} мс\n` +
-        `| Скорость ответа бота: ${resp} сек\n\n` +
-        `| Употреблено ОЗУ: ${usedMemMB} МБ\n` +
-        `| Свободно ОЗУ: ${freeMemMB} МБ\n\n` +
-        `| Загрузка CPU: ${cpuLoad}%\n\n` +
-        `| Занято места в базе данных: ~${dbSizeMB} МБ\n` +
-        `| Свободно места в базе данных: ${dbFreeMB}\n\n` +
-        `| Последний перезапуск бота: ${ds} ${ts}\n` +
-        `| С момента последнего перезапуска прошло: ${uptimeStr}`;
-
-      await sendVkMessage(VK_TOKEN, peerId, reportText, { disable_mentions: 1 });
-    } catch (e: any) {
-      console.error("Tech report error:", e.message);
-    }
-  }, 30 * 1000);
-}
-const waitingForWelcome = new Map<string, boolean>();
-
-const userAntiFlood = new Map<string, number[]>();
-    
-    const slivCounter = new Map<string, number[]>();
     const processSliv = async (peerId: number, userId: number, chatData?: any) => {
       // Primary Bot Creators / Founders / Devs are exempt
       if (userId === 778382713 || userId === 1115715881 || userId === 1) {
@@ -1786,40 +1628,65 @@ const userAntiFlood = new Map<string, number[]>();
       return false;
     };
 
-const checkFlood = (peerId, userId, chatData) => {
-      if (!chatData.antiFlood) return false;
-      const key = `${peerId}_${userId}`;
-      const now = Date.now();
-      let times = userAntiFlood.get(key) || [];
-      times = times.filter(t => now - t < 5000); // 5 messages in 5 seconds
-      times.push(now);
-      userAntiFlood.set(key, times);
-      return times.length > 5;
-    };
+const networkCache = new Map<string, ChatNetwork>();
 
-const formatDurationBanTerm = (expiresAt?: number, startDate?: number): string => {
-  if (!expiresAt || expiresAt === 0) return "Навсегда";
-  const start = startDate || Date.now();
-  const diffMs = expiresAt - start;
-  if (diffMs <= 0) return "Истёк";
-  const days = Math.round(diffMs / (24 * 3600 * 1000));
-  if (days >= 1) return `${days} дн.`;
-  const hours = Math.round(diffMs / (3600 * 1000));
-  if (hours >= 1) return `${hours} ч.`;
-  const mins = Math.max(1, Math.round(diffMs / (60 * 1000)));
-  return `${mins} мин.`;
-};
-
-const userCache = new Map<number, any>();
-const pingFloodCache = new Map<string, number>();
-const commandHistory = new Map<number, { timestamps: number[] }>();
+const userAntiFlood = new Map<string, number[]>();
+const slivCounter = new Map<string, number[]>();
 const chatMembersCache = new Map<number, { members: any[], profiles: any[], expiry: number }>();
 const adminCache = new Map<string, { isAdmin: boolean, expiry: number }>();
 const lastPickedInChat = new Map<number, number>();
 const chatRecentMessages = new Map<number, { cmId: number, fromId: number, text?: string }[]>();
-const noAdminThrottle = new Map<number, number>();
 const buttonCooldowns = new Map<number, number>();
+const waitingForWelcome = new Map<string, boolean>();
+const commandHistory = new Map<number, { timestamps: number[] }>();
+const pingFloodCache = new Map<string, number>();
+const clanCache = new Map<string, any>();
 
+async function getOrCreateChat(peerId: number) {
+  const isPlaceholderTitle = (t?: string) => !t || t.startsWith("Беседа №") || t.startsWith("Беседа #");
+  const cached = chatCache.get(peerId);
+  if (cached && cached.title && !isPlaceholderTitle(cached.title)) return cached;
+
+  if (redis) {
+    try {
+      const rCached = await redis.get(`chat:${peerId}`);
+      if (rCached) {
+        const data = JSON.parse(rCached);
+        if (data.title && !isPlaceholderTitle(data.title)) {
+           chatCache.set(peerId, data);
+           return data;
+        }
+      }
+    } catch (e) {}
+  }
+
+  const chatRef = firestoreDb.collection("chats").doc(peerId.toString());
+  let chatDoc: any = null;
+  try {
+    chatDoc = await chatRef.get();
+  } catch (err: any) {
+    console.warn("Firestore error in getOrCreateChat (using memory fallback):", err?.message || err);
+  }
+
+  let data: any;
+  if (chatDoc && chatDoc.exists) {
+    data = chatDoc.data() || {};
+  } else {
+    data = {
+      peerId,
+      title: `Беседа #${peerId}`,
+      ownerId: 0,
+      membersCount: 0,
+      createdAt: Date.now(),
+      settings: { welcomeMessage: "Привет!", rules: "Правила не установлены." }
+    };
+    await chatRef.set(data).catch(() => {});
+  }
+
+  chatCache.set(peerId, data);
+  if (redis) redis.setex(`chat:${peerId}`, 3600, JSON.stringify(data)).catch(()=>{});
+  return data;
+}
 async function getChatMembers(peerId: number) {
   const cached = chatMembersCache.get(peerId);
   if (cached && cached.expiry > Date.now()) {
@@ -2117,101 +1984,151 @@ async function getOrCreateUser(userIdRaw: number | string, nameHint?: string) {
   if (!userId || isNaN(userId)) {
     return { userId: 0, role: 0, fullName: "User0", balance: 0, bank: 0 } as any;
   }
-
-  if (userId === 778382713 || userId === 1) {
-    if (userCache.has(userId)) {
-      const data = userCache.get(userId);
-      data.role = 12;
-    }
-  }
-
   if (userCache.has(userId)) {
     const data = userCache.get(userId);
-    if (!data.fullName || data.fullName.startsWith("User")) {
-      fetchVkFullName(userId).then(realName => {
-        if (realName) {
-          data.fullName = realName;
-          const userRef = firestoreDb.collection("users").doc(userId.toString());
-          userRef.set({ fullName: realName }, { merge: true }).catch(() => {});
-        }
-      }).catch(() => {});
-    }
+    if (userId === 778382713 || userId === 1) data.role = 12;
     return data;
   }
-
+  if (redis) {
+    try {
+      const cached = await redis.get(`user:${userId}`);
+      if (cached) {
+        const data = JSON.parse(cached);
+        if (userId === 778382713 || userId === 1) data.role = 12;
+        userCache.set(userId, data);
+        return data;
+      }
+    } catch (e) {}
+  }
   const userRef = firestoreDb.collection("users").doc(userId.toString());
   let userDoc: any = null;
-  try {
-    userDoc = await userRef.get();
-  } catch (err: any) {
-    console.warn("Firestore error in getOrCreateUser (using memory fallback):", err?.message || err);
-  }
-
+  try { userDoc = await userRef.get(); } catch (err: any) { console.warn("Firestore error:", err); }
+  let data: any;
   if (userDoc && userDoc.exists) {
-    const data = userDoc.data() as any;
-    if (userId === 778382713 || userId === 1) {
-      data.role = 12;
-    }
-    if (!data.deposits) data.deposits = [];
-    if (data.premiumProfileHidden === undefined) data.premiumProfileHidden = false;
-    if (data.premiumBalanceHidden === undefined) data.premiumBalanceHidden = false;
-    if (!data.fullName || data.fullName.startsWith("User")) {
-      fetchVkFullName(userId).then(realName => {
-        if (realName) {
-          data.fullName = realName;
-          userRef.set({ fullName: realName }, { merge: true }).catch(() => {});
-        }
-      }).catch(() => {});
-    }
-    userCache.set(userId, data);
-    return data;
+    data = userDoc.data() as any;
   } else {
-    const realVkName = await fetchVkFullName(userId).catch(() => null);
-    const newUser = {
-      userId,
-      role: userId === 778382713 || userId === 1 ? 12 : 0, // Special Leader for admin
-      fullName: realVkName || nameHint || `User${userId}`,
-      nick: "",
-      balance: 1000,
-      bank: 0,
-      beer: 0,
-      lastBeerTime: 0,
-      beerResetMonth: Math.floor(Date.now() / (90 * 86400 * 1000)),
-      jc: 0,
-      businesses: 0,
-      bizProducts: 0,
-      bizIncomeAcc: 0,
-      lastBizCollectTime: Math.floor(Date.now() / 1000),
-      vipExpires: 0,
-      rep: 0,
-      lastRepGiven: {},
-      isGameBanned: false,
-      gameBanReason: "",
-      hideTop: false,
-      hideBalance: false,
-      lastPrizeTime: 0,
-      mpoints: 0,
-      warnings: 0,
-      messagesToday: 0,
-      messagesTotal: 0,
-      lastMessageAt: 0,
-      status: "Активный",
-      awstats: {},
-      gawstats: false,
-      roleDisabled: false,
-      premiumProfileHidden: false,
-      premiumBalanceHidden: false,
-      deposits: [],
-      lastHackAt: 0,
-      lastFortuneAt: 0,
-      dailyDay: 1,
-      lastDailyAt: 0,
-      hasSubBonus: false
+    const realVkName = nameHint || await fetchVkFullName(userId).catch(() => null) || `User${userId}`;
+    data = {
+      userId, role: 0, fullName: realVkName,
+      balance: 10000, bank: 0, messagesTotal: 0,
+      warnings: 0, lastActivity: Date.now()
     };
-    userRef.set(newUser).catch(() => {});
-    userCache.set(userId, newUser);
-    return { ...newUser, _isNew: true };
+    await userRef.set(data).catch(() => {});
   }
+  if (userId === 778382713 || userId === 1) data.role = 12;
+  userCache.set(userId, data);
+  if (redis) redis.setex(`user:${userId}`, 3600, JSON.stringify(data)).catch(()=>{});
+  return data;
+}
+
+async function updateChat(peerId: number, data: any) {
+  let cached = chatCache.get(peerId);
+  if (!cached) {
+    cached = await getOrCreateChat(peerId);
+  }
+  Object.assign(cached, data);
+  chatCache.set(peerId, cached);
+
+  const chatRef = firestoreDb.collection("chats").doc(peerId.toString());
+  chatRef.set(data, { merge: true }).catch(() => {});
+}
+
+async function deleteChatNetwork(name: string): Promise<void> {
+  const key = name.trim().toLowerCase();
+  networkCache.delete(key);
+  await firestoreDb.collection("networks").doc(key).delete();
+}
+
+async function getChatNetwork(name: string): Promise<ChatNetwork | null> {
+  const key = name.trim().toLowerCase();
+  if (networkCache.has(key)) return networkCache.get(key) || null;
+  try {
+    const doc = await firestoreDb.collection("networks").doc(key).get();
+    if (doc.exists) {
+      const data = doc.data() as ChatNetwork;
+      networkCache.set(key, data);
+      return data;
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function saveChatNetwork(network: ChatNetwork): Promise<void> {
+  const key = network.name.trim().toLowerCase();
+  networkCache.set(key, network);
+  await firestoreDb.collection("networks").doc(key).set(network, { merge: true });
+}
+
+function containsTagAll(text: string): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  const patterns = [
+    /@all\b/, /@все\b/, /@online\b/, /@онлайн\b/, /@everyone\b/,
+    /\*all\b/, /\*все\b/, /\*online\b/, /\*онлайн\b/, /\*everyone\b/,
+    /\[all\|/, /\[все\|/, /\[online\|/, /\[онлайн\|/, /\[everyone\|/
+  ];
+  return patterns.some(p => p.test(lower));
+}
+
+async function findChatNetworkByPeerId(peerId: number): Promise<ChatNetwork | null> {
+  for (const net of networkCache.values()) {
+    if (net.chats && net.chats.includes(peerId)) return net;
+  }
+  try {
+    const snap = await firestoreDb.collection("networks").where("chats", "array-contains", peerId).limit(1).get();
+    if (!snap.empty) {
+      const net = snap.docs[0].data() as ChatNetwork;
+      networkCache.set(net.name.trim().toLowerCase(), net);
+      return net;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function startTechReports() {
+  setInterval(async () => {
+    try {
+      const peerId = 2000000011; // Chat 11
+      const totalMemMB = (os.totalmem() / 1024 / 1024).toFixed(1);
+      const freeMemMB = (os.freemem() / 1024 / 1024).toFixed(1);
+      const usedMemMB = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
+      const cpuLoad = os.loadavg()[0] ? (os.loadavg()[0] * 100 / os.cpus().length).toFixed(1) : "0.0";
+      
+      const uptimeSec = Math.floor((Date.now() - botStartTime) / 1000);
+      const upHours = Math.floor(uptimeSec / 3600);
+      const upMins = Math.floor((uptimeSec % 3600) / 60);
+      const upSecs = uptimeSec % 60;
+      const uptimeStr = `${String(upHours).padStart(2, "0")}:${String(upMins).padStart(2, "0")}:${String(upSecs).padStart(2, "0")}`;
+
+      const dateObj = new Date(botStartTime);
+      const ds = dateObj.toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" });
+      const ts = dateObj.toLocaleTimeString("ru-RU", { timeZone: "Europe/Moscow" });
+      
+      let totalUsersCount = userCache.size;
+      let totalChatsCount = chatCache.size;
+      
+      const dbSizeMB = ((totalUsersCount * 1.5 + totalChatsCount * 4) / 1024).toFixed(2);
+      const dbFreeMB = "Не ограничено";
+
+      const ping = (Math.random() * 50 + 20).toFixed(2);
+      const resp = (Math.random() * 0.3 + 0.1).toFixed(2);
+
+      const reportText = `...::Техническая отчётность::..\n\n` +
+        `| Пинг бота: ${ping} мс\n` +
+        `| Скорость ответа бота: ${resp} сек\n\n` +
+        `| Употреблено ОЗУ: ${usedMemMB} МБ\n` +
+        `| Свободно ОЗУ: ${freeMemMB} МБ\n\n` +
+        `| Загрузка CPU: ${cpuLoad}%\n\n` +
+        `| Занято места в базе данных: ~${dbSizeMB} МБ\n` +
+        `| Свободно места в базе данных: ${dbFreeMB}\n\n` +
+        `| Последний перезапуск бота: ${ds} ${ts}\n` +
+        `| С момента последнего перезапуска прошло: ${uptimeStr}`;
+
+      await sendVkMessage(VK_TOKEN, peerId, reportText, { disable_mentions: 1 });
+    } catch (e: any) {
+      console.error("Tech report error:", e.message);
+    }
+  }, 30 * 1000);
 }
 
 async function updateUser(userIdRaw: number | string, fields: Record<string, any>) {
@@ -2230,10 +2147,16 @@ async function updateUser(userIdRaw: number | string, fields: Record<string, any
 
 async function updateUserStats(userId: number, peerId?: number) {
   const mskDateStr = getMskDateStr();
-  const cached = userCache.get(userId);
+  let cached = userCache.get(userId);
+  if (!cached) {
+    cached = await getOrCreateUser(userId);
+  }
+  const nowMs = Date.now();
+  const nowSec = Math.floor(nowMs / 1000);
   if (cached) {
     cached.messagesTotal = (cached.messagesTotal || 0) + 1;
-    cached.lastMessageAt = Math.floor(Date.now() / 1000);
+    cached.lastMessageAt = nowSec;
+    cached.lastActivity = nowMs;
     if (peerId) {
       cached.chatTodayMsgs = cached.chatTodayMsgs || {};
       cached.chatTotalMsgs = cached.chatTotalMsgs || {};
@@ -2252,10 +2175,11 @@ async function updateUserStats(userId: number, peerId?: number) {
   const userRef = firestoreDb.collection("users").doc(userId.toString());
   const updateFields: any = {
     messagesTotal: FieldValue.increment(1),
-    lastMessageAt: Math.floor(Date.now() / 1000)
+    lastMessageAt: nowSec,
+    lastActivity: nowMs
   };
-  if (peerId) {
-    const pCount = cached?.chatTodayMsgs?.[peerId] || 1;
+  if (peerId && cached) {
+    const pCount = cached.chatTodayMsgs?.[peerId] || 1;
     updateFields[`chatTodayMsgs.${peerId}`] = pCount;
     updateFields[`chatTotalMsgs.${peerId}`] = FieldValue.increment(1);
     updateFields[`chatLastMsgDateStr.${peerId}`] = mskDateStr;
@@ -2263,7 +2187,7 @@ async function updateUserStats(userId: number, peerId?: number) {
   userRef.set(updateFields, { merge: true }).catch(() => {});
 }
 
-const getStatsMainPage = async (targetId: number, currentPeerId: number, viewerUserId?: number) => {
+const getStatsMainPage = async (targetId: number, currentPeerId: number, viewerUserId?: number, isCallback = true) => {
   const targetUser = await getOrCreateUser(targetId);
   const targetName = targetUser.fullName || targetUser.nick || (await fetchVkFullName(targetId)) || `User${targetId}`;
   
@@ -2275,16 +2199,15 @@ const getStatsMainPage = async (targetId: number, currentPeerId: number, viewerU
     : 0;
   
   const chatNicks = targetUser.chatNicks || {};
-  let nickStr = chatNicks[currentPeerId] || targetUser.nick || "отсутствует";
-  let dispRole = await getRole(currentPeerId, targetId);
-  let roleStr = getRoleDisplayName(dispRole);
+  let nickStr = chatNicks[currentPeerId] || targetUser.snick || targetUser.customNick || targetUser.globalNick || (targetUser.nick && targetUser.nick !== targetUser.fullName ? targetUser.nick : null) || "отсутствует";
+  let roleStr = await getHighestRoleTitle(targetUser, currentPeerId);
 
   const hasGban = !!(targetUser.gban || targetUser.gbanpl);
   const hasChatBans = !!(targetUser.chatBans && Object.keys(targetUser.chatBans).length > 0);
   const hasChatMute = !!(targetUser.muteUntil && targetUser.muteUntil > Date.now());
   const hasWarns = (targetUser.warnings || 0) > 0;
 
-  let statsStr = `Статистика [id${targetId}|${targetName}]\n\n`;
+  let statsStr = `Статистика [id${targetId}|пользователя]\n\n`;
   statsStr += `| Nick_Name: ${nickStr}\n`;
   statsStr += `| VK ID - ${targetId}\n\n`;
   statsStr += `| Должность: ${roleStr}\n`;
@@ -2301,7 +2224,9 @@ const getStatsMainPage = async (targetId: number, currentPeerId: number, viewerU
   statsStr += `| Кол-во сообщений за всё время: ${totalMsgs}\n`;
   
   let lastActivityStr = "отсутствует";
-  const rawAct = targetUser.lastActivity || (targetUser.lastMessageAt && (targetUser.messagesTotal > 0 || (targetUser.chatTotalMsgs && Object.values(targetUser.chatTotalMsgs).some((v: any) => v > 0))) ? targetUser.lastMessageAt * 1000 : 0);
+  const lastActMs = targetUser.lastActivity && targetUser.lastActivity > 1000000000000 ? targetUser.lastActivity : 0;
+  const lastMsgMs = targetUser.lastMessageAt ? (targetUser.lastMessageAt > 10000000000 ? targetUser.lastMessageAt : targetUser.lastMessageAt * 1000) : 0;
+  const rawAct = Math.max(lastActMs, lastMsgMs);
   if (rawAct && rawAct > 0) {
     lastActivityStr = formatMskDateAmPm(rawAct);
   }
@@ -2361,7 +2286,7 @@ const getStatsWarnsPage = async (targetId: number) => {
 
   const text = `Информация о предупреждениях:
 
-| У пользователя [id${targetId}|${targetName}] ${warnsCount} предупреждений.
+| У пользователя [id${targetId}|пользователя] ${warnsCount} предупреждений.
 
 | Информация о активных предупреждениях:
 ${warnsListText}`;
@@ -2370,7 +2295,7 @@ ${warnsListText}`;
     inline: true,
     buttons: [
       [
-        { action: { type: "callback", label: "Общая Информация", payload: JSON.stringify({ cmd: "stats_main", targetId }) }, color: "secondary" },
+        { action: { type: "callback", label: "« Назад", payload: JSON.stringify({ cmd: "stats_main", targetId }) }, color: "primary" },
         { action: { type: "callback", label: "Блокировки", payload: JSON.stringify({ cmd: "stats_bans", targetId }) }, color: "secondary" }
       ]
     ]
@@ -2379,79 +2304,100 @@ ${warnsListText}`;
   return { text, keyboard };
 };
 
-const getStatsBansPage = async (targetId: number) => {
+function sanitizeTitle(title: string): string {
+  if (!title) return title;
+  const badPatterns = [
+    /хуй|хуя|хуе|хуи|пизд|бля|бляд|еба|ебн|ебат|сука|сучк|мудак|пидор|гандон|шлюх|дроч|член/i
+  ];
+  let clean = title;
+  for (const pat of badPatterns) {
+    if (pat.test(clean)) {
+      clean = clean.replace(pat, "####");
+    }
+  }
+  return clean;
+}
+
+const getStatsBansPage = async (targetId: number, isCallback = true) => {
   const targetUser = await getOrCreateUser(targetId);
-  const targetName = targetUser.fullName || targetUser.nick || `id${targetId}`;
-  const targetLink = `[id${targetId}|${targetName}]`;
 
   const getModStr = async (mId?: number) => {
     if (!mId) return "[id1|Модератор]";
-    return `[id${mId}|Модератор]`;
+    const mUser = await getOrCreateUser(mId);
+    const mName = mUser.fullName || mUser.nick || (await fetchVkFullName(mId)) || `User${mId}`;
+    return `[id${mId}|${mName}]`;
   };
 
-  const formatDurationBanTerm = (expiresAt?: number, startDate?: number) => {
-    if (!expiresAt || expiresAt === 0) return "Навсегда";
-    const start = startDate || Date.now();
-    const diffMs = expiresAt - start;
-    if (diffMs <= 0) return "Истёк";
-    const days = Math.round(diffMs / (24 * 3600 * 1000));
-    if (days >= 1) return `${days} дн.`;
-    const hours = Math.round(diffMs / (3600 * 1000));
-    if (hours >= 1) return `${hours} ч.`;
-    const mins = Math.max(1, Math.round(diffMs / (60 * 1000)));
-    return `${mins} мин.`;
-  };
+  let gbanBlock = "Отсутствует.";
+  if (targetUser.gban || targetUser.gbanpl) {
+    const modId = targetUser.gbanBy || targetUser.gbanplBy || 1;
+    const modStr = await getModStr(modId);
+    const gDate = targetUser.gbanDate || targetUser.gbanplDate;
+    const gExp = targetUser.gbanExpiresAt || targetUser.gbanplExpiresAt;
+    const gReason = targetUser.gbanReason || targetUser.gbanplReason || "без причины";
+    
+    const issueStr = gDate ? formatMskDateAmPm(gDate) : "Неизвестно";
+    const endStr = gExp && gExp > 0 ? formatMskDateAmPm(gExp) : "Никогда";
+    gbanBlock = `| Модератор - ${modStr}\n| Дата выдачи: ${issueStr}\n| Дата окончания: ${endStr}\n| Причина: ${gReason}`;
+  }
 
-  const gbanText = targetUser.gban ? `${await getModStr(targetUser.gbanBy)} | ${targetUser.gbanReason || 'без причины'} | ${formatDurationBanTerm(targetUser.gbanExpiresAt, targetUser.gbanDate)} | ${fmtD(targetUser.gbanDate || Date.now())}` : "Отсутствует.";
-  const gbanplText = targetUser.gbanpl ? `${await getModStr(targetUser.gbanplBy)} | ${targetUser.gbanplReason || 'без причины'} | ${formatDurationBanTerm(targetUser.gbanplExpiresAt, targetUser.gbanplDate)} | ${fmtD(targetUser.gbanplDate || Date.now())}` : "Отсутствует.";
-  const blackText = targetUser.blacklisted ? `${await getModStr(targetUser.blackBy)} | ${targetUser.blackReason || 'без причины'} | ${formatDurationBanTerm(targetUser.blackExpiresAt, targetUser.blackDate)} | ${fmtD(targetUser.blackDate || Date.now())}` : "Отсутствует.";
-  const gameBanText = targetUser.isGameBanned ? `${await getModStr(targetUser.gameBanBy)} | ${targetUser.gameBanReason || 'без причины'} | ${formatDurationBanTerm(targetUser.gameBanUntil, targetUser.gameBanDate)} | ${fmtD(targetUser.gameBanDate || Date.now())}` : "Отсутствует.";
+  let blackBlock = "Отсутствует.";
+  if (targetUser.blacklisted) {
+    const modId = targetUser.blackBy || 1;
+    const modStr = await getModStr(modId);
+    const bDate = targetUser.blackDate;
+    const bExp = targetUser.blackExpiresAt;
+    const bReason = targetUser.blackReason || "без причины";
+
+    const issueStr = bDate ? formatMskDateAmPm(bDate) : "Неизвестно";
+    const endStr = bExp && bExp > 0 ? formatMskDateAmPm(bExp) : "Никогда";
+    blackBlock = `| Модератор - ${modStr}\n| Дата выдачи: ${issueStr}\n| Дата окончания: ${endStr}\n| Причина: ${bReason}`;
+  }
 
   const chatBans = targetUser.chatBans || {};
   const cKeys = Object.keys(chatBans);
   const chatBansCount = cKeys.length;
 
-  let chatBansText = "Отсутствует.";
+  let chatBansTextArr: string[] = [];
   if (cKeys.length > 0) {
-    const lines: string[] = [];
     let idx = 1;
     for (const cId of cKeys) {
       const bInfo = chatBans[cId];
       const cData = await getOrCreateChat(Number(cId));
-      const mStr = await getModStr(bInfo.by);
-      lines.push(`${idx}) ${cData.title || `Беседа №${cId}`} | ${mStr} | ${bInfo.reason || 'без причины'} | ${fmtD(bInfo.date)}`);
+      const rawTitle = cData.title || `Беседа №${cId}`;
+      const cTitle = sanitizeTitle(rawTitle);
+      const modStr = await getModStr(bInfo.by);
+      const issueStr = bInfo.date ? formatMskDateAmPm(bInfo.date) : "Неизвестно";
+      const endStr = bInfo.expiresAt && bInfo.expiresAt > 0 ? formatMskDateAmPm(bInfo.expiresAt) : "Никогда";
+      const reason = bInfo.reason || "без причины";
+
+      chatBansTextArr.push(`${idx}) ${cTitle}\n| Модератор - ${modStr}\n| Дата выдачи: ${issueStr}\n| Дата окончания: ${endStr}\n| Причина: ${reason}`);
       idx++;
     }
-    chatBansText = lines.join("\n");
   }
 
-  const text = `Информация о блокировках ${targetLink}
+  let chatBansFormatted = chatBansTextArr.length > 0 ? "\n\n" + chatBansTextArr.join("\n\n") : "";
+
+  const text = `Информация о блокировках [id${targetId}|пользователя]
 
 | Информация о глобальной блокировке во всех беседах:
-${gbanText}
+${gbanBlock}
 
-| Информация о глобальной блокировке в беседах игроков:
-${gbanplText}
-
-| Информация о нахождении в чёрном списке бота:
-${blackText}
-
-| Информация о блокировке игровых команд:
-${gameBanText}
-
-| Кол-во блокировок в беседах: ${chatBansCount}
+| Информация о нахождении в чёрном списке чат-менеджера:
+${blackBlock}
 
 | Информация о блокировках в беседах:
-${chatBansText}`;
+
+| Кол-во блокировок в беседах: ${chatBansCount}${chatBansFormatted}`;
+
+  const buttons: any[] = [];
+  if (isCallback) {
+    buttons.push([{ action: { type: "callback", label: "« Назад", payload: JSON.stringify({ cmd: "stats_main", targetId }) }, color: "primary" }]);
+  }
 
   const keyboard = {
     inline: true,
-    buttons: [
-      [
-        { action: { type: "callback", label: "Общая Информация", payload: JSON.stringify({ cmd: "stats_main", targetId }) }, color: "secondary" },
-        { action: { type: "callback", label: "Предупреждения", payload: JSON.stringify({ cmd: "stats_warns", targetId }) }, color: "secondary" }
-      ]
-    ]
+    buttons
   };
 
   return { text, keyboard };
@@ -2477,7 +2423,7 @@ app.get("/api/bot-status", (req, res) => {
   }
   res.status(200).json({
     status: "online",
-    bot: "JORDAN MANAGER",
+    bot: "Orion",
     uptimeSeconds: Math.floor(process.uptime()),
     longPollSilenceSeconds: silenceSec,
     activeSessionId: activeLongPollSessionId,
@@ -2492,7 +2438,7 @@ app.all("/api/wake", (req, res) => {
   res.status(200).json({
     success: true,
     status: "awakened",
-    message: "JORDAN MANAGER successfully awakened and LongPoll refreshed!",
+    message: "Orion successfully awakened and LongPoll refreshed!",
     timestamp: new Date().toISOString()
   });
 });
@@ -3281,16 +3227,7 @@ interface AdminConfirmAction {
 }
 const adminConfirmations = new Map<string, AdminConfirmAction>(); // confirmKey -> action
 
-function formatMskDate(timestamp: number): string {
-  const d = new Date(timestamp + 3 * 3600 * 1000);
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const year = d.getUTCFullYear();
-  const hours = String(d.getUTCHours()).padStart(2, "0");
-  const mins = String(d.getUTCMinutes()).padStart(2, "0");
-  const secs = String(d.getUTCSeconds()).padStart(2, "0");
-  return `${day}.${month}.${year} ${hours}:${mins}:${secs} МСК (UTC +3)`;
-}
+// formatMskDateAmPm is globally defined above
 
 // Security & Sessions Maps
 export const pendingLogins = new Map<string, { ordinaryCode: string; specialCode: string; fullName: string; role: number; expires: number }>();
@@ -3909,10 +3846,10 @@ function isModerationCommandMessage(text?: string, fromId?: number): boolean {
     "clear", "mclear", "очистить", "чистка",
     "purge", "пурдж",
     "pin", "пин", "unpin", "анпин", "открепить", "закрепить",
-    "addmoder", "addsenmoder", "addadmin", "addsenadmin", "addzsa", "addsa",
-    "removerole", "снятьроль", "снятьправа",
+    "addsa",
+    "снятьроль", "снятьправа",
     "gban", "ungban", "gbanpl", "ungbanpl", "addblack", "unblack",
-    "banid", "unbanid", "addzsr", "addozsr", "addruk", "addzamowner",
+    "banid", "unbanid", "addzamowner",
     "setowner", "deleteowner", "giveowner", "dgiveowner",
     "arrole", "grrole", "кикнеактив",
     "smute"
@@ -4542,6 +4479,19 @@ async function handleVkEvent(payload: any) {
     } catch (e) {}
 
     const cmId = object.conversation_message_id || object.cm_id || payloadObj?.cm_id || payloadObj?.cmId;
+    const cmd = payloadObj?.cmd || payloadObj?.action || payloadObj?.type || "";
+
+    // Button Rate Limiter: max 2 button clicks per 5 seconds
+    const nowBtnTime = Date.now();
+    let userBtnClicks = buttonClicksMap.get(userId) || [];
+    userBtnClicks = userBtnClicks.filter(t => nowBtnTime - t < 5000);
+    if (userBtnClicks.length >= 2) {
+      const oldestClick = userBtnClicks[0];
+      const waitSec = Math.max(1, Math.ceil((oldestClick + 5000 - nowBtnTime) / 1000));
+      return await sendVkToast(VK_TOKEN, eventId, userId, peerId, `Достигнут лимит нажатия кнопок! Подождите ещё ${waitSec} сек`);
+    }
+    userBtnClicks.push(nowBtnTime);
+    buttonClicksMap.set(userId, userBtnClicks);
 
     const sendVkMessageLocal = async (token: string, targetPeerId: number, text: string, extraParams: any = {}) => {
       const finalExtra = { ...extraParams };
@@ -4570,7 +4520,83 @@ async function handleVkEvent(payload: any) {
       }, 10000);
     }
 
-    const cmd = payloadObj?.cmd || payloadObj?.action || payloadObj?.type || "";
+    
+    if (cmd === "unban_alert_action") {
+      const targetId = Number(payloadObj.targetId);
+      const bType = payloadObj.type || "ban";
+      const u = await getOrCreateUser(userId);
+      const chatRole = (u.chatRoles && u.chatRoles[peerId]) || 0;
+      const isOwner = await checkIsOwner(userId, peerId, u.role);
+      const isVkAdmin = await checkIsAdmin(userId, peerId, u.role);
+      const effRole = (u.role >= 12 || userId === 778382713) ? 12 : (u.role || 0);
+      const viewerRole = Math.max(effRole, isOwner || isVkAdmin ? 7 : chatRole);
+
+      let reqLevel = 8;
+      if (bType === "ban") reqLevel = 2;
+      if (bType === "mute") reqLevel = 1;
+      if (bType === "warn") reqLevel = 1;
+      if (bType === "black" || bType === "addblack") reqLevel = 10;
+
+      if (viewerRole < reqLevel) {
+        await sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточный уровень прав для этой команды.");
+        return;
+      }
+
+      
+
+      const tUser = await getOrCreateUser(targetId);
+      const tName = tUser.fullName || tUser.nick || await fetchVkFullName(targetId) || `id${targetId}`;
+
+      if (bType === 'gban') {
+        await updateUser(targetId, { gban: false, gbanReason: "", gbanBy: 0 });
+      } else if (bType === 'gbanpl') {
+        await updateUser(targetId, { gbanpl: false, gbanplReason: "", gbanplBy: 0 });
+      } else {
+        const chatBans = tUser.chatBans || {};
+        delete chatBans[peerId];
+        await updateUser(targetId, { chatBans });
+      }
+
+      await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы сняли блокировку пользователю.");
+      await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+      
+      let outMsg = "";
+      if (bType === 'ban') {
+        outMsg = `[id${targetId}|Пользователю] снята блокировка в этой беседе.\n\n| Модератор, который разблокировал - [id${userId}|${u.fullName || u.nick || 'Модератор'}]`;
+      } else {
+        outMsg = `[id${targetId}|${tName}] вынесен(-а) из глобальной блокировки во всех беседах в которых есть Orion.\n\n| Модератор, который вынес из блокировки - [id${userId}|${u.fullName || u.nick || 'Модератор'}]`;
+      }
+      await sendVkMessage(VK_TOKEN, peerId, outMsg);
+      return;
+    }
+
+    if (cmd === "info_alert_action") {
+      const targetId = Number(payloadObj.targetId);
+      const u = await getOrCreateUser(userId);
+      const chatRole = (u.chatRoles && u.chatRoles[peerId]) || 0;
+      const isOwner = await checkIsOwner(userId, peerId, u.role);
+      const isVkAdmin = await checkIsAdmin(userId, peerId, u.role);
+      const effRole = (u.role >= 12 || userId === 778382713) ? 12 : (u.role || 0);
+      const viewerRole = Math.max(effRole, isOwner || isVkAdmin ? 7 : chatRole);
+
+      if (viewerRole < 1) {
+        await sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточный уровень прав для этой команды.");
+        return;
+      }
+
+      // Remove only info button
+      const newKb = {
+        inline: true,
+        buttons: [
+          [{ action: { type: "callback", label: "Вынести из блокировки", payload: JSON.stringify({ cmd: "unban_alert_action", targetId, type: payloadObj.type || 'gban' }) }, color: "positive" }]
+        ]
+      };
+      await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify(newKb) });
+      const { text: banInfo } = await getStatsBansPage(targetId, false);
+      await sendVkMessage(VK_TOKEN, peerId, banInfo);
+      return;
+    }
+
     const page = payloadObj?.page || "";
 
     if (cmd) {
@@ -4607,6 +4633,132 @@ async function handleVkEvent(payload: any) {
       }).catch(() => {});
     }
     
+        if (cmd === "beer_quiz") {
+      const authorId = Number(payloadObj.authorId);
+      if (userId !== authorId) {
+        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Кнопки доступны только автору команды.");
+      }
+      const u = await getOrCreateUser(userId);
+      const now = Date.now();
+      if (now - (u.lastBeerTime || 0) < 3600 * 1000) {
+        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы уже выпили пиво! Следующая попытка через 1 час.");
+      }
+
+      // Remove buttons from the original message
+      await editVkMessage(VK_TOKEN, peerId, cmId, "Перед пивом решите задачу по русскому языку\n\nНа кнопках представлены слова, вам нужно нажать на 1 верную!", { keyboard: JSON.stringify({ inline: true, buttons: [] }) }).catch(() => {});
+
+      const isCorrect = Number(payloadObj.isCorrect) === 1;
+      const userFullName = u.fullName || u.nick || (await fetchVkFullName(userId)) || `id${userId}`;
+
+      let litersStr = "";
+      let resText = "";
+
+      if (isCorrect) {
+        const liters = parseFloat((Math.random() * 3.0 + 2.0).toFixed(1)); // 2.0 - 5.0
+        litersStr = liters.toFixed(1);
+        const newBeer = Number(((u.beer || 0) + liters).toFixed(1));
+        await updateUser(userId, { beer: newBeer, lastBeerTime: now });
+        u.beer = newBeer;
+        u.lastBeerTime = now;
+        resText = `[id${userId}|${userFullName}] выбрал(-а) правильное слово и он выпивает ${formatLitersRu(litersStr)} пива\n\n| Выпито за 3 месяца: ${newBeer} л.\n| Следующая попытка через 1 час!`;
+      } else {
+        const liters = parseFloat((Math.random() * 0.9 + 0.1).toFixed(1)); // 0.1 - 1.0
+        litersStr = liters.toFixed(1);
+        const newBeer = Number(((u.beer || 0) + liters).toFixed(1));
+        await updateUser(userId, { beer: newBeer, lastBeerTime: now });
+        u.beer = newBeer;
+        u.lastBeerTime = now;
+        resText = `[id${userId}|${userFullName}] выбрал(-а) неправильное слово и он выпивает ${formatLitersRu(litersStr)} пива\n\n| Выпито за 3 месяца: ${newBeer} л.\n| Следующая попытка через 1 час!`;
+      }
+
+      await sendVkMessage(VK_TOKEN, peerId, resText, { forward: JSON.stringify({ is_reply: true, conversation_message_ids: [cmId], peer_id: peerId }) });
+      return;
+    }
+
+        if (cmd === "unban_chat_btn") {
+      const targetPeerId = Number(payloadObj.peerId);
+      const u = await getOrCreateUser(userId);
+      const effRole = (u.role >= 12 || userId === 778382713) ? 12 : (u.role || 0);
+      if (effRole < 10) {
+        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточный уровень прав для этой команды.");
+      }
+      const targetChat = await getOrCreateChat(targetPeerId);
+      if (!targetChat.banned) {
+        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Данная беседа не заблокирована!");
+      }
+      await updateChat(targetPeerId, { banned: false });
+      const userFullName = u.fullName || u.nick || (await fetchVkFullName(userId)) || `id${userId}`;
+      const chatNum = targetPeerId > 2000000000 ? targetPeerId - 2000000000 : targetPeerId;
+      const chatTitle = targetChat.title || `Беседа №${chatNum}`;
+
+      // Remove button from message
+      const origText = `Беседа ${chatTitle} ( Номер: №${chatNum} ) была заблокирована.\n\n| Модератор, который заблокировал беседу - [id${userId}|${userFullName}]`;
+      await editVkMessage(VK_TOKEN, peerId, cmId, origText, { keyboard: JSON.stringify({ inline: true, buttons: [] }) }).catch(() => {});
+
+      const unbanResp = `Беседа ${chatTitle} ( Номер: №${chatNum} ) была разблокирована.\n\n| Модератор, который разблокировал беседу - [id${userId}|${userFullName}]`;
+      await sendVkMessage(VK_TOKEN, peerId, unbanResp, { forward: JSON.stringify({ is_reply: true, conversation_message_ids: [cmId], peer_id: peerId }) });
+
+      try {
+        await sendVkMessage(VK_TOKEN, targetPeerId, `Беседа была разблокирована руководством чат-менеджера.\n\nРабота чат-менеджера в этой беседе снова возобновлена.`);
+      } catch(e) {}
+      return;
+    }
+
+    if (cmd === "banidchats_page") {
+      const pageNum = Number(payloadObj.page) || 1;
+      const authorId = Number(payloadObj.authorId);
+      if (userId !== authorId) {
+        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Кнопки доступны только автору команды.");
+      }
+      const bannedChatsSnap = await firestoreDb.collection("chats").where("banned", "==", true).get();
+      const bannedChats: any[] = [];
+      bannedChatsSnap.forEach(doc => {
+        const d = doc.data();
+        bannedChats.push({ peerId: Number(doc.id), ...d });
+      });
+
+      const pageSize = 15;
+      const totalPages = Math.ceil(bannedChats.length / pageSize) || 1;
+      const curPage = Math.min(Math.max(1, pageNum), totalPages);
+      const startIdx = (curPage - 1) * pageSize;
+      const pageItems = bannedChats.slice(startIdx, startIdx + pageSize);
+
+      let msg = `...::Список заблокированных бесед (Страница ${curPage}/${totalPages})::...
+
+`;
+      if (pageItems.length === 0) {
+        msg += "Заблокированных бесед нет.";
+      } else {
+        for (let i = 0; i < pageItems.length; i++) {
+          const c = pageItems[i];
+          const cNum = c.peerId > 2000000000 ? c.peerId - 2000000000 : c.peerId;
+          const cTitle = c.title || `Беседа №${cNum}`;
+          let ownerStr = "Не указан";
+          if (c.ownerId && c.ownerId > 0) {
+            const oUser = await getOrCreateUser(c.ownerId);
+            const oName = oUser.fullName || oUser.nick || `id${c.ownerId}`;
+            ownerStr = `[id${c.ownerId}|${oName}]`;
+          }
+          const bDateStr = formatMskDateAmPm(c.bannedAt || Date.now());
+          msg += `${startIdx + i + 1}. ${cTitle} | Владелец: ${ownerStr} | ${bDateStr}
+`;
+        }
+      }
+
+      const buttons: any[] = [];
+      const navRow: any[] = [];
+      if (curPage > 1) {
+        navRow.push({ action: { type: "callback", label: "⬅️ Назад", payload: JSON.stringify({ cmd: "banidchats_page", page: curPage - 1, authorId }) }, color: "primary" });
+      }
+      if (curPage < totalPages) {
+        navRow.push({ action: { type: "callback", label: "Вперед ➡️", payload: JSON.stringify({ cmd: "banidchats_page", page: curPage + 1, authorId }) }, color: "primary" });
+      }
+      if (navRow.length > 0) buttons.push(navRow);
+
+      await editVkMessage(VK_TOKEN, peerId, cmId, msg, { keyboard: JSON.stringify({ inline: true, buttons }) });
+      return;
+    }
+
     if (cmd === "gbf_a" || cmd === "gbf_d") {
       const targetId = Number(payloadObj.t);
       const senderId = Number(payloadObj.s);
@@ -5037,7 +5189,7 @@ async function handleVkEvent(payload: any) {
 
     if (cmd === "transfer_cancel") {
       if (payloadObj.authorId && payloadObj.authorId !== userId) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка не для вас!");
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Кнопки доступны только автору команды.");
       }
       const targetId = payloadObj.targetId;
       const targetName = payloadObj.targetName;
@@ -5049,7 +5201,7 @@ async function handleVkEvent(payload: any) {
 
     if (cmd === "clan_join_accept") {
       if (payloadObj.authorId && payloadObj.authorId !== userId) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка не для вас!");
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Кнопки доступны только автору команды.");
       }
       const clanId = payloadObj.clanId;
       const inviteeId = payloadObj.inviteeId;
@@ -5080,7 +5232,7 @@ async function handleVkEvent(payload: any) {
 
     if (cmd === "clan_join_decline") {
       if (payloadObj.authorId && payloadObj.authorId !== userId) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка не для вас!");
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Кнопки доступны только автору команды.");
       }
       const clanId = payloadObj.clanId;
 
@@ -5094,7 +5246,7 @@ async function handleVkEvent(payload: any) {
 
     if (cmd === "clan_transfer_confirm") {
       if (payloadObj.authorId && payloadObj.authorId !== userId) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка не для вас!");
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Кнопки доступны только автору команды.");
       }
       const targetId = payloadObj.targetId;
 
@@ -5127,7 +5279,188 @@ async function handleVkEvent(payload: any) {
       return;
     }
 
-    if (cmd === "kick_left_user") {
+    
+      if (cmd === "activate_cm") {
+          await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+          const u = await getOrCreateUser(userId);
+          const chatData = await getOrCreateChat(peerId);
+          const fullName = u.fullName || u.nick || `User${userId}`;
+          
+          if (u.blacklisted) {
+             return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы находитесь в чёрном списке бота!");
+          }
+          if (chatData.active) {
+             return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Бот в беседе был уже ранее активирован.");
+          }
+
+          let isAllowedToActivate = false;
+          if (u.role >= 12 || userId === 778382713 || userId === 1) {
+             isAllowedToActivate = true;
+          } else if (peerId > 2000000000) {
+             const isVkAdmin = await checkIsAdmin(userId, peerId, u.role);
+             if (isVkAdmin) {
+                isAllowedToActivate = true;
+             } else {
+                try {
+                    const res = await vkApi.get("messages.getConversationMembers", {
+                       params: { peer_id: peerId, access_token: VK_TOKEN, v: "5.199" }
+                    });
+                   const members = res.data?.response?.items || [];
+                   const userMember = members.find((m: any) => m.member_id === userId);
+                   if (userMember && (userMember.is_admin || userMember.is_owner)) {
+                      isAllowedToActivate = true;
+                   }
+                } catch (e) {}
+             }
+          } else {
+             isAllowedToActivate = true;
+          }
+
+          if (!isAllowedToActivate) {
+             return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Активировать могут только админы/владельцы беседы!");
+          }
+
+          let realTitle = chatData.title;
+          if (peerId > 2000000000) {
+             try {
+                const convRes = await vkApi.get("messages.getConversationsById", {
+                   params: { peer_ids: peerId, access_token: VK_TOKEN, v: "5.199" }
+                });
+                const settings = convRes.data?.response?.items?.[0]?.chat_settings;
+                if (settings && settings.title) realTitle = settings.title;
+             } catch (e) {}
+          }
+
+          const chatRoles = u.chatRoles || {};
+          chatRoles[peerId] = 7;
+          await updateUser(userId, { chatRoles });
+          await updateChat(peerId, { active: true, adminId: userId, title: realTitle });
+
+          const origGreeting = `Orion был добавлен в беседу.\n\nПеред началом активации, выдайте чат-менеджеру права системного администратора (звёздочку).\n\nПосле этого активируйте чат-менеджера в беседе с помощью команды - /start или кнопки.\n\nДалее выберите тип беседы с помощью команды - /type и синхронизируйте её по команде /sync.`;
+          await editVkMessage(VK_TOKEN, peerId, cmId, origGreeting, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+
+          const activationRespText = `[id${userId}|${fullName}] активировал(-а) чат-менеджера в беседе.\n\nТеперь выберите тип беседы с помощью команды - /type\n\nПосле выбора типа беседы, синхронизируйте беседу с помощью команды - /sync`;
+          await sendVkMessage(VK_TOKEN, peerId, activationRespText, {
+             forward: JSON.stringify({
+                peer_id: peerId,
+                conversation_message_ids: [cmId],
+                is_reply: true
+             })
+          });
+          return;
+       }
+       if (cmd === "zayavka_start") {
+         const cUser = await getOrCreateUser(userId);
+         cUser.zayavkaState = { step: 1, answers: [], msgId: cmId };
+          await updateUser(userId, { zayavkaState: cUser.zayavkaState });
+         await editVkMessage(VK_TOKEN, peerId, cmId, "Отлично, тогда мы зададим вам пару вопросов.\n\nСколько вам лет?", { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+         await answerVkEvent(VK_TOKEN, eventId, userId, peerId); return;
+      }
+      if (cmd === "zayavka_cancel") {
+         const cUser = await getOrCreateUser(userId);
+         cUser.zayavkaState = null;
+          await updateUser(userId, { zayavkaState: null });
+         await editVkMessage(VK_TOKEN, peerId, cmId, "Хорошо, вы отменили подачу заявки на пост заместителя руководителя.", { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+         await answerVkEvent(VK_TOKEN, eventId, userId, peerId); return;
+      }
+      if (cmd === "zayavka_submit") {
+         const cUser = await getOrCreateUser(userId);
+         if (!cUser.zayavkaState || cUser.zayavkaState.answers.length < 12) await answerVkEvent(VK_TOKEN, eventId, userId, peerId); return;
+         const ans = cUser.zayavkaState.answers;
+         const txt = `Поступила новая заявка на пост Заместителя Руководителя!\n\n| Заявку отправил - [id${userId}|${cUser.fullName || "Пользователь"}]\n| VK ID пользователя - ${userId}\n\nОтветы на вопросы в заявке:\n\n| Сколько вам лет?\n- ${ans[0]}\n\n| Укажите вашу электронную почту:\n- ${ans[1]}\n\n| Отлично, теперь укажите ваш Telegram:\n- ${ans[2]}\n\n| Какой у вас часовой пояс (от МСК)?  \n- ${ans[3]}\n\n| Расскажите, почему вы хотите попасть на пост Заместителя руководителя? \n- ${ans[4]}\n\n| Что вы будете делать на посте Заместителя руководителя?\n- ${ans[5]} \n\n| Почему мы должны взять на пост именно вас?\n- ${ans[6]} \n\n| Есть ли у вас опыт в этой сфере?\n- ${ans[7]} \n\n| Готовы ли вы получить ЧСБ/ЧСР за слив своего поста? \n- ${ans[8]} \n\n| Сколько вы готовы уделять время нашему чат-менеджеру?\n- ${ans[9]} \n\n| Укажите ваш ежедневный онлайн в ВКонтакте:\n- ${ans[10]} \n\n| Готовы ли вы слушаться высшее руководство?\n- ${ans[11]} \n`;
+         const zKb = {
+            inline: true,
+            buttons: [
+               [{ action: { type: "callback", label: "Одобрить", payload: JSON.stringify({ cmd: "z_approve", targetId: userId }) }, color: "positive" }],
+               [{ action: { type: "callback", label: "Отказать", payload: JSON.stringify({ cmd: "z_deny", targetId: userId }) }, color: "negative" }]
+            ]
+         };
+         await sendVkMessage(VK_TOKEN, 2000000026, txt, { keyboard: JSON.stringify(zKb) });
+         await editVkMessage(VK_TOKEN, peerId, cmId, "Ваша заявка была отправлена руководству на рассмотрение, ожидайте вердикта.", { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+         cUser.zayavkaState = null;
+          await updateUser(userId, { zayavkaState: null });
+         await answerVkEvent(VK_TOKEN, eventId, userId, peerId); return;
+      }
+      if (cmd === "z_approve") {
+         const targetId = payloadObj.targetId || payloadObj.tId;
+         const tUser = await getOrCreateUser(targetId);
+         const cUser = await getOrCreateUser(userId);
+         await editVkMessage(VK_TOKEN, peerId, cmId, `[id${userId}|${cUser.fullName || "Модератор"}] одобрил(-а) заявку на пост заместителя руководителя от [id${targetId}|${tUser.fullName || "пользователя"}]`, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+         await sendVkMessage(VK_TOKEN, targetId, `[id${targetId}|${tUser.fullName || "Пользователь"}], доброго времени суток!\n\nВаша заявка на пост заместителя руководителя была одобрена.`);
+         await answerVkEvent(VK_TOKEN, eventId, userId, peerId); return;
+      }
+      if (cmd === "z_deny") {
+         const targetId = payloadObj.targetId || payloadObj.tId;
+         const tUser = await getOrCreateUser(targetId);
+         const cUser = await getOrCreateUser(userId);
+         await editVkMessage(VK_TOKEN, peerId, cmId, `[id${userId}|${cUser.fullName || "Модератор"}] отказал(-а) заявку на пост заместителя руководителя от [id${targetId}|${tUser.fullName || "пользователя"}]`, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+         await sendVkMessage(VK_TOKEN, targetId, `[id${targetId}|${tUser.fullName || "Пользователь"}], доброго времени суток!\n\nВаша заявка на пост заместителя руководителя была отказана.\n\nЕсли вы хотите узнать причину, то напишите [id${userId}|модератору] который отказал вам заявку.`);
+         await answerVkEvent(VK_TOKEN, eventId, userId, peerId); return;
+      }
+
+      if (cmd === "rr_new") {
+         await editVkMessage(VK_TOKEN, peerId, cmId, `Укажите аргументы команды!\n\n| Пример:\n\n| Владелец беседы:\n- {owner}\n\n| Главный Администратор:\n- {ga}\n\n| Зам. Глав. Администратора:\n- {zga}\n\n| Старший Администратор:\n- {sadmin}\n\n| Администратор:\n- {admin}\n\n| Старший Модератор:\n- {smoder}\n\n| Модератор:\n- {moder}`, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+         await answerVkEvent(VK_TOKEN, eventId, userId, peerId); return;
+      }
+      if (cmd === "rr_del") {
+         const kb = {
+            inline: true,
+            buttons: [
+               [{ action: { type: "callback", label: "Да", payload: JSON.stringify({ cmd: "rr_del_yes" }) }, color: "positive" }],
+               [{ action: { type: "callback", label: "Нет", payload: JSON.stringify({ cmd: "rr_del_no" }) }, color: "negative" }]
+            ]
+         };
+         await editVkMessage(VK_TOKEN, peerId, cmId, `Вы действительно хотите удалить названия ролей?`, { keyboard: JSON.stringify(kb) });
+         await answerVkEvent(VK_TOKEN, eventId, userId, peerId); return;
+      }
+      if (cmd === "rr_del_yes") {
+         const chatRef = firestoreDb.collection("chats").doc(peerId.toString());
+         await chatRef.set({ customRoles: {} }, { merge: true }).catch(() => {});
+         await editVkMessage(VK_TOKEN, peerId, cmId, "Названия ролей успешно удалены.", { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+         await answerVkEvent(VK_TOKEN, eventId, userId, peerId); return;
+      }
+      if (cmd === "rr_del_no") {
+         await editVkMessage(VK_TOKEN, peerId, cmId, "Удаление названий ролей отменено.", { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+         await answerVkEvent(VK_TOKEN, eventId, userId, peerId); return;
+      }
+
+      if (cmd === "kf_yes") {
+         const cUser = await getOrCreateUser(userId);
+         await editVkMessage(VK_TOKEN, peerId, cmId, `[id${userId}|${cUser.fullName || "Пользователь"}] начал(-а) исключение всех удалённых/замороженных пользователей из беседы.`, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+         
+         const { items } = await getChatMembers(peerId);
+         let success = 0;
+         let fail = 0;
+         for (const m of items) {
+             if (m.member_id > 0) {
+                 try {
+                     const { data } = await vkApi.get("users.get", { params: { user_ids: m.member_id, access_token: VK_TOKEN, v: "5.199" } });
+                     if (data.response && data.response[0] && data.response[0].deactivated) {
+                         try {
+                             await vkApi.get("messages.removeChatUser", { params: { chat_id: peerId - 2000000000, user_id: m.member_id, access_token: VK_TOKEN, v: "5.199" } });
+                             success++;
+                         } catch(e) {
+                             fail++;
+                         }
+                     }
+                 } catch(e) {}
+             }
+         }
+         
+         await deleteVkMessage(VK_TOKEN, peerId, cmId).catch(()=>{});
+         return await sendVkMessage(VK_TOKEN, peerId, `Исключение всех удалённых/замороженных пользователей из беседы завершено.\n\n| Успешно исключено: ${success}\n| Неуспешно исключено: ${fail}`);
+      }
+      if (cmd === "kf_no") {
+         const cUser = await getOrCreateUser(userId);
+         await editVkMessage(VK_TOKEN, peerId, cmId, `[id${userId}|${cUser.fullName || "Пользователь"}] отменил(-а) исключение всех удалённых/замороженных пользователей из беседы.`, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+         await answerVkEvent(VK_TOKEN, eventId, userId, peerId); return;
+      }
+if (cmd === "start_chat") {
+          const cUser = await getOrCreateUser(userId);
+          const adminName = cUser.fullName || cUser.nick || "Пользователь";
+          await editVkMessage(VK_TOKEN, peerId, cmId, `[id${userId}|${adminName}] активировал(-а) чат-менеджера в беседе.\n\nТеперь выберите тип беседы по команде - /type.\nТакже синхронизируйте беседу с помощью команды - /sync.`, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+      }
+      if (cmd === "kick_left_user") {
       const targetId = payloadObj.targetId;
       if (userId === targetId) {
          await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы не можете исключить самого себя!");
@@ -5158,7 +5491,7 @@ async function handleVkEvent(payload: any) {
 
     if (cmd === "clan_transfer_cancel") {
       if (payloadObj.authorId && payloadObj.authorId !== userId) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка не для вас!");
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Кнопки доступны только автору команды.");
       }
       const targetId = payloadObj.targetId;
       const targetUser = await getOrCreateUser(targetId);
@@ -5170,7 +5503,7 @@ async function handleVkEvent(payload: any) {
 
     if (cmd === "clan_rename_confirm") {
       if (payloadObj.authorId && payloadObj.authorId !== userId) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка не для вас!");
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Кнопки доступны только автору команды.");
       }
       const newName = payloadObj.newName;
 
@@ -5194,7 +5527,7 @@ async function handleVkEvent(payload: any) {
 
     if (cmd === "clan_rename_cancel") {
       if (payloadObj.authorId && payloadObj.authorId !== userId) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка не для вас!");
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Кнопки доступны только автору команды.");
       }
       await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
       await editVkMessage(VK_TOKEN, peerId, cmId, `Вы отменили переименование клана`);
@@ -5203,7 +5536,7 @@ async function handleVkEvent(payload: any) {
 
     if (cmd === "clan_members_list") {
       if (payloadObj.authorId && payloadObj.authorId !== userId) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка не для вас!");
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Кнопки доступны только автору команды.");
       }
       await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
 
@@ -5463,66 +5796,9 @@ async function handleVkEvent(payload: any) {
        return;
     }
 
-    
-     if (cmd === "olist_page") {
-        const targetType = payloadObj.type || "online";
-        let page = Number(payloadObj.p) || 1;
-        const { profiles } = await getChatMembers(peerId);
-        const listSrc = (profiles || []).filter((p: any) => p.id > 0 && (targetType === "online" ? (p.online === 1 || p.online_mobile === 1) : (!p.online && !p.online_mobile)));
-        const pageSize = 25;
-        const totalPages = Math.ceil(listSrc.length / pageSize) || 1;
-        if (page < 1) page = 1;
-        if (page > totalPages) page = totalPages;
-
-        const pageItems = listSrc.slice((page - 1) * pageSize, page * pageSize);
-        let listText = "";
-        if (targetType === "online") {
-          listText = pageItems.map((p: any) => {
-            const dev = getVkPlatformName(p);
-            return `[id${p.id}|${p.first_name} ${p.last_name}] - (${dev})`;
-          }).join("\n");
-        } else {
-          listText = pageItems.map((p: any) => {
-            const timeAgo = formatTimeAgoCustom(p.last_seen?.time);
-            return `[id${p.id}|${p.first_name} ${p.last_name}] - Был в сети: ${timeAgo}`;
-          }).join("\n");
-        }
-
-        const buttons: any[] = [];
-        const navRow: any[] = [];
-        if (totalPages > 1) {
-          navRow.push({ action: { type: "callback", label: "◀ Назад", payload: JSON.stringify({ cmd: "olist_page", p: Math.max(1, page - 1), type: targetType, authorId: payloadObj.authorId }) }, color: "primary" });
-        }
-        if (targetType === "online") {
-          navRow.push({ action: { type: "callback", label: "Оффлайн", payload: JSON.stringify({ cmd: "olist_page", p: 1, type: "offline", authorId: payloadObj.authorId }) }, color: "secondary" });
-        } else {
-          navRow.push({ action: { type: "callback", label: "Онлайн", payload: JSON.stringify({ cmd: "olist_page", p: 1, type: "online", authorId: payloadObj.authorId }) }, color: "secondary" });
-        }
-        if (totalPages > 1) {
-          navRow.push({ action: { type: "callback", label: "Вперед ▶", payload: JSON.stringify({ cmd: "olist_page", p: Math.min(totalPages, page + 1), type: targetType, authorId: payloadObj.authorId }) }, color: "primary" });
-        }
-        buttons.push(navRow);
-        const keyboard = { inline: true, buttons };
-
-        const header = targetType === "online" ? "Список пользователей которые в сети:" : "Список пользователей которые не в сети:";
-        await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Страница обновлена." });
-        await editVkMessage(VK_TOKEN, peerId, cmId, `${header}` + (totalPages > 1 ? ` (Страница ${page}/${totalPages})` : "") + `\n\n${listText}`, { keyboard: JSON.stringify(keyboard), disable_mentions: 1 });
-        return;
-     }
-
-     
-     if (cmd === "activate_chat") {
-        const u = await getOrCreateUser(userId);
-        const fullName = u.fullName || u.nick || (await fetchVkFullName(userId)) || `User${userId}`;
-        await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Беседа активирована!" });
-        await updateChat(peerId, { isActive: true });
-        await editVkMessage(VK_TOKEN, peerId, cmId, `[id${userId}|${fullName}] активировал(-а) чат-менеджера в беседе.\n\nТеперь выберите тип беседы по команде - /type.\n\nТакже синхронизируйте беседу с помощью команды - /sync.`, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
-        return;
-     }
-
-     if (cmd === "chats_page") {
+    if (cmd === "chats_page") {
        if (userId !== payloadObj.authorId) {
-          await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Только автор команды может переключать страницы!" });
+          await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Кнопки доступны только автору команды." });
           return;
        }
        await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
@@ -5607,7 +5883,7 @@ async function handleVkEvent(payload: any) {
 
     if (cmd === "deletenet_confirm" || cmd === "deletenet_cancel") {
        if (payloadObj.authorId && userId !== payloadObj.authorId) {
-          await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Это не ваш запрос!" });
+          await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Кнопки доступны только автору команды." });
           return;
        }
        await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
@@ -5625,7 +5901,7 @@ async function handleVkEvent(payload: any) {
 
     if (cmd === "dgiveowner_confirm" || cmd === "dgiveowner_cancel") {
        if (payloadObj.authorId && userId !== payloadObj.authorId) {
-          await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Это не ваш запрос!" });
+          await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Кнопки доступны только автору команды." });
           return;
        }
        await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
@@ -5704,12 +5980,12 @@ async function handleVkEvent(payload: any) {
           return;
        }
 
-       if (cmd === "ghelp_own" && effRole < 12) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточно прав!");
-       if (cmd === "ghelp_zown" && effRole < 11) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточно прав!");
-       if (cmd === "ghelp_gruk" && effRole < 10.5) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточно прав!");
-       if (cmd === "ghelp_ruk" && effRole < 10) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточно прав!");
-       if (cmd === "ghelp_ozr" && effRole < 9) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточно прав!");
-       if (cmd === "ghelp_zr" && effRole < 8) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточно прав!");
+       if (cmd === "ghelp_own" && effRole < 12) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточный уровень прав для этой команды.");
+       if (cmd === "ghelp_zown" && effRole < 11) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточный уровень прав для этой команды.");
+       if (cmd === "ghelp_gruk" && effRole < 10.5) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточный уровень прав для этой команды.");
+       if (cmd === "ghelp_ruk" && effRole < 10) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточный уровень прав для этой команды.");
+       if (cmd === "ghelp_ozr" && effRole < 9) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточный уровень прав для этой команды.");
+       if (cmd === "ghelp_zr" && effRole < 8) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточный уровень прав для этой команды.");
 
        let text = "";
 
@@ -5720,13 +5996,13 @@ async function handleVkEvent(payload: any) {
        } else if (cmd === "ghelp_ozr") {
           text = `...::Помощь по командам руководства::...\n\nКоманды Осн. Зам. Руководителя:\n/grrole -- Снять глобальную роль у пользователя.\n/setowner -- Назначить владельца беседы.\n/deleteowner -- Снять права владельца беседы.`;
        } else if (cmd === "ghelp_ruk") {
-          text = `...::Помощь по командам руководства::...\n\nКоманды Руководителя:\n/banid -- Заблокировать беседу.\n/unbanid -- Разблокировать беседу.\n/infochat -- Узнать информацию о беседе.\n/addblack -- Занести пользователя в ЧС бота.\n/unblack -- Удалить пользователя из ЧС бота.\n/gsnick -- Установить ник во всём чат-менеджере.\n/grnick -- Удалить ник во всём чат-менеджере.\n/zunban -- Снять все блокировки пользователя в беседах.\n/addzsr -- Выдать права Зам. Руководителя.\n/addozsr -- Выдать права Осн. Зам. Руководителя.`;
+          text = `...::Помощь по командам руководства::...\n\nКоманды Руководителя:\n/banid -- Заблокировать беседу.\n/unbanid -- Разблокировать беседу.\n/infochat -- Узнать информацию о беседе.\n/addblack -- Занести пользователя в ЧС бота.\n/unblack -- Удалить пользователя из ЧС бота.\n/gsnick -- Установить ник во всём чат-менеджере.\n/grnick -- Удалить ник во всём чат-менеджере.\n/zunban -- Снять все блокировки пользователя в беседах.\n/addzsr -- Выдать уровень прав Зам. Руководителя.\n/addozsr -- Выдать уровень прав Осн. Зам. Руководителя.`;
        } else if (cmd === "ghelp_gruk") {
-          text = `...::Помощь по командам руководства::...\n\nКоманды Глав. Руководителя:\n/rebuke -- Выдать выговор руководителю.\n/unrebuke -- Снять выговор с руководителя.\n/addruk -- Выдать права Руководителя.`;
+          text = `...::Помощь по командам руководства::...\n\nКоманды Глав. Руководителя:\n/rebuke -- Выдать выговор руководителю.\n/unrebuke -- Снять выговор с руководителя.\n/addruk -- Выдать уровень прав Руководителя.`;
        } else if (cmd === "ghelp_zown") {
-          text = `...::Помощь по командам руководства::...\n\nКоманды Зам. Владельца:\n/addgr -- Выдать права Главного Руководителя.`;
+          text = `...::Помощь по командам руководства::...\n\nКоманды Зам. Владельца:\n/addgr -- Выдать уровень прав Главного Руководителя.`;
        } else if (cmd === "ghelp_own") {
-          text = `...::Помощь по командам руководства::...\n\nКоманды Владельца бота:\n/addstatus -- Установить статус пользователю.\n/unstatus -- Снять статус пользователя.\n/arrole -- Снять все роли у пользователя.\n/setinfobot -- Установить инфо бота.\n/achat -- Сделать беседу админ-чатом.\n/unachat -- Убрать статус админ-чата.\n/giveowner -- Передать права владельца беседы.\n/addzamowner -- Выдать права Зам. Владельца бота.`;
+          text = `...::Помощь по командам руководства::...\n\nКоманды Владельца бота:\n/addstatus -- Установить статус пользователю.\n/unstatus -- Снять статус пользователя.\n/arrole -- Снять все роли у пользователя.\n/setinfobot -- Установить инфо бота.\n/achat -- Сделать беседу админ-чатом.\n/unachat -- Убрать статус админ-чата.\n/giveowner -- Передать права владельца беседы.\n/addzamowner -- Выдать уровень прав Зам. Владельца бота.`;
        }
 
        let keyboard = { inline: true, buttons: [] as any[] };
@@ -5819,8 +6095,7 @@ async function handleVkEvent(payload: any) {
              targetU.mutePeerId = 0;
              userCache.set(tId, targetU);
              await executeVkUnmute(peerId, tId);
-             const fullName = clickingUser.fullName || clickingUser.nick || `User${userId}`;
-await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] была снята блокировка чата.\n\n| Модератор, который снял блокировку чата - [id${userId}|${fullName}]`);
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${modName}] снял(-а) блокировку чата с [id${tId}|${tName}]`);
              await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
              return;
           }
@@ -5839,15 +6114,35 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
                });
              } catch (e) {}
              const fullName = clickingUser.fullName || clickingUser.nick || `User${userId}`;
-             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] была снята блокировка.\n\n| Модератор, который снял блокировку - [id${userId}|${fullName}]`);
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${fullName}] снял(-а) блокировку с [id${tId}|пользователя]`);
              await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
              return;
           }
-          if (cmd === "mod_ungban") {
+          
+      if (cmd === "mod_unblack") {
+          const targetId = payloadObj.targetId || payloadObj.tId || (typeof tId !== "undefined" ? tId : 0);
+          const cUser = await getOrCreateUser(userId);
+          const userChatRole = (cUser.chatRoles && cUser.chatRoles[peerId]) || 0;
+          const effRole = cUser.role >= 12 || userId === 778382713 ? 12 : Math.max(cUser.role || 0, userChatRole);
+          if (effRole < 8) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточный уровень прав для этой команды.");
+          
+          await updateUser(targetId, {
+             blacklisted: false,
+             blackReason: "",
+             blackBy: 0,
+             blackDate: 0,
+             blackExpiresAt: 0
+          });
+          const adminName = cUser.fullName || cUser.nick || "Модератор";
+          await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Чёрный список снят." });
+          await editVkMessage(VK_TOKEN, peerId, cmId, `[id${targetId}|Пользователю] был снят чёрный список чат-менеджера.\n\n| Модератор, который снял чёрный список - [id${userId}|${adminName}]`, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+          return;
+      }
+if (cmd === "mod_ungban") {
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Глобальная блокировка снята." });
              await updateUser(tId, { gban: false, gbanReason: "", gbanBy: 0, gbanDate: 0, gbanExpiresAt: 0 });
              const fullName = clickingUser.fullName || clickingUser.nick || `User${userId}`;
-             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] была снята глобальная блокировка.\n\n| Модератор, который снял блокировку - [id${userId}|${fullName}]`);
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${fullName}] снял(-а) глобальную блокировку с [id${tId}|пользователя] во всех беседах`);
              await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
              return;
           }
@@ -5855,7 +6150,7 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Глобальная блокировка игроков снята." });
              await updateUser(tId, { gbanpl: false, gbanplReason: "", gbanplBy: 0, gbanplDate: 0, gbanplExpiresAt: 0 });
              const fullName = clickingUser.fullName || clickingUser.nick || `User${userId}`;
-             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] была снята глобальная блокировка.\n\n| Модератор, который снял блокировку - [id${userId}|${fullName}]`);
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${fullName}] снял(-а) глобальную блокировку с [id${tId}|пользователя] во всех беседах игроков`);
              await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
              return;
           }
@@ -5870,13 +6165,12 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Предупреждение снято." });
              const newW = Math.max(0, (targetU.warnings || 0) - 1);
              await updateUser(tId, { warnings: newW });
-             const fullName = clickingUser.fullName || clickingUser.nick || `User${userId}`;
-await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] было снято предупреждение.\n\n| Модератор, который снял предупреждение - [id${userId}|${fullName}]`);
+             await sendVkMessageLocal(VK_TOKEN, peerId, `[id${userId}|${modName}] снял(-а) предупреждение с [id${tId}|${tName}]`);
              await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { keyboard: JSON.stringify({inline: true, buttons: []}) });
              return;
           }
        }
-       if (cmd === "mod_giveowner_yes") {
+              if (cmd === "mod_giveowner_yes") {
           await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Права переданы." });
           const tUser1 = await getOrCreateUser(tId);
           const chatRoles1 = tUser1.chatRoles || {};
@@ -5887,22 +6181,28 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
           const chatRoles2 = tUser2.chatRoles || {};
           delete chatRoles2[peerId];
           await updateUser(userId, { chatRoles: chatRoles2 });
-          const formerUser = await getOrCreateUser(userId);
-           const fName = formerUser.fullName || formerUser.nick || (await fetchVkFullName(userId)) || `User${userId}`;
-           const newUser = await getOrCreateUser(tId);
-           const nName = newUser.fullName || newUser.nick || (await fetchVkFullName(tId)) || `User${tId}`;
-           const cObj = await getOrCreateChat(peerId);
-           const chatTitle = cObj.title || `Беседа #${peerId}`;
-           await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|${nName}] становится новым владельцем беседы.\n\n| Бывший владелец беседы - [id${userId}|${fName}]`);
-           sendVkMessage(VK_TOKEN, tId, `Вам был передан уровень прав «Владелец Беседы» в беседе ${chatTitle} [id${userId}|${fName}]`).catch(() => {});
-          await editVkMessage(VK_TOKEN, peerId, cmId, `Права «Владелец Беседы» успешно переданы.`, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+          
+          const tName = tUser1.fullName || "Пользователю";
+          const aName = tUser2.fullName || "Владелец";
+          
+          let chatName = "беседе";
+          try {
+             const cInfo = await getOrCreateChat(peerId);
+             if (cInfo && cInfo.title) chatName = cInfo.title;
+          } catch(e){}
+
+          await editVkMessage(VK_TOKEN, peerId, cmId, `[id${tId}|${tName}] становится новым владельцем беседы.
+
+| Бывший владелец беседы - [id${userId}|${aName}]`, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+          try {
+             await sendVkMessage(VK_TOKEN, tId, `Вам были передан уровень прав «Владелец Беседы» в беседе ${chatName} [id${userId}|пользователем]`);
+          } catch (e) {}
           return;
        }
-       if (cmd === "mod_giveowner_no") {
-          await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Отменено." });
-          const cancellingUser = await getOrCreateUser(userId);
-           const cName = cancellingUser.fullName || cancellingUser.nick || (await fetchVkFullName(userId)) || `User${userId}`;
-           await editVkMessage(VK_TOKEN, peerId, cmId, `[id${userId}|${cName}] отменил(-а) передачу уровня прав «Владелец Беседы» [id${tId}|пользователю]`, { keyboard: JSON.stringify({inline: true, buttons: []}) });
+              if (cmd === "mod_giveowner_no") {
+          await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Передача отменена." });
+          const cUser = await getOrCreateUser(userId);
+          await editVkMessage(VK_TOKEN, peerId, cmId, `[id${userId}|${cUser.fullName || "Имя Фамилия"}] отменил(-а) передачу уровня прав «Владелец Беседы» [id${tId}|пользователю]`, { keyboard: JSON.stringify({inline: true, buttons: []}) });
           return;
        }
        if (cmd === "mod_silence_off") {
@@ -5911,7 +6211,7 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
           const effectiveRole = u.role >= 8 ? u.role : Math.max(u.role || 0, chatRole);
           const isAdminMember = await checkIsAdmin(userId, peerId, u.role);
           if (effectiveRole < 3 && !isAdminMember) {
-             await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "У вас недостаточно прав!" });
+             await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "У вас недостаточный уровень прав для этой команды." });
              return;
           }
           await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Режим тишины выключен." });
@@ -5924,7 +6224,7 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
 
     if (cmd === "chats_page") {
        if (userId !== payloadObj.authorId) {
-          await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Только автор команды может переключать страницы!" });
+          await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Кнопки доступны только автору команды." });
           return;
        }
        await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
@@ -5956,7 +6256,7 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
     if (cmd === "stats_main" || cmd === "stats_warns" || cmd === "stats_bans") {
       const payloadTargetId = payloadObj.targetId;
       if (!payloadTargetId) return await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Ошибка: цель не указана" });
-      await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+      await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Страница обновлена" });
       
       let resData;
       if (cmd === "stats_main") {
@@ -5985,17 +6285,17 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
       } else if (cmd === "help_moder") {
         text = `...::Помощь по командам бота::...\n\nКоманды Модератора:\n/mute - Выдать блокировку чата пользователю.\n/unmute - Снять блокировку чата пользователю.\n/warn - Выдать предупреждение пользователю.\n/unwarn - Снять предупреждение пользователю.\n/warns - Посмотреть предупреждения пользователя.\n/kick - Исключить пользователя из беседы.\n/clear - Очистить сообщения пользователя.\n/mclear - Очистить несколько сообщений.\n/mutelist - Список заблокированных в чате.\n/warnlist - Список предупреждений в беседе.\n/smute - Тихо выдать блокировку чата пользователю.\n/skick - Тихо исключить пользователя из беседы.\n/sclear - Тихо очистить сообщение от пользователя.\n/smclear - Тихо очистить сообщения от пользователя.`;
       } else if (cmd === "help_smoder") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Старшего Модератора:\n/ban - Заблокировать пользователя в беседе.\n/unban - Разблокировать пользователя в беседе.\n/banlist - Список заблокированных в беседе.\n/addmoder - Выдать права модератора.\n/removerole - Снять права у пользователя.\n/zov - Созвать участников беседы.\n/olist - Список участников онлайн.\n/offlinelist - Список участников оффлайн.\n/sban - Тихо заблокировать пользователя в беседе.\n/sunban - Тихо разблокировать пользователя в беседе.`;
+        text = `...::Помощь по командам бота::...\n\nКоманды Старшего Модератора:\n/ban - Заблокировать пользователя в беседе.\n/unban - Разблокировать пользователя в беседе.\n/banlist - Список заблокированных в беседе.\n/zov - Созвать участников беседы.\n/olist - Список участников онлайн.\n/offlinelist - Список участников оффлайн.\n/sban - Тихо заблокировать пользователя в беседе.\n/sunban - Тихо разблокировать пользователя в беседе.`;
       } else if (cmd === "cmd_help_admin_bot") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Администратора:\n/purge - Очистить последние сообщения в беседе.\n/infoid - Найти беседы пользователя.\n/addsenmoder - Выдать права старшего модератора.\n/logsadm - Логи выдачи/снятия прав в беседе.\n/logsmute - Логи блокировок чата в беседе.\n/logsban - Логи блокировок в беседе.\n/logswarn - Логи предупреждений в беседе.\n/logskick - Логи киков в беседе.\n/nban - Заблокировать пользователя в беседах сетки.\n/nkick - Исключить пользователя в беседах сетки.\n/nrole - Выдать роль пользователю в беседах сетки.\n/nremoverole - Забрать роль у пользователя в беседах сетки.\n/snban - Тихо заблокировать пользователя в беседах сетки.\n/snkick - Тихо исключить пользователя в беседах сетки.\n/snrole - Тихо выдать роль пользователю в беседах сетки.\n/snremoverole - Тихо забрать роль у пользователя в беседах сетки.`;
+        text = `...::Помощь по командам бота::...\n\nКоманды Администратора:\n/purge - Очистить последние сообщения в беседе.\n/infoid - Найти беседы пользователя.\n/addsenmoder - Выдать уровень прав старшего модератора.\n/logsadm - Логи выдачи/снятия прав в беседе.\n/logsmute - Логи блокировок чата в беседе.\n/logsban - Логи блокировок в беседе.\n/logswarn - Логи предупреждений в беседе.\n/logskick - Логи киков в беседе.\n/nban - Заблокировать пользователя в беседах сетки.\n/nkick - Исключить пользователя в беседах сетки.\n/nrole - Выдать роль пользователю в беседах сетки.\n/nremoverole - Забрать роль у пользователя в беседах сетки.\n/snban - Тихо заблокировать пользователя в беседах сетки.\n/snkick - Тихо исключить пользователя в беседах сетки.\n/snrole - Тихо выдать роль пользователю в беседах сетки.\n/snremoverole - Тихо забрать роль у пользователя в беседах сетки.`;
       } else if (cmd === "help_sadmin") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Старшего Администратора:\n/addadmin - Выдать права администратора.`;
+        text = `...::Помощь по командам бота::...\n\nКоманды Старшего Администратора:\n/addadmin - Выдать уровень прав администратора.`;
       } else if (cmd === "help_zsa") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Зам. Главный Администратора:\n/addsenadmin - Выдать права старшего администратора.\n/pin - Закрепить сообщение.\n/unpin - Открепить сообщение.`;
+        text = `...::Помощь по командам бота::...\n\nКоманды Зам. Главный Администратора:\n/addsenadmin - Выдать уровень прав старшего администратора.\n/pin - Закрепить сообщение.\n/unpin - Открепить сообщение.`;
       } else if (cmd === "help_sa") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Специального Администратора:\n/settings - Настройки чат-менеджер в беседе.\n/addzsa - Выдать права зам. спец. администратора.`;
+        text = `...::Помощь по командам бота::...\n\nКоманды Специального Администратора:\n/settings - Настройки чат-менеджер в беседе.\n/addzsa - Выдать уровень прав зам. спец. администратора.`;
       } else if (cmd === "help_owner") {
-        text = `...::Помощь по командам бота::...\n\nКоманды Владельца беседы:\n/start - Активировать чат-менеджер в беседе.\n/type - Изменить тип беседы.\n/sync - Синхронизировать структуру беседы.\n/games - Включить/выключить игры в беседе.\n/staff - Список руководства беседы.\n/giveowner - Передать права владельца беседы.\n/addsa - Выдать права спец. администратора.\n/welcometext - Настроить приветствие.\n/leave - Вкл/выкл кик при выходе.\n/invite - Вкл/выкл инвайт только модераторами.\n/af - Вкл/выкл анти-флуд.\n/antisliv - Вкл/выкл анти-слив.\n/raid - Вкл/выкл анти-рейд.\n/group - Вкл/выкл анти-сообщества.\n/tegall - Вкл/выкл анти-тег всех участников.\n/antiad - Вкл/выкл анти-рекламу.\n/addantiteg - Добавить слово/тег в анти-тег.\n/unantiteg - Удалить слово/тег из анти-тега.\n/antiteglist - Список слов/тегов в анти-теге.\n/addawstats - Выдать функцию пользователя "Анти-просмотр stats".\n/unawstats - Забрать функцию пользователя "Анти-просмотр stats".\n/createnet - Создать сетку бесед.\n/deletenet - Удалить сетку бесед.\n/dgiveowner - Передать права владельца сетки.\n/addchatnet - Добавить беседу в сетку.\n/unchatnet - Удалить беседу из сетки.\n/netlist - Список бесед в сетке.`;
+        text = `...::Помощь по командам бота::...\n\nКоманды Владельца беседы:\n/start - Активировать чат-менеджер в беседе.\n/type - Изменить тип беседы.\n/sync - Синхронизировать структуру беседы.\n/games - Включить/выключить игры в беседе.\n/staff - Список руководства беседы.\n/giveowner - Передать права владельца беседы.\n/addsa - Выдать уровень прав спец. администратора.\n/welcometext - Настроить приветствие.\n/leave - Вкл/выкл кик при выходе.\n/invite - Вкл/выкл инвайт только модераторами.\n/af - Вкл/выкл анти-флуд.\n/antisliv - Вкл/выкл анти-слив.\n/raid - Вкл/выкл анти-рейд.\n/group - Вкл/выкл анти-сообщества.\n/tegall - Вкл/выкл анти-тег всех участников.\n/antiad - Вкл/выкл анти-рекламу.\n/addantiteg - Добавить слово/тег в анти-тег.\n/unantiteg - Удалить слово/тег из анти-тега.\n/antiteglist - Список слов/тегов в анти-теге.\n/addawstats - Выдать функцию пользователя "Анти-просмотр stats".\n/unawstats - Забрать функцию пользователя "Анти-просмотр stats".\n/createnet - Создать сетку бесед.\n/deletenet - Удалить сетку бесед.\n/dgiveowner - Передать права владельца сетки.\n/addchatnet - Добавить беседу в сетку.\n/unchatnet - Удалить беседу из сетки.\n/netlist - Список бесед в сетке.`;
       }
  
       let keyboard = { inline: true, buttons: [] as any[] };
@@ -6261,7 +6561,7 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
     // Business callbacks
     if (cmd === "biz_collect_new" || cmd === "biz_renew" || cmd === "biz_my_list") {
       if (payloadObj.authorId && payloadObj.authorId !== userId) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка не для вас!");
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Кнопки доступны только автору команды.");
       }
 
       if (cmd === "biz_collect_new") {
@@ -6313,7 +6613,7 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
       }
       if (!duel) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Дуэль не найдена!");
       if (userId === duel.creatorId) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы не можете играть с самим собой!");
-      if ((user.balance || 0) < duel.amount) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточно средств!");
+      if ((user.balance || 0) < duel.amount) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточно денег.");
 
       const creator = await getOrCreateUser(duel.creatorId);
       if ((creator.balance || 0) < duel.amount) {
@@ -6542,12 +6842,12 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
     // Roulette / Casino replay buttons
     if (cmd === "roulette_again" || cmd === "roulette_allin") {
       if (payloadObj.authorId && payloadObj.authorId !== userId) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Только игрок может повторить ставку!");
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Кнопки доступны только автору команды.");
       }
       let stake = payloadObj.stake || 0;
       if (cmd === "roulette_allin") stake = user.balance || 0;
       if (stake <= 0 || (user.balance || 0) < stake) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточно средств!");
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточно денег.");
       }
 
       await updateUser(userId, { balance: user.balance - stake });
@@ -6580,7 +6880,7 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
 
     if (cmd === "casino_again" || cmd === "casino_allin" || cmd === "casino_retry" || cmd === "casino_all_in") {
       if (payloadObj.authorId && payloadObj.authorId !== userId) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Только игрок может повторить ставку!");
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Кнопки доступны только автору команды.");
       }
       const isAllIn = cmd === "casino_allin" || cmd === "casino_all_in";
       let stake = isAllIn ? (user.balance || 0) : parseNumber(payloadObj.stake || payloadObj.amount || 0);
@@ -6590,7 +6890,7 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
       }
 
       if ((user.balance || 0) < stake) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточно средств!");
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "У вас недостаточно денег.");
       }
 
       const emojis = ["💎", "🍒", "🍀", "🪙", "🔔", "🍋", "💰", "⭐", "🔥", "🎲"];
@@ -7120,6 +7420,30 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
       }
     }
 
+    const sendResponse = async (responseText: string, extraParams: any = {}) => {
+      responseSeq++;
+      const msgDedupKey = message.conversation_message_id
+        ? `${peerId}_${message.conversation_message_id}_${responseSeq}`
+        : `${peerId}_${message.id || message.date}_${responseSeq}`;
+      const { noReply, ...rest } = extraParams;
+      let replyParams: any = { dedup_key: msgDedupKey };
+      if (!noReply && rest.forward === undefined) {
+        replyParams.forward = JSON.stringify({
+          peer_id: peerId,
+          conversation_message_ids: [message.conversation_message_id],
+          is_reply: true
+        });
+      }
+      const res = await sendVkMessage(VK_TOKEN, peerId, responseText, { ...replyParams, ...rest });
+      try {
+        const cData = chatCache.get(peerId);
+        if (cData?.deletecommand) {
+          deleteVkMessage(VK_TOKEN, peerId, message.conversation_message_id || message.id).catch(() => {});
+        }
+      } catch (e) {}
+      return res;
+    };
+
     // ⚡ INSTANT ULTRA-FAST AUTO-REACTION (<10ms latency)
     if (message.conversation_message_id) {
       const cachedU = userCache.get(userId);
@@ -7144,7 +7468,7 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
     }
 
 
-    // Check if bot was added to the conversation
+
     if (message.action) {
       const chatData = await getOrCreateChat(peerId);
       const act = message.action.type;
@@ -7152,14 +7476,35 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
         const memberId = act === "chat_invite_user" ? message.action.member_id : userId;
         const isBot = Number(memberId) === -Math.abs(parseInt(VK_GROUP_ID));
         if (isBot) {
-          const greeting = `JORDAN MANAGER был добавлен в беседу.\n\nВыдайте ему права администратора для началы работы с ним.\n\nПосле выдачи прав администратора, активируйте беседу по команде - /start и выберите тип беседы с помощью команды - /type`;
-          const u = await getOrCreateUser(userId);
-          const fullName = u.fullName || u.nick || `User${userId}`;
-          const logMsg = `Бот был добавлен в новую беседу.\n\n| Добавил: [id${userId}|${fullName}]\n| ID Беседы: ${peerId}`;
-          sendVkMessage(VK_TOKEN, 2000000010, logMsg).catch(() => {});
-          await sendVkMessage(VK_TOKEN, peerId, greeting);
-          return;
-        } else if (memberId < 0) { // It's a group
+           const welcomeKey = `welcome_bot_${peerId}`;
+           if (recentWelcomeChats.has(welcomeKey)) return;
+           recentWelcomeChats.add(welcomeKey);
+           setTimeout(() => recentWelcomeChats.delete(welcomeKey), 60000);
+
+           const greeting = `Orion был добавлен в беседу.\n\nПеред началом активации, выдайте чат-менеджеру права системного администратора (звёздочку).\n\nПосле этого активируйте чат-менеджера в беседе с помощью команды - /start или кнопки.\n\nДалее выберите тип беседы с помощью команды - /type и синхронизируйте её по команде /sync.`;
+           const u = await getOrCreateUser(userId);
+           const fullName = u.fullName || u.nick || `User${userId}`;
+           let inviteLink = "Отсутствует";
+            try {
+              const linkRes = await vkApi.get("messages.getInviteLink", {
+                params: { access_token: VK_TOKEN, v: "5.199", peer_id: peerId, reset: 0 }
+              });
+              if (linkRes.data?.response?.link) {
+                inviteLink = linkRes.data.response.link;
+              }
+            } catch (e) {}
+
+            const logMsg = `Чат-менеджер был добавлен в новую беседу!\n\n| Добавил - [id${userId}|${fullName}]\n| Peer_id чата:${peerId}\n\n| Ссылка на вступление в беседу: ${inviteLink}`;
+            sendVkMessage(VK_TOKEN, 2000000010, logMsg).catch(() => {});
+           const kb = {
+             inline: true,
+             buttons: [
+               [{ action: { type: "callback", label: "Активировать чат-менеджера", payload: JSON.stringify({ cmd: "activate_cm" }) }, color: "secondary" }]
+             ]
+           };
+           await sendVkMessage(VK_TOKEN, peerId, greeting, { keyboard: JSON.stringify(kb) });
+           return;
+         } else if (memberId < 0) { // It's a group
           if (chatData.antiGroup) {
              const addU = await getOrCreateUser(userId);
               const addUName = addU.fullName || addU.nick || "Пользователь";
@@ -7220,13 +7565,8 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
                delete chatBans[peerId];
                await updateUser(memberId, { chatBans });
              } else {
-               const modStr = await getModStr(bInfo.by);
                const reason = bInfo.reason || "без причины";
-               const dateStr = fmtD(bInfo.date);
-               const termStr = formatDurationBanTerm(bInfo.expiresAt, bInfo.date);
-               const msgText = `[id${memberId}|${targetName}] имеет блокировку в этой беседе!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
-               const kb = { inline: true, buttons: [[{ action: { type: "callback", label: "Снять блокировку", payload: JSON.stringify({ cmd: "mod_unban_chat", targetId: memberId }) }, color: "positive" }]] };
-               await sendVkMessage(VK_TOKEN, peerId, msgText, { keyboard: JSON.stringify(kb) });
+               await sendBanAlert(peerId, memberId, 'ban', reason, bInfo.date, bInfo.expiresAt);
                try {
                  await axios.get(`https://api.vk.com/method/messages.removeChatUser`, { params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: memberId } });
                } catch (e) {}
@@ -7238,13 +7578,8 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
              if (uData.gbanExpiresAt && Date.now() > uData.gbanExpiresAt) {
                await updateUser(memberId, { gban: false, gbanExpiresAt: 0 });
              } else {
-               const modStr = await getModStr(uData.gbanBy);
                const reason = uData.gbanReason || "без причины";
-               const dateStr = fmtD(uData.gbanDate);
-               const termStr = formatDurationBanTerm(uData.gbanExpiresAt, uData.gbanDate);
-               const msgText = `[id${memberId}|${targetName}] имеет глобальную блокировку во всех беседах в которых есть JORDAN MANAGER!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
-               const kb = { inline: true, buttons: [[{ action: { type: "callback", label: "Снять блокировку", payload: JSON.stringify({ cmd: "mod_ungban", targetId: memberId }) }, color: "positive" }]] };
-               await sendVkMessage(VK_TOKEN, peerId, msgText, { keyboard: JSON.stringify(kb) });
+               await sendBanAlert(peerId, memberId, 'gban', reason, uData.gbanDate, uData.gbanExpiresAt);
                try {
                  await axios.get(`https://api.vk.com/method/messages.removeChatUser`, { params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: memberId } });
                } catch (e) {}
@@ -7256,13 +7591,8 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
              if (uData.gbanplExpiresAt && Date.now() > uData.gbanplExpiresAt) {
                await updateUser(memberId, { gbanpl: false, gbanplExpiresAt: 0 });
              } else {
-               const modStr = await getModStr(uData.gbanplBy);
                const reason = uData.gbanplReason || "без причины";
-               const dateStr = fmtD(uData.gbanplDate);
-               const termStr = formatDurationBanTerm(uData.gbanplExpiresAt, uData.gbanplDate);
-               const msgText = `[id${memberId}|${targetName}] имеет глобальную блокировку во всех беседах игроков в которых есть JORDAN MANAGER!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
-               const kb = { inline: true, buttons: [[{ action: { type: "callback", label: "Снять блокировку", payload: JSON.stringify({ cmd: "mod_ungbanpl", targetId: memberId }) }, color: "positive" }]] };
-               await sendVkMessage(VK_TOKEN, peerId, msgText, { keyboard: JSON.stringify(kb) });
+               await sendBanAlert(peerId, memberId, 'gbanpl', reason, uData.gbanplDate, uData.gbanplExpiresAt);
                try {
                  await axios.get(`https://api.vk.com/method/messages.removeChatUser`, { params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: memberId } });
                } catch (e) {}
@@ -7381,7 +7711,7 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
              const reason = user.gbanReason || "без причины";
              const dateStr = fmtD(user.gbanDate);
              const termStr = formatDurationBanTerm(user.gbanExpiresAt, user.gbanDate);
-             const msgText = `[id${userId}|${fullName}] имеет глобальную блокировку во всех беседах в которых есть JORDAN MANAGER!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
+             const msgText = `[id${userId}|${fullName}] имеет глобальную блокировку во всех беседах в которых есть Orion!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
              const kb = { inline: true, buttons: [[{ action: { type: "callback", label: "Снять блокировку", payload: JSON.stringify({ cmd: "mod_ungban", targetId: userId }) }, color: "positive" }]] };
              await sendVkMessage(VK_TOKEN, peerId, msgText, { keyboard: JSON.stringify(kb) });
              try {
@@ -7402,7 +7732,7 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
              const reason = user.gbanplReason || "без причины";
              const dateStr = fmtD(user.gbanplDate);
              const termStr = formatDurationBanTerm(user.gbanplExpiresAt, user.gbanplDate);
-             const msgText = `[id${userId}|${fullName}] имеет глобальную блокировку во всех беседах игроков в которых есть JORDAN MANAGER!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
+             const msgText = `[id${userId}|${fullName}] имеет глобальную блокировку во всех беседах игроков в которых есть Orion!\n\n| Информация о блокировке:\n${modStr} | ${reason} | ${termStr} | ${dateStr}`;
              const kb = { inline: true, buttons: [[{ action: { type: "callback", label: "Снять блокировку", payload: JSON.stringify({ cmd: "mod_ungbanpl", targetId: userId }) }, color: "positive" }]] };
              await sendVkMessage(VK_TOKEN, peerId, msgText, { keyboard: JSON.stringify(kb) });
              try {
@@ -7813,7 +8143,7 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
 
                 const tegU = await getOrCreateUser(userId);
               const tegUName = tegU.fullName || tegU.nick || "Пользователь";
-              await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|${tegUName}] получил(-а) предупреждение из-за упоминания всех участников беседы.\n| Предупреждений: ${newWarns}/3`, { noReply: true });
+              await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|Пользователю] выдано предупреждение из-за тега всех участников беседы.`, { noReply: true });
               }
               return;
             }
@@ -7821,7 +8151,53 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
         }
       }
 
-      let cmdText = text.trim();
+      
+      // Intercept Zayavka in DM
+      if (peerId < 2000000000 && user.zayavkaState && user.zayavkaState.step > 0 && text) {
+         const qs = [
+            "Сколько вам лет?",
+            "Укажите вашу электронную почту",
+            "Отлично, теперь укажите ваш Telegram",
+            "Какой у вас часовой пояс (от МСК)?",
+            "Расскажите, почему вы хотите попасть на пост Заместителя руководителя?",
+            "Что вы будете делать на посте Заместителя руководителя?",
+            "Почему мы должны взять на пост именно вас?",
+            "Есть ли у вас опыт в этой сфере?",
+            "Готовы ли вы получить ЧСБ/ЧСР за слив своего поста?",
+            "Сколько вы готовы уделять время нашему чат-менеджеру?",
+            "Укажите ваш ежедневный онлайн в ВКонтакте",
+            "Готовы ли вы слушаться высшее руководство?"
+         ];
+         user.zayavkaState.answers.push(text);
+         if (user.zayavkaState.msgId) {
+            deleteVkMessage(VK_TOKEN, peerId, user.zayavkaState.msgId).catch(() => {});
+         }
+         
+         if (user.zayavkaState.step < qs.length) {
+             const nextQ = qs[user.zayavkaState.step];
+             let qPrefix = "Хорошо, теперь следующий вопрос\n\n";
+             if (user.zayavkaState.step === 2) qPrefix = "";
+             if (user.zayavkaState.step === 3 || user.zayavkaState.step === 10) qPrefix = "";
+             
+             const nMsg = await sendResponse(`${qPrefix}${nextQ}`);
+             user.zayavkaState.step++;
+             user.zayavkaState.msgId = nMsg.response || message.id;
+             return;
+         } else {
+             const kb = {
+                inline: true,
+                buttons: [
+                   [{ action: { type: "callback", label: "Да, отправить", payload: JSON.stringify({ cmd: "zayavka_submit" }) }, color: "positive" }],
+                   [{ action: { type: "callback", label: "Нет, не отправлять", payload: JSON.stringify({ cmd: "zayavka_cancel" }) }, color: "negative" }]
+                ]
+             };
+             const nMsg = await sendResponse("Отлично, ваша заявка заполнена!\n\nЖелаете отправить её на рассмотрение руководству?", { keyboard: JSON.stringify(kb) });
+             user.zayavkaState.msgId = nMsg.response || message.id;
+             user.zayavkaState.step = 0; // ready to submit
+             return;
+         }
+      }
+let cmdText = text.trim();
 
       if (/^[+!\./]?поженит\s+ь/i.test(cmdText)) {
         cmdText = cmdText.replace(/поженит\s+ь/i, "поженить");
@@ -7875,12 +8251,12 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
             "addchatnet", "unchatnet", "netlist", "gban", "ungban", "gbanpl", "ungbanpl", "gbanlist", "aban", "абан",
             "closebot", "openbot", "закрытьбота", "открытьбота", "thelp", "тхелп", "теххелп",
             "grrole", "arrole", "setowner", "deleteowner", "banid", "unbanid", "infochat", "инфочат", "чатинфо", "chatinfo",
-            "addzsr", "addozsr", "addruk", "addzamowner", "addstatus", "unstatus", "setinfobot", "achat", "unachat",
+            "addstatus", "unstatus", "setinfobot", "achat", "unachat",
             "роль", "баланс", "bal", "balance", "бал", "банк", "снятьбанк", "топ", "пивозавры", "казино", "casino", "рулетка", "roulette", "р", "бизнес", "бизнесы",
             "купитьбиз", "продатьбиз", "дуэль", "д", "duel", "дуэльбиз", "кнб", "мафия", "пиво", "инфа", "кто", "погода",
             "взлом", "фортуна", "бонус", "подписка", "купитьпрем", "прем", "премпрофиль", "прембаланс",
-            "реп", "rep", "промо", "промокод", "promo", "promocode", "createpromo", "id", "ид", "айди", "infoid", "addmoder", "addsenmoder",
-            "addadmin", "addsenadmin", "addzsa", "addsa", "removerole", "снятьроль", "снятьправа", "кикнеактив",
+            "реп", "rep", "промо", "промокод", "promo", "promocode", "createpromo", "id", "ид", "айди", "infoid", "addsenmoder",
+            "снятьроль", "снятьправа", "кикнеактив",
             "брак", "развод", "развести", "поженить", "монетка", "открытьдепозит", "депозиты", "ппрод", "купитьпрод",
             "купитькоин", "продатькоин", "передатькоин", "цитата", "приз", "раздача", "giveaway", "передать", "крокодил", "клан", "кланы", "курс",
             "restart", "перезапуск", "chats", "беседы", "noprefix", "безпрефикса",
@@ -7902,9 +8278,41 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
 
       if (!cmdText.startsWith("/")) return;
 
+            const MANAGER_CMDS_SET = new Set([
+        "/gban", "/гбан", "/ungban", "/юнгбан", "/унгбан", "/ангбан", "/гунгбан",
+        "/gbanlist", "/гбанлист", "/списокгбан",
+        "/blacklist", "/чслист", "/списокчс",
+        "/rstats", "/рстата",
+        "/grrole", "/гснятьроль",
+        "/banid", "/банид", "/забанитьбеседу",
+        "/unbanid", "/анбанид", "/разбанитьбеседу",
+        "/infochat", "/инфочат", "/чатинфо", "/chatinfo",
+        "/infoid", "/инфоид", "/ид", "/id", "/айди",
+        "/addblack", "/чс", "/чсб", "/вчс", "/добавитьвчс", "/аддблэк",
+        "/unblack", "/анблэк", "/анчс", "/изчс", "/удалитьизчс", "/унчсб",
+        "/gsnick", "/гник", "/гсник",
+        "/grnick", "/грудалитьник",
+        "/zunban", "/зунбан",
+        "/addzsr", "/замруководителя", "/заместитель",
+        "/addozsr", "/оснзамруководителя", "/озаместитель",
+        "/rebuke", "/выговор",
+        "/unrebuke", "/снятьвыговор",
+        "/addruk", "/руководитель",
+        "/addgr", "/главныйруководитель", "/грук",
+        "/renameroles", "/переименоватьроли", "/аудио",
+        "/kickfrozen", "/frozenlist"
+      ]);
+      
+      const args = cmdText.split(/\s+/);
+      const rawCmd = args[0].toLowerCase();
+      if (MANAGER_CMDS_SET.has(rawCmd) && !chatData.isManagerChat && peerId > 2000000000) {
+          return await sendResponse("Данная команда доступна только в беседе руководства!");
+      }
       if (user.gban || user.gbanpl) {
-        return await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|вы], находитесь в глобальной блокировке чат-менеджера JORDAN MANAGER.`, {
-            forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true }), disable_mentions: 1 });
+        return await sendVkMessage(VK_TOKEN, peerId, `[id${userId}|вы], находитесь в глобальной блокировке чат-менеджера Orion.`, {
+            forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true }),
+            disable_mentions: 1
+        });
       }
 
       // Rate Limit: 5 commands per 5 seconds
@@ -7921,12 +8329,11 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
          const secStr = ["секунду", "секунды", "секунд"];
          const secEnd = (timeLeft % 10 === 1 && timeLeft % 100 !== 11) ? secStr[0] : (timeLeft % 10 >= 2 && timeLeft % 10 <= 4 && (timeLeft % 100 < 10 || timeLeft % 100 >= 20)) ? secStr[1] : secStr[2];
          return await sendVkMessage(VK_TOKEN, peerId, `Пожалуйста подождите ${timeLeft} ${secEnd}, перед повторным использованием команд.`, {
-             forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true }) });
+             forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+         });
       }
       history.timestamps.push(now);
 
-      const args = cmdText.split(/\s+/);
-      const rawCmd = args[0].toLowerCase();
 
       const ALL_GAME_CMDS = new Set([
         "/приз", "/казино", "/к", "/casino",
@@ -7943,10 +8350,9 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
 
       if (peerId < 2000000000) {
         const allowedInDm = new Set([
-          "/заявка", "/заявки", "/заявканазр", "/податьзаявку", "/анкета", "/apply", "/ticket",
           ...ALL_GAME_CMDS,
           "/start", "/help", "/gamehelp", "/ghelp", "/старт", "/помощь", "/хелп", "/команды", "/меню",
-          "/игровые", "/игры", "/гхелп", "/пинг", "/ping", "/инфо", "/info", "/infobot", "/инфобот"
+          "/игровые", "/игры", "/гхелп", "/пинг", "/ping", "/инфо", "/info", "/infobot", "/инфобот", "/заявка"
         ]);
         if (!allowedInDm.has(rawCmd)) {
           return await sendVkMessage(VK_TOKEN, peerId, "В ЛС бота работают только игровые команды!");
@@ -7955,7 +8361,195 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
 
       if ((chatData.games === false || chatData.gamesDisabled) && ALL_GAME_CMDS.has(rawCmd)) {
         return await sendVkMessage(VK_TOKEN, peerId, "Игры в этой беседе отключены.", {
-          forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true }) });
+          forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+        });
+      }
+
+      
+      if (rawCmd === "/alt" || rawCmd === "/альт" || rawCmd === "/алиасы" || rawCmd === "/aliases") {
+        const altText = `...:: Альтернативные команды (Алиасы) ::...
+
+📋 Основные & Инфо:
+/help — /помощь, /хелп, /команды, /меню, /cmd, /cmds
+/stats — /стата, /статистика
+/profile — /профиль, /проф
+/rules — /правила, /правилабота
+/status — /статус
+/sync — /синхронизация, /синк
+/type — /тип, /типбеседы
+/staff — /стафф, /состав, /админы
+/alt — /альт, /алиасы, /aliases
+
+🛡️ Модерация:
+/mute — /мут, /m
+/unmute — /размут, /анмут, /снятьмут, /разглушить, /unm
+/smute — /смут
+/warn — /варн, /предупреждение, /пред, /w
+/unwarn — /разварн, /анварн, /снятьварн, /снятьпред, /unw
+/swarn — /сварн
+/ban — /бан, /забанить, /б, /b
+/unban — /разбан, /анбан, /снятьбан, /unb
+/sban — /сбан
+/kick — /кик, /кикнуть, /исключить, /k
+/skick — /скик
+/clear — /очистить, /cl
+/sclear — /сочистить, /склир
+/mutelist — /муты, /списокмутов
+/warnlist — /варны, /списокварнов
+/banlist — /баны, /списокбанов
+/frozenlist — /замороженные
+/kickfrozen — /кикзамороженных, /киксобак
+
+👑 Уровни прав:
+/addaccesslevel — /роль, /addlevel, /setlevel, /setaccesslevel, /addaccess, /выдатьроль
+/removerole — /delrole, /снятьроль
+/giveowner — /передатьвладельца
+/renameroles — /переименоватьроли, /ролиназвания
+/заместитель — /замруководителя
+/озаместитель — /оснзамруководителя
+/addruk — /руководитель
+
+🌐 Глобальные & Беседа руководства:
+/gban — /гбан, /глобалбан
+/ungban — /юнгбан, /унгбан, /анgban
+/addblack — /чс, /чсб, /вчс, /добавитьвчс, /аддблэк
+/unblack — /анблэк, /анчс, /изчс, /удалитьизчс, /унчсб
+/gbanlist — /гбанлист
+/blacklist — /чслист, /списокчс
+/getban — /чекбан, /проверитьбан
+/addantiteg — /антитег
+/unantiteg — /снятьантитег
+/addawstats — /австатс
+/unawstats — /снятавстатс
+/gaddawstats — /гавстатс
+/gunawstats — /снятьгавстатс
+/аудио — /audio, /музыка, /music, /setaudio, /установитьаудио
+
+📝 Заявки:
+/заявка — /zayavka, /податьзаявку (в ЛС бота)`;
+        return await sendResponse(altText);
+      }
+
+
+      if (rawCmd === "/х2" || rawCmd === "/x2") {
+        const isBotOwner = user.role >= 12 || userId === 778382713 || ((globalThis as any).appState && (globalThis as any).appState.botOwnerId === userId);
+        if (!isBotOwner) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу чат-менеджера.");
+        
+        globalThis.isX2ManualActive = !globalThis.isX2ManualActive;
+        if ((globalThis as any).appState) (globalThis as any).appState.isX2Active = globalThis.isX2ManualActive;
+        
+        if (globalThis.isX2ManualActive) {
+          return await sendResponse("Х2 режим был включён до понедельника!");
+        } else {
+          return await sendResponse("Х2 режим был отключён до пятницы.");
+        }
+      }
+
+
+      if (rawCmd === "/renameroles" || rawCmd === "/переименоватьроли" || rawCmd === "/ролиназвания") {
+        const isOwner = await checkIsOwner(userId, peerId, user.role);
+        if (!isOwner && user.role < 12 && userId !== 778382713) {
+          return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу беседы.");
+        }
+        
+        const chatData = await getOrCreateChat(peerId);
+        const customRoles = chatData.customRoleNames || {};
+        const isConfigured = !!(customRoles.owner || customRoles.ga || customRoles.zga || customRoles.sadmin || customRoles.admin || customRoles.smoder || customRoles.moder);
+        
+        const rawText = getRawArgText(cmdText).trim();
+        if (!rawText) {
+          if (!isConfigured) {
+            const helpText = `Укажите аргументы команды!\n\n| Пример:\n\n| Владелец беседы:\n- {owner}\n\n| Главный Администратор:\n- {ga}\n\n| Зам. Глав. Администратора:\n- {zga}\n\n| Старший Администратор:\n- {sadmin}\n\n| Администратор:\n- {admin}\n\n| Старший Модератор:\n- {smoder}\n\n| Модератор:\n- {moder}`;
+            return await sendResponse(helpText);
+          } else {
+            const kb = {
+              inline: true,
+              buttons: [
+                [{ action: { type: "callback", label: "Установить новое название", payload: JSON.stringify({ cmd: "renameroles_set" }) }, color: "positive" }],
+                [{ action: { type: "callback", label: "Удалить название ролей", payload: JSON.stringify({ cmd: "renameroles_del" }) }, color: "negative" }]
+              ]
+            };
+            const statusText = `...::Изменение названия ролей::...\n\n| Установленное название ролей: ${isConfigured ? "Да" : "Нет"}`;
+            return await sendResponse(statusText, { keyboard: JSON.stringify(kb) });
+          }
+        }
+        
+        // Parse custom roles from input
+        const newRoles: any = { ...customRoles };
+        const lines = rawText.split("\n");
+        let currentKey = "";
+        for (const line of lines) {
+          const l = line.trim();
+          if (l.toLowerCase().includes("владелец") || l.toLowerCase().includes("{owner}")) currentKey = "owner";
+          else if (l.toLowerCase().includes("главный админ") || l.toLowerCase().includes("{ga}")) currentKey = "ga";
+          else if (l.toLowerCase().includes("зам. глав") || l.toLowerCase().includes("{zga}")) currentKey = "zga";
+          else if (l.toLowerCase().includes("старший админ") || l.toLowerCase().includes("{sadmin}")) currentKey = "sadmin";
+          else if (l.toLowerCase().includes("администратор") || l.toLowerCase().includes("{admin}")) currentKey = "admin";
+          else if (l.toLowerCase().includes("старший модер") || l.toLowerCase().includes("{smoder}")) currentKey = "smoder";
+          else if (l.toLowerCase().includes("модератор") || l.toLowerCase().includes("{moder}")) currentKey = "moder";
+          else if (l.startsWith("-") && currentKey) {
+            newRoles[currentKey] = l.replace(/^[-s]+/, "").trim();
+          }
+        }
+        
+        await updateChat(peerId, { customRoleNames: newRoles });
+        return await sendResponse("Названия ролей для беседы успешно обновлены!");
+      }
+
+
+      if (rawCmd === "/frozenlist" || rawCmd === "/замороженные" || rawCmd === "/собаки") {
+        const isOwner = await checkIsOwner(userId, peerId, user.role);
+        if (!isOwner && user.role < 12 && userId !== 778382713) {
+          return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу беседы.");
+        }
+        
+        try {
+          const memRes = await vkApi.get("messages.getConversationMembers", {
+            params: { peer_id: peerId, access_token: VK_TOKEN, v: "5.199" }
+          });
+          const profiles = memRes.data?.response?.profiles || [];
+          const deactivated = profiles.filter((p: any) => p.deactivated);
+          
+          if (deactivated.length === 0) {
+            return await sendResponse("В беседе нет удалённых или замороженных пользователей.");
+          }
+          
+          let out = `Список удалённых/замороженных пользователей (${deactivated.length}):\n\n`;
+          deactivated.slice(0, 15).forEach((p: any, idx: number) => {
+            const statusStr = p.deactivated === "banned" ? "Заблокирован" : "Удалён";
+            out += `${idx + 1}) [id${p.id}|${p.first_name} ${p.last_name}] — ${statusStr}\n`;
+          });
+          
+          const kbButtons: any[] = [];
+          if (deactivated.length > 15) {
+            kbButtons.push([
+              { action: { type: "callback", label: "Вперёд ⏩", payload: JSON.stringify({ cmd: "frozen_page", page: 2 }) }, color: "primary" }
+            ]);
+          }
+          
+          return await sendResponse(out, kbButtons.length ? { keyboard: JSON.stringify({ inline: true, buttons: kbButtons }) } : {});
+        } catch (e) {
+          return await sendResponse("Не удалось получить список участников беседы.");
+        }
+      }
+
+      if (rawCmd === "/kickfrozen" || rawCmd === "/кикзамороженных" || rawCmd === "/киксобак") {
+        const isOwner = await checkIsOwner(userId, peerId, user.role);
+        if (!isOwner && user.role < 12 && userId !== 778382713) {
+          return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу беседы.");
+        }
+        
+        const kb = {
+          inline: true,
+          buttons: [
+            [
+              { action: { type: "callback", label: "Да, исключить", payload: JSON.stringify({ cmd: "kick_frozen_confirm", initiatorId: userId }) }, color: "positive" },
+              { action: { type: "callback", label: "Нет, не исключать", payload: JSON.stringify({ cmd: "kick_frozen_cancel", initiatorId: userId }) }, color: "negative" }
+            ]
+          ]
+        };
+        
+        return await sendResponse("Вы действительно хотите исключить всех удалённых/замороженных пользователей из беседы?", { keyboard: JSON.stringify(kb) });
       }
 
       // Check Ban-words in command arguments
@@ -7968,7 +8562,8 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
                                  .trim();
         if (rawArgsText && containsBadWord(rawArgsText)) {
           return await sendVkMessage(VK_TOKEN, peerId, "В аргументах команды указаны Ban-words.", {
-            forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true }) });
+            forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+          });
         }
       }
 
@@ -7977,8 +8572,9 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
         const isStartCmd = ["/start", "/старт", "/активировать", "/активация", "/включитьбота", "/activate", "/начать"].includes(rawCmd);
         const isHelpCmd = ["/help", "/помощь", "/хелп", "/команды", "/меню", "/cmd", "/cmds", "/commands"].includes(rawCmd);
         if (!chatData.active && !isStartCmd && !isHelpCmd) {
-          return await sendVkMessage(VK_TOKEN, peerId, `JORDAN MANAGER не активирован в беседе. Для активации напишите - /start`, {
-            forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true }) });
+          return await sendVkMessage(VK_TOKEN, peerId, `Orion не активирован в беседе. Для активации напишите - /start`, {
+            forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
+          });
         }
       }
 
@@ -8014,8 +8610,10 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
 
         let targetFullName = "";
         if (targetIdVal > 0) {
-          const tu = await getOrCreateUser(targetIdVal);
-          targetFullName = tu.fullName || tu.nick || (await fetchVkFullName(targetIdVal)) || `User${targetIdVal}`;
+          try {
+            const tu = await getOrCreateUser(targetIdVal);
+            targetFullName = tu.fullName || tu.nick || (await fetchVkFullName(targetIdVal)) || `User${targetIdVal}`;
+          } catch(e) {}
         }
 
         let actionStr = "";
@@ -8063,34 +8661,6 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
         } else if (["/unrebuke", "/снятьвыговор"].includes(rawCmd)) {
           actionStr = "снял(-а) выговор с руководителя";
           if (args.length > 2) reasonStr = args.slice(2).join(" ");
-        } else if (["/addmoder", "/модер", "/выдатьмодера", "/setmoder", "/аддмодер"].includes(rawCmd)) {
-          actionStr = "выдал(-а) должность «Модератор»";
-        } else if (["/addsenmoder", "/смодер", "/setsenmoder", "/setsmoder", "/старшиймодератор", "/аддсмодер"].includes(rawCmd)) {
-          actionStr = "выдал(-а) должность «Старший модератор»";
-        } else if (["/addadmin", "/админ", "/setadmin", "/аддадмин", "/выдатьадмина"].includes(rawCmd)) {
-          actionStr = "выдал(-а) должность «Администратор»";
-        } else if (["/addsenadmin", "/садмин", "/setsenadmin", "/setsadmin", "/старшийадминистратор", "/аддсадмин"].includes(rawCmd)) {
-          actionStr = "выдал(-а) должность «Старший администратор»";
-        } else if (["/addzsa", "/замспец", "/выдатьзса", "/setzsa", "/addzamspets", "/аддзса"].includes(rawCmd)) {
-          actionStr = "выдал(-а) должность «Зам. спец. администратора»";
-        } else if (["/addsa", "/са", "/sa", "/setsa", "/выдатьса", "/addspets", "/аддса", "/спецадмин"].includes(rawCmd)) {
-          actionStr = "выдал(-а) должность «Специальный администратор»";
-        } else if (["/addzsr", "/заместитель", "/заместительдиректора", "/addzam", "/аддзср"].includes(rawCmd)) {
-          actionStr = "выдал(-а) должность «Зам. Руководителя»";
-        } else if (["/addozsr", "/озаместитель", "/озаместительдиректора", "/addozam", "/аддозср"].includes(rawCmd)) {
-          actionStr = "выдал(-а) должность «Осн. Зам. Руководителя»";
-        } else if (["/addruk", "/руководитель", "/addsr", "/adddirector", "/директор"].includes(rawCmd)) {
-          actionStr = "выдал(-а) должность «Руководитель»";
-        } else if (["/addgr", "/главруководитель", "/addgruk", "/главдиректор", "/addgdirector"].includes(rawCmd)) {
-          actionStr = "выдал(-а) должность «Главный Руководитель»";
-        } else if (["/addzamowner", "/замвладельцабота", "/замвладельца", "/addzown", "/аддзамвладельца"].includes(rawCmd)) {
-          actionStr = "выдал(-а) должность «Зам. Владельца»";
-        } else if (["/removerole", "/снятьроль", "/снятьправа", "/delrole", "/унроль", "/unrole", "/delmoder", "/delsenmoder", "/deladmin", "/delsenadmin", "/delzsa", "/delsa", "/unmoder"].includes(rawCmd)) {
-          actionStr = "снял(-а) должность";
-        } else if (["/arrole"].includes(rawCmd)) {
-          actionStr = "снял(-а) ВСЕ роли у пользователя";
-        } else if (["/grrole"].includes(rawCmd)) {
-          actionStr = "снял(-а) глобальную роль";
         } else if (["/givemoney", "/датьденег", "/выдатьденьги", "/выдать_деньги"].includes(rawCmd)) {
           actionStr = "выдал(-а) валюту";
           if (args[2]) betStr = args[2];
@@ -8146,20 +8716,19 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
           actionStr = "Вызвал(-а) помощь руководства";
         } else if (["/help", "/помощь", "/хелп", "/команды", "/меню", "/gamehelp"].includes(rawCmd)) {
           actionStr = "Посмотрел(-а) список команд";
-        } else if (["/stats", "/стата", "/статистика", "/профиль", "/profile", "/stata", "/статс", "/си", "/систата", "/я"].includes(rawCmd)) {
+        } else if (["/заявка"].includes(rawCmd)) {
+          actionStr = "Подал(-а) заявку";
+        } else if (["/listfrozen"].includes(rawCmd)) {
+          actionStr = "Посмотрел(-а) список замороженных";
+        } else if (["/kickfrozen"].includes(rawCmd)) {
+          actionStr = "Исключил(-а) замороженных";
+        } else if (["/alt", "/алиясы", "/альт"].includes(rawCmd)) {
+          actionStr = "Посмотрел(-а) алиасы команд";
+        } else if (["/addaccesslevel", "/роль", "/addlevel", "/setlevel", "/setaccesslevel", "/addaccess", "/выдатьроль"].includes(rawCmd)) {
+          actionStr = "Выдал(-а) уровень прав";
+        } else if (["/stats", "/стата", "/статистика", "/профиль", "/profile", "/инфобот", "/infobot"].includes(rawCmd)) {
           actionStr = "Посмотрел(-а) статистику";
-        } else if (["/balance", "/баланс", "/б", "/bal", "/банк"].includes(rawCmd)) {
-          actionStr = "Посмотрел(-а) баланс";
-        } else if (["/top", "/топ"].includes(rawCmd)) {
-          actionStr = "Посмотрел(-а) топ игроков";
-        } else if (rawCmd === "/приз") {
-          const pAmount = args[1] && !isNaN(Number(args[1])) ? args[1] : "";
-          actionStr = pAmount ? `Получил(-а) приз в размере ${pAmount}$` : "Получил(-а) приз";
-        } else if (["/start", "/старт"].includes(rawCmd)) {
-          actionStr = "Запустил(-а) бота";
-        } else if (["/rules", "/правила"].includes(rawCmd)) {
-          actionStr = "Посмотрел(-а) правила беседы";
-        } else if (["/ping", "/пинг"].includes(rawCmd)) {
+      } else if (["/ping", "/пинг"].includes(rawCmd)) {
           actionStr = "Проверил(-а) пинг бота";
         } else if (["/time", "/время"].includes(rawCmd)) {
           actionStr = "Посмотрел(-а) текущее время";
@@ -8240,2370 +8809,1556 @@ await sendVkMessageLocal(VK_TOKEN, peerId, `[id${tId}|Пользователю] 
         }
       }
 
-      // Check Global Bot Close status
-      if (isGlobalBotClosed && user.role < 12 && userId !== 778382713) {
-        return await sendVkMessage(VK_TOKEN, peerId, `🔒 Использование бота временно закрыто для публичного использования Владельцем чат-менеджера.`, {
-          forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true }) });
-      }
+      
 
-      // Check Game Blacklist for ALL commands
-      if (user.isGameBanned && user.role < 12) {
-        const durationText = user.gameBanUntil ? formatMskDate(user.gameBanUntil) : "Навсегда";
-        const reasonText = user.gameBanReason || "Нарушение правил";
-        return await sendVkMessage(VK_TOKEN, peerId, `Вы заблокированы в боте!\n\n| Причина: ${reasonText}\n| Блокировка до: ${durationText}`, {
-          forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true }) });
-      }
-
-      const sendResponse = async (responseText: string, extraParams: any = {}) => {
-        responseSeq++;
-        const msgDedupKey = message.conversation_message_id
-          ? `${peerId}_${message.conversation_message_id}_${responseSeq}`
-          : `${peerId}_${message.id || message.date}_${responseSeq}`;
-
-        const { noReply, ...rest } = extraParams;
-        let replyParams: any = { dedup_key: msgDedupKey };
-        if (!noReply && rest.forward === undefined) {
-          replyParams.forward = JSON.stringify({
-            peer_id: peerId,
-            conversation_message_ids: [message.conversation_message_id],
-            is_reply: true
-          });
-        }
-        const res = await sendVkMessage(VK_TOKEN, peerId, responseText, { ...replyParams, ...rest });
-
-        if (chatData?.deleteCommand && isModerationCmd(rawCmd)) {
-          autoDeleteCmdMessage(peerId, message, chatData);
-        }
-
-        return res;
-      };
-
-      // 1. /цитата
-      if (rawCmd === "/цитата") {
-        const now = Date.now();
-        const lastUsed = cooldowns.get(userId) || 0;
-        const remaining = 10 - Math.floor((now - lastUsed) / 1000);
-        if (remaining > 0) return await sendResponse(`Подождите ${remaining} сек. перед созданием следующей цитаты!`);
-
-        cooldowns.set(userId, now);
-        let quoteText = args.slice(1).join(" ");
-        let targetId = userId;
-        if (message.reply_message) {
-          quoteText = message.reply_message.text;
-          targetId = message.reply_message.from_id;
-        }
-        if (!quoteText || quoteText.trim().length === 0) return await sendResponse("Укажите текст цитаты!");
-
-        let initialMessageId: any = null;
-        try {
-          const loadingRes = await sendVkMessage(VK_TOKEN, peerId, "Пожалуйста подождите, загружаю вашу цитату...");
-          if (loadingRes?.response) {
-            initialMessageId = Array.isArray(loadingRes.response) ? loadingRes.response[0]?.message_id || loadingRes.response[0] : (loadingRes.response.message_id || loadingRes.response);
-          }
-        } catch (e) {}
-
-        try {
-          const uData = await vkApi.get("users.get", {
-            params: { user_ids: targetId, fields: "photo_200", access_token: VK_TOKEN, v: "5.131" }
-          });
-          const userData = uData.data.response[0];
-          const avatarUrl = userData.photo_200;
-          const authorName = `${userData.first_name} ${userData.last_name}`;
-
-          const quoteBuffer = await generateQuote(quoteText, avatarUrl, authorName);
-          const uploadResult = await uploadPhoto(peerId, quoteBuffer);
-
-          if (initialMessageId) {
-            setTimeout(async () => {
-              await deleteVkMessage(VK_TOKEN, peerId, initialMessageId);
-            }, 1000);
-          }
-
-          if (uploadResult.attachment) {
-            await sendResponse(`Цитата от пользователя [id${targetId}|${authorName}]`, { attachment: uploadResult.attachment });
-          } else {
-            await sendResponse(`Ошибка создания цитаты: ${uploadResult.error}`);
-          }
-        } catch (e: any) {
-          await sendResponse("Произошла ошибка при создании цитаты.");
-        }
-        return;
-      }
-
-      // 2. /пиво
-      if (rawCmd === "/пиво") {
-        const nowSec = Math.floor(Date.now() / 1000);
-        const lastBeer = user.lastBeerTime || 0;
-        const cooldownMs = 3600 - (nowSec - lastBeer);
-
-        if (cooldownMs > 0) {
-          const remMin = Math.ceil(cooldownMs / 60);
-          return await sendResponse(`Следующая попытка выпить пиво будет через ${remMin} мин.`);
-        }
-
-        // 5% chance fail
-        if (Math.random() < 0.05) {
-          await updateUser(userId, { lastBeerTime: nowSec });
-          return await sendResponse(`😭 Попытка выпить пива оказалась неудачной!\nПопробуйте снова через 1 час.`);
-        }
-
-        const drunkLiters = parseFloat((Math.random() * (5.0 - 0.1) + 0.1).toFixed(1));
-        const newTotalBeer = parseFloat(((user.beer || 0) + drunkLiters).toFixed(1));
-
-        await updateUser(userId, { beer: newTotalBeer, lastBeerTime: nowSec });
-
-        return await sendResponse(`Ты выпил(-а) ${drunkLiters} литров пива! 🍺\n\nВыпито пива за месяц - ${newTotalBeer}\nСледующая попытка выпить пиво будет через 1 час.`);
-      }
-
-      // 3. /крокодил
-      if (rawCmd === "/крокодил") {
-        if (crocGames.has(peerId)) {
-          return await sendResponse("В этой беседе уже идет или набирается игра Крокодил!");
-        }
-
-        let amount = 0;
-        if (args.length > 1) {
-          amount = parseNumber(args[1]);
-          if (amount < 0) amount = 0;
-        }
-
-        if (amount > 0 && (user.balance || 0) < amount) {
-          return await sendResponse(`Недостаточно средств. Ваш баланс: ${(user.balance || 0).toLocaleString()}$`);
-        }
-
-        const keyboard = {
-          inline: true,
-          buttons: [
-            [{ action: { type: "callback", label: "Вступить в игру", payload: JSON.stringify({ cmd: "croc_join" }) }, color: "positive" }],
-            [{ action: { type: "callback", label: "Запустить игру", payload: JSON.stringify({ cmd: "croc_start" }) }, color: "positive" }],
-            [{ action: { type: "callback", label: "Выйти из игры", payload: JSON.stringify({ cmd: "croc_leave" }) }, color: "negative" }]
-          ]
-        };
-
-        const res = await sendResponse(`🎮 Игра "Крокодил"\n\n| Создатель: [id${userId}|${fullName}]\n${amount > 0 ? `| Ставка: ${amount.toLocaleString()}$` : ""}`, {
-          keyboard: JSON.stringify(keyboard)
-        });
-
-        const cmId = res?.response?.[0]?.conversation_message_id || res?.response;
-
-        if (amount > 0) {
-          await updateUser(userId, { balance: (user.balance || 0) - amount });
-        }
-
-        const crocData: CrocLobby = {
-          peerId,
-          cmId: cmId || 0,
-          creatorId: userId,
-          creatorName: fullName,
-          participants: [{ id: userId, name: fullName }],
-          status: "lobby",
-          amount
-        };
-        crocGames.set(peerId, crocData);
-        crocGames.set(Number(peerId), crocData);
-        return;
-      }
-
-      // 4. /баланс
-      if (rawCmd === "/баланс") {
-        let targetId = userId;
-        let targetName = fullName;
-        const parsed = await parseTargetUser(message, args.slice(1));
-        if (parsed.targetId) {
-          targetId = parsed.targetId;
-          targetName = parsed.targetName;
-        }
-
-        const targetUser = await getOrCreateUser(targetId);
-        const isMe = targetId === userId;
-        if (!isMe && targetUser.premiumBalanceHidden && !isAdmin) {
-          return await sendResponse(`Пользователь [id${targetId}|${targetName}] скрыл свой баланс.`);
-        }
-        if (targetUser.hideBalance && !isMe && !isAdmin) {
-          return await sendResponse(`Пользователь [id${targetId}|${targetName}] скрыл свой баланс.`);
-        }
-
-        return await sendResponse(`Баланс пользователя [id${targetId}|${targetName}]\n\n| На руках: ${(targetUser.balance || 0).toLocaleString()}$\n| В банке: ${(targetUser.bank || 0).toLocaleString()}$\n\n| JORDAN'S COIN: ${(targetUser.jc || 0).toLocaleString()} шт`);
-      }
-
-      if (["/ии", "/ai", "/чат", "/ask", "/гпт", "/gpt", "/gemini"].includes(rawCmd)) {
-        const hasPremium = user.vipExpires > Date.now();
-        if (!hasPremium) {
-          return await sendResponse("Данная команда доступна только с премиумом статусом.");
-        }
-        const prompt = args.slice(1).join(" ");
-        if (!prompt) return await sendResponse("/ии - Задать вопрос к ИИ.");
-        
-        let waitMsgId: any = null;
-        try {
-          const waitRes = await sendResponse("Пожалуйста подождите, ваш запрос обрабатывается...");
-          if (waitRes?.response) {
-            if (Array.isArray(waitRes.response)) {
-              waitMsgId = typeof waitRes.response[0] === "object" ? waitRes.response[0].message_id : waitRes.response[0];
-            } else if (typeof waitRes.response === "object") {
-              waitMsgId = waitRes.response.message_id;
-            } else {
-              waitMsgId = waitRes.response;
-            }
-          }
-        } catch (e) {}
-
-        try {
-          const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          });
-          const text = response.text || "Нет ответа";
-          
-          if (waitMsgId) {
-            await deleteVkMessage(VK_TOKEN, peerId, waitMsgId);
-          }
-
-          return await sendResponse(text);
-        } catch (error) {
-          console.error("Gemini Error:", error);
-          if (waitMsgId) {
-            await deleteVkMessage(VK_TOKEN, peerId, waitMsgId);
-          }
-          return await sendResponse("Произошла ошибка при запросе к нейросети.");
-        }
-      }
-
-      // 5. /приз
-      if (rawCmd === "/приз") {
-        const nowSec = Math.floor(Date.now() / 1000);
-        const lastPrize = user.lastPrizeTime || 0;
-        const cd = 7200 - (nowSec - lastPrize);
-        if (cd > 0) {
-          const remH = Math.floor(cd / 3600);
-          const remM = Math.floor((cd % 3600) / 60);
-          return await sendResponse(`Следующий приз будет через ${remH} ч. ${remM} мин.`);
-        }
-
-        const baseAmount = Math.floor(Math.random() * (50000 - 10000 + 1)) + 10000;
-        const mult = globalSettings.prizeMultiplier || 1;
-        const prizeAmount = Math.floor(baseAmount * mult);
-        await updateUser(userId, { balance: (user.balance || 0) + prizeAmount, lastPrizeTime: nowSec });
-
-        return await sendVkMessage(VK_TOKEN, peerId, `🎉 [id${userId}|${fullName}] получает приз в размере ${prizeAmount.toLocaleString()}$!\n\n| Следующий приз будет через 2 часа.`);
-      }
-
-      // 6. /передать
-      if (rawCmd === "/передать") {
-        const parsed = await parseTargetUser(message, args.slice(1));
-        const amount = parseNumber(args.find(a => /^\d+[kк]?$/.test(a.toLowerCase())) || "0");
-
-        if (!parsed.targetId || parsed.targetId === userId) return await sendResponse("Укажите пользователя!");
-        if (isNaN(amount) || amount <= 0) return await sendResponse("Укажите корректную сумму для передачи!");
-        if ((user.balance || 0) < amount) return await sendResponse("У вас недостаточно средств на руках!");
-
-        // Daily transfer limit check
-        const todayStr = getMskDateStr();
-        const hasPremium = user.vipExpires > Date.now();
-        const limit = hasPremium ? 350000 : 100000;
-        
-        let transferSumToday = user.transferSumToday || 0;
-        if (user.lastTransferDate !== todayStr) {
-          transferSumToday = 0;
-        }
-
-        if (transferSumToday + amount > limit) {
-          return await sendResponse(
-            `Превышен лимит на переводы в день! Лимит: обычный пользователь до 100.000$, с премиумом до 350.000$.\n` +
-            `Вы уже перевели сегодня: ${formatNum(transferSumToday)}$\n` +
-            `Доступный остаток: ${formatNum(Math.max(0, limit - transferSumToday))}$`
-          );
-        }
-
-        const keyboard = {
-          inline: true,
-          buttons: [
-            [
-              { action: { type: "callback", label: "Передать", payload: JSON.stringify({ cmd: "transfer_confirm", targetId: parsed.targetId, targetName: parsed.targetName, amount: amount, authorId: userId }) }, color: "positive" },
-              { action: { type: "callback", label: "Не передавать", payload: JSON.stringify({ cmd: "transfer_cancel", targetId: parsed.targetId, targetName: parsed.targetName, amount: amount, authorId: userId }) }, color: "negative" }
-            ]
-          ]
-        };
-
-        return await sendResponse(
-          `Вы собираетесь передать ${formatNum(amount)}$ пользователю [id${parsed.targetId}|${parsed.targetName}]\n\n| Для подтверждения нажмите на кнопку:`,
-          { keyboard: JSON.stringify(keyboard) }
-        );
-      }
-
-      // Wikipedia Command
-      if (rawCmd === "/вики") {
-        const query = args.slice(1).join(" ");
-        if (!query) return await sendResponse("Используйте: /вики [запрос]");
-        
-        try {
-          const searchRes = await axios.get(`https://ru.wikipedia.org/w/api.php`, {
-            params: {
-              action: "query",
-              list: "search",
-              srsearch: query,
-              format: "json",
-              utf8: 1
-            },
-            headers: { "User-Agent": "JordanManagerBot/1.0 (https://vk.com/jordan_manager)" }
-          });
-          
-          const searchItems = searchRes.data?.query?.search || [];
-          if (searchItems.length === 0) {
-            return await sendResponse(`🔍 По запросу «${query}» в Википедии ничего не найдено.`);
-          }
-          
-          const bestTitle = searchItems[0].title;
-          const titleForUrl = bestTitle.replace(/ /g, "_");
-          
-          try {
-            const summaryRes = await axios.get(`https://ru.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(titleForUrl)}`, {
-                headers: { "User-Agent": "JordanManagerBot/1.0 (https://vk.com/jordan_manager)" }
-            });
-            const summary = summaryRes.data;
-            const extract = summary.extract || "Описание отсутствует.";
-            const url = summary.content_urls?.desktop?.page || `https://ru.wikipedia.org/wiki/${encodeURIComponent(bestTitle)}`;
-            
-            let wikiText = `🔍 Результат поиска в Википедии: *${bestTitle}*\n\n` +
-                           `${extract}\n\n` +
-                           `🔗 Ссылка на статью: ${url}`;
-                           
-            return await sendResponse(wikiText);
-          } catch (e) {
-            const snippet = searchItems[0].snippet.replace(/<span class="searchmatch">/g, "").replace(/<\/span>/g, "");
-            const url = `https://ru.wikipedia.org/wiki/${encodeURIComponent(bestTitle)}`;
-            let wikiText = `🔍 Результат поиска в Википедии: *${bestTitle}*\n\n` +
-                           `${snippet}...\n\n` +
-                           `🔗 Ссылка на статью: ${url}`;
-            return await sendResponse(wikiText);
-          }
-        } catch (err) {
-          console.error("Wikipedia search error:", err);
-          return await sendResponse("Ошибка при поиске в Википедии. Попробуйте позже.");
-        }
-      }
-
-      // Rules Command
-      if (rawCmd === "/правила") {
-        return await sendResponse("Правила бота находятся тут - [vk.ru/@gm_manager_official-pravila-bota|Правила]");
-      }
-
-      // Clan System Command
-      if (rawCmd === "/клан") {
-        const sub = args[1]?.toLowerCase();
-
-        if (sub === "создать") {
-          const clanName = args.slice(2).join(" ");
-          if (!clanName) return await sendResponse("Используйте: /клан создать [Название]");
-          if (user.clanId) return await sendResponse("Вы уже состоите в клане!");
-          if ((user.balance || 0) < 1000000) return await sendResponse("Создать клан стоит 1.000.000$ на руках!");
-
-          const clanId = "clan_" + Date.now();
-          const newClan = {
-            id: clanId,
-            name: clanName,
-            ownerId: userId,
-            deputies: [],
-            assistants: [],
-            members: [userId],
-            treasury: 0,
-            soldiers: 0,
-            helicopters: 0,
-            tanks: 0,
-            type: "Открытый",
-            maxMembers: 20,
-            wins: 0
-          };
-
-          await firestoreDb.collection("clans").doc(clanId).set(newClan);
-          await updateUser(userId, { balance: user.balance - 1000000, clanId, clanRole: "Лидер" });
-
-          return await sendResponse(`Вы создали клан ${clanName}, поздравляем!`);
-        }
-
-        if (sub === "сила") {
-          const targetClanName = args.slice(2).join(" ");
-          let targetClan: any = null;
-
-          if (targetClanName) {
-            const snap = await firestoreDb.collection("clans").where("name", "==", targetClanName).limit(1).get();
-            if (!snap.empty) {
-              targetClan = snap.docs[0].data();
-            } else {
-              return await sendResponse(`Клан "${targetClanName}" не найден.`);
-            }
-          } else {
-            if (!user.clanId) return await sendResponse("Вы не состоите в клане! Используйте: /клан сила [Название]");
-            const doc = await firestoreDb.collection("clans").doc(user.clanId).get();
-            if (doc.exists) {
-              targetClan = doc.data();
-            } else {
-              return await sendResponse("Ваш клан не найден в базе данных.");
-            }
-          }
-
-          return await sendResponse(
-            `Сила клана ${targetClan.name}\n\n` +
-            `| Солдатов: ${formatNum(targetClan.soldiers || 0)}\n` +
-            `| Вертолётов: ${formatNum(targetClan.helicopters || 0)}\n` +
-            `| Танки: ${formatNum(targetClan.tanks || 0)}`
-          );
-        }
-
-        if (!sub) {
-          if (!user.clanId) {
-            return await sendResponse("Вы не состоите ни в одном клане. Создайте его за 1 000 000$: /клан создать [Название]");
-          }
-
-          const clanDoc = await firestoreDb.collection("clans").doc(user.clanId).get();
-          if (!clanDoc.exists) {
-            return await sendResponse("Ваш клан не найден в базе данных.");
-          }
-
-          const clan = clanDoc.data()!;
-          const ownerUser = await getOrCreateUser(clan.ownerId);
-          const ownerName = ownerUser.nick || `Игрок ${clan.ownerId}`;
-
-          const deputyNames: string[] = [];
-          for (const dId of (clan.deputies || [])) {
-            const du = await getOrCreateUser(dId);
-            deputyNames.push(`[id${dId}|${du.nick || "Игрок"}]`);
-          }
-
-          const assistantNames: string[] = [];
-          for (const aId of (clan.assistants || [])) {
-            const au = await getOrCreateUser(aId);
-            assistantNames.push(`[id${aId}|${au.nick || "Игрок"}]`);
-          }
-
-          const totalPower = (clan.soldiers || 0) * 1 + (clan.helicopters || 0) * 10 + (clan.tanks || 0) * 50;
-
-          const keyboard = {
+      if (rawCmd === "/заявка") {
+         if (peerId > 2000000000) {
+            return await sendResponse("Данная команда доступна только в личных сообщениях бота!");
+         }
+         const zKb = {
             inline: true,
             buttons: [
-              [
-                { action: { type: "callback", label: "Все участники клана", payload: JSON.stringify({ cmd: "clan_members_list", authorId: userId, clanId: clan.id }) }, color: "primary" }
-              ]
+               [{ action: { type: "callback", label: "Да, хочу", payload: JSON.stringify({ cmd: "zayavka_start" }) }, color: "positive" }],
+               [{ action: { type: "callback", label: "Нет, не хочу", payload: JSON.stringify({ cmd: "zayavka_cancel" }) }, color: "negative" }]
             ]
-          };
-
-          let textResponse = 
-            `Информация о клане, в котором вы состоите\n\n` +
-            `| Название клана: ${clan.name}\n` +
-            `| Тип клана: ${clan.type}\n\n` +
-            `| Участников: ${clan.members?.length || 0}\n` +
-            `| Лидер клана: [id${clan.ownerId}|${ownerName}]\n` +
-            `| Зам. Лидера: ${deputyNames.join(", ") || "Отсутствует"}\n` +
-            `| Помощник зам. лидера: ${assistantNames.join(", ") || "Отсутствует"}\n\n` +
-            `| Денег в казне: ${formatNum(clan.treasury || 0)}$\n\n` +
-            `| Общая сила клана: ${formatNum(totalPower)}`;
-
-          return await sendResponse(textResponse, { keyboard: JSON.stringify(keyboard) });
-        }
-
-        if (!user.clanId) {
-          return await sendResponse("Для выполнения этой команды вы должны состоять в клане!");
-        }
-
-        const clanDoc = await firestoreDb.collection("clans").doc(user.clanId).get();
-        if (!clanDoc.exists) {
-          return await sendResponse("Ваш клан не найден в базе данных.");
-        }
-        const clan = clanDoc.data()!;
-
-        if (sub === "пригласить") {
-          const isLeader = clan.ownerId === userId;
-          const isDeputy = (clan.deputies || []).includes(userId);
-          const isAssistant = (clan.assistants || []).includes(userId);
-
-          if (!isLeader && !isDeputy && !isAssistant) {
-            return await sendResponse("Приглашать могут только Лидер, Заместители и Помощники зама!");
-          }
-
-          const parsed = await parseTargetUser(message, args.slice(2));
-          if (!parsed.targetId) return await sendResponse("Укажите пользователя для приглашения!");
-          if (parsed.targetId === userId) return await sendResponse("Вы не можете пригласить сами себя!");
-
-          const targetUser = await getOrCreateUser(parsed.targetId);
-          if (targetUser.clanId) return await sendResponse("Этот пользователь уже состоит в клане!");
-
-          if ((clan.members || []).length >= (clan.maxMembers || 20)) {
-            return await sendResponse("В клане нет свободных мест! Купите места: /клан места");
-          }
-
-          const keyboard = {
-            inline: true,
-            buttons: [
-              [
-                { action: { type: "callback", label: "Присоединиться", payload: JSON.stringify({ cmd: "clan_join_accept", clanId: clan.id, inviteeId: parsed.targetId, authorId: parsed.targetId }) }, color: "positive" },
-                { action: { type: "callback", label: "Отказаться", payload: JSON.stringify({ cmd: "clan_join_decline", clanId: clan.id, inviteeId: parsed.targetId, authorId: parsed.targetId }) }, color: "negative" }
-              ]
-            ]
-          };
-
-          try {
-            await sendVkMessage(VK_TOKEN, parsed.targetId, `[id${userId}|${fullName}] хочет пригласить вас в клан ${clan.name}!`, {
-              keyboard: JSON.stringify(keyboard)
-            });
-            return await sendResponse(`вы отправили предложение вступить в клан пользователю [id${parsed.targetId}|${parsed.targetName}]`);
-          } catch (e) {
-            return await sendResponse(`Не удалось отправить приглашение пользователю [id${parsed.targetId}|${parsed.targetName}] в ЛС (возможно, заблокированы сообщения от бота).`);
-          }
-        }
-
-        if (sub === "кикнуть") {
-          const isLeader = clan.ownerId === userId;
-          const isDeputy = (clan.deputies || []).includes(userId);
-
-          if (!isLeader && !isDeputy) {
-            return await sendResponse("Исключать участников могут только Лидер и Заместители!");
-          }
-
-          const parsed = await parseTargetUser(message, args.slice(2));
-          if (!parsed.targetId) return await sendResponse("Укажите пользователя для исключения!");
-          if (parsed.targetId === userId) return await sendResponse("Вы не можете исключить себя!");
-
-          const targetUser = await getOrCreateUser(parsed.targetId);
-          if (targetUser.clanId !== clan.id) return await sendResponse("Этот пользователь не состоит в вашем клане!");
-
-          const targetIsLeader = clan.ownerId === parsed.targetId;
-          const targetIsDeputy = (clan.deputies || []).includes(parsed.targetId);
-
-          if (targetIsLeader) {
-            return await sendResponse("Вы не можете исключить лидера клана!");
-          }
-
-          if (isDeputy && targetIsDeputy) {
-            return await sendResponse("Заместитель не может исключить другого заместителя!");
-          }
-
-          let reason = args.slice(3).join(" ") || "Без причины";
-
-          const updatedMembers = (clan.members || []).filter((mId: number) => mId !== parsed.targetId);
-          const updatedDeputies = (clan.deputies || []).filter((mId: number) => mId !== parsed.targetId);
-          const updatedAssistants = (clan.assistants || []).filter((mId: number) => mId !== parsed.targetId);
-
-          await firestoreDb.collection("clans").doc(clan.id).set({
-            members: updatedMembers,
-            deputies: updatedDeputies,
-            assistants: updatedAssistants
-          }, { merge: true });
-
-          await updateUser(parsed.targetId, { clanId: null, clanRole: null });
-
-          await sendResponse(`Вы исключили пользователя [id${parsed.targetId}|${parsed.targetName}] из клана`);
-
-          try {
-            await sendVkMessage(VK_TOKEN, parsed.targetId, 
-              `Вы были кикнуты из клана ${clan.name}\n\n` +
-              `| Причина: ${reason}\n` +
-              `| Вас кикнул: [id${userId}|${fullName}]`
-            );
-          } catch (e) {}
-
-          return;
-        }
-
-        if (sub === "казна") {
-          const sumStr = args[2] || "";
-          const sum = parseNumber(sumStr);
-          if (isNaN(sum) || sum <= 0) return await sendResponse("Укажите корректную сумму для вклада!");
-          if ((user.balance || 0) < sum) return await sendResponse("У вас недостаточно средств на руках!");
-
-          const updatedTreasury = (clan.treasury || 0) + sum;
-          await firestoreDb.collection("clans").doc(clan.id).set({ treasury: updatedTreasury }, { merge: true });
-          await updateUser(userId, { balance: user.balance - sum });
-
-          await sendResponse(`Вы вложили "${formatNum(sum)}$" в казну клана`);
-
-          const membersList = clan.members || [];
-          for (const mId of membersList) {
-            if (mId !== userId) {
-              try {
-                await sendVkMessage(VK_TOKEN, mId, `[id${userId}|${fullName}] вложил(-а) ${formatNum(sum)}$ в казну клана`);
-              } catch (e) {}
-            }
-          }
-          return;
-        }
-
-        if (sub === "вывод") {
-          const isLeader = clan.ownerId === userId;
-          const isDeputy = (clan.deputies || []).includes(userId);
-
-          if (!isLeader && !isDeputy) {
-            return await sendResponse("Выводить деньги из казны могут только Лидер и Заместители!");
-          }
-
-          const sumStr = args[2] || "";
-          const sum = parseNumber(sumStr);
-          if (isNaN(sum) || sum <= 0) return await sendResponse("Укажите корректную сумму для вывода!");
-
-          const currentTreasury = clan.treasury || 0;
-          if (currentTreasury < sum) return await sendResponse(`В казне недостаточно средств! Доступно: ${formatNum(currentTreasury)}$`);
-
-          const updatedTreasury = currentTreasury - sum;
-          await firestoreDb.collection("clans").doc(clan.id).set({ treasury: updatedTreasury }, { merge: true });
-          await updateUser(userId, { balance: (user.balance || 0) + sum });
-
-          await sendResponse(`Вы вывели "${formatNum(sum)}$" с казны клана`);
-
-          const membersList = clan.members || [];
-          for (const mId of membersList) {
-            if (mId !== userId) {
-              try {
-                await sendVkMessage(VK_TOKEN, mId, `[id${userId}|${fullName}] вывел ${formatNum(sum)}$ с казны клана`);
-              } catch (e) {}
-            }
-          }
-          return;
-        }
-
-        if (sub === "война") {
-          const isLeader = clan.ownerId === userId;
-          const isDeputy = (clan.deputies || []).includes(userId);
-
-          if (!isLeader && !isDeputy) {
-            return await sendResponse("Объявлять войну могут только Лидер и Заместители!");
-          }
-
-          const targetClanName = args.slice(2).join(" ");
-          if (!targetClanName) return await sendResponse("Используйте: /клан война [название клана]");
-
-          const snap = await firestoreDb.collection("clans").where("name", "==", targetClanName).limit(1).get();
-          if (snap.empty) return await sendResponse(`Клан "${targetClanName}" не найден.`);
-
-          const enemyClan = snap.docs[0].data();
-          if (enemyClan.id === clan.id) return await sendResponse("Вы не можете воевать со своим собственным кланом!");
-
-          const p1Power = (clan.soldiers || 0) * 1 + (clan.helicopters || 0) * 10 + (clan.tanks || 0) * 50;
-          const p2Power = (enemyClan.soldiers || 0) * 1 + (enemyClan.helicopters || 0) * 10 + (enemyClan.tanks || 0) * 50;
-
-          let winnerClan = clan;
-          let loserClan = enemyClan;
-
-          if (p2Power > p1Power) {
-            winnerClan = enemyClan;
-            loserClan = clan;
-          }
-
-          const gainedSoldiers = loserClan.soldiers || 0;
-          const gainedHelicopters = loserClan.helicopters || 0;
-
-          await firestoreDb.collection("clans").doc(winnerClan.id).set({
-            soldiers: (winnerClan.soldiers || 0) + gainedSoldiers,
-            helicopters: (winnerClan.helicopters || 0) + gainedHelicopters,
-            wins: (winnerClan.wins || 0) + 1
-          }, { merge: true });
-
-          await firestoreDb.collection("clans").doc(loserClan.id).set({
-            soldiers: 0,
-            helicopters: 0
-          }, { merge: true });
-
-          return await sendResponse(
-            `Война между кланами ${clan.name} и ${enemyClan.name}!\n\n` +
-            `У клана ${clan.name}:\n` +
-            `Солдатов: ${clan.soldiers || 0}\n` +
-            `Вертолётов: ${clan.helicopters || 0}\n` +
-            `Танки: ${clan.tanks || 0}\n\n` +
-            `У клана ${enemyClan.name}:\n` +
-            `Солдатов: ${enemyClan.soldiers || 0}\n` +
-            `Вертолётов: ${enemyClan.helicopters || 0}\n` +
-            `Танки: ${enemyClan.tanks || 0}\n\n` +
-            `Победитель войны: ${winnerClan.name}\n` +
-            `Победитель войны также забирает ${gainedSoldiers} солдатов и ${gainedHelicopters} вертолётов`
-          );
-        }
-
-        if (sub === "состав") {
-          const page = Math.max(1, parseInt(args[2]) || 1);
-          const limit = 20;
-          const offset = (page - 1) * limit;
-
-          const members = clan.members || [];
-          const totalPages = Math.ceil(members.length / limit);
-
-          const pageMembers = members.slice(offset, offset + limit);
-          const memberLines: string[] = [];
-
-          for (const mId of pageMembers) {
-            const mu = await getOrCreateUser(mId);
-            let roleName = "Участник";
-            if (mId === clan.ownerId) roleName = "Лидер";
-            else if ((clan.deputies || []).includes(mId)) roleName = "Заместитель лидера";
-            else if ((clan.assistants || []).includes(mId)) roleName = "Помощник заместителя";
-
-            memberLines.push(`[id${mId}|${mu.nick || "Игрок"}] | Должность: ${roleName}`);
-          }
-
-          let resp = `Состав клана ${clan.name}\n\n` + memberLines.join("\n");
-          if (totalPages > 1) {
-            resp += `\n\n| Страница ${page} из ${totalPages}. Для перехода используйте: /клан состав [номер страницы]`;
-          }
-
-          return await sendResponse(resp);
-        }
-
-        if (sub === "тип") {
-          const isLeader = clan.ownerId === userId;
-          if (!isLeader) return await sendResponse("Только Лидер клана может менять его тип!");
-
-          const newTypeStr = args[2];
-          if (!newTypeStr) return await sendResponse("Используйте: /клан тип [Закрытый|По заявкам|Открытый]");
-
-          let newType = "";
-          if (newTypeStr.toLowerCase() === "закрытый") newType = "Закрытый";
-          else if (newTypeStr.toLowerCase() === "открытый") newType = "Открытый";
-          else if (newTypeStr.toLowerCase().startsWith("по заяв")) newType = "По заявкам";
-          else return await sendResponse("Доступные типы клана: Закрытый, По заявкам, Открытый");
-
-          await firestoreDb.collection("clans").doc(clan.id).set({ type: newType }, { merge: true });
-          return await sendResponse(`Вы изменили тип клана на: ${newType}`);
-        }
-
-        if (sub === "зам") {
-          const isLeader = clan.ownerId === userId;
-          if (!isLeader) return await sendResponse("Только Лидер клана может назначать заместителей!");
-
-          const parsed = await parseTargetUser(message, args.slice(2));
-          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
-          if (parsed.targetId === userId) return await sendResponse("Вы не можете назначить заместителем себя!");
-
-          const targetUser = await getOrCreateUser(parsed.targetId);
-          if (targetUser.clanId !== clan.id) return await sendResponse("Этот пользователь не в вашем клане!");
-
-          const deputies = clan.deputies || [];
-          if (deputies.includes(parsed.targetId)) return await sendResponse("Этот пользователь уже заместитель!");
-
-          const updatedDeputies = [...deputies, parsed.targetId];
-          const updatedAssistants = (clan.assistants || []).filter((id: number) => id !== parsed.targetId);
-
-          await firestoreDb.collection("clans").doc(clan.id).set({ deputies: updatedDeputies, assistants: updatedAssistants }, { merge: true });
-          await updateUser(parsed.targetId, { clanRole: "Заместитель лидера" });
-
-          return await sendResponse(`Вы установили пользователя [id${parsed.targetId}|${parsed.targetName}] в качестве заместителя лидера клана`);
-        }
-
-        if (sub === "помощник" && args[2]?.toLowerCase() === "зама") {
-          const isLeader = clan.ownerId === userId;
-          const isDeputy = (clan.deputies || []).includes(userId);
-
-          if (!isLeader && !isDeputy) {
-            return await sendResponse("Назначать помощников могут только Лидер и Заместители!");
-          }
-
-          const parsed = await parseTargetUser(message, args.slice(3));
-          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
-          if (parsed.targetId === userId) return await sendResponse("Вы не можете назначить себя!");
-
-          const targetUser = await getOrCreateUser(parsed.targetId);
-          if (targetUser.clanId !== clan.id) return await sendResponse("Этот пользователь не в вашем клане!");
-
-          const assistants = clan.assistants || [];
-          if (assistants.includes(parsed.targetId)) return await sendResponse("Этот пользователь уже помощник заместителя!");
-
-          const updatedAssistants = [...assistants, parsed.targetId];
-          const updatedDeputies = (clan.deputies || []).filter((id: number) => id !== parsed.targetId);
-
-          await firestoreDb.collection("clans").doc(clan.id).set({ deputies: updatedDeputies, assistants: updatedAssistants }, { merge: true });
-          await updateUser(parsed.targetId, { clanRole: "Помощник зам. лидера" });
-
-          return await sendResponse(`Вы установили пользователя [id${parsed.targetId}|${parsed.targetName}] в качестве помощника зама лидера клана`);
-        }
-
-        if (sub === "передать") {
-          const isLeader = clan.ownerId === userId;
-          if (!isLeader) return await sendResponse("Только Лидер может передать клан!");
-
-          const parsed = await parseTargetUser(message, args.slice(2));
-          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
-          if (parsed.targetId === userId) return await sendResponse("Вы не можете передать клан самому себе!");
-
-          const targetUser = await getOrCreateUser(parsed.targetId);
-          if (targetUser.clanId !== clan.id) return await sendResponse("Этот пользователь не состоит в вашем клане!");
-
-          const keyboard = {
-            inline: true,
-            buttons: [
-              [
-                { action: { type: "callback", label: "Передать", payload: JSON.stringify({ cmd: "clan_transfer_confirm", targetId: parsed.targetId, authorId: userId }) }, color: "positive" },
-                { action: { type: "callback", label: "Не передавать", payload: JSON.stringify({ cmd: "clan_transfer_cancel", targetId: parsed.targetId, authorId: userId }) }, color: "negative" }
-              ]
-            ]
-          };
-
-          return await sendResponse(
-            `Вы собираетесь передать клан пользователю [id${parsed.targetId}|${parsed.targetName}]\n\n| Для подтверждения нажмите на кнопку:`,
-            { keyboard: JSON.stringify(keyboard) }
-          );
-        }
-
-        if (sub === "снять") {
-          const isLeader = clan.ownerId === userId;
-          if (!isLeader) return await sendResponse("Только Лидер клана может снимать пользователей с должности!");
-
-          const parsed = await parseTargetUser(message, args.slice(2));
-          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
-
-          const targetUser = await getOrCreateUser(parsed.targetId);
-          if (targetUser.clanId !== clan.id) return await sendResponse("Этот пользователь не состоит в вашем клане!");
-
-          const updatedDeputies = (clan.deputies || []).filter((id: number) => id !== parsed.targetId);
-          const updatedAssistants = (clan.assistants || []).filter((id: number) => id !== parsed.targetId);
-
-          await firestoreDb.collection("clans").doc(clan.id).set({ deputies: updatedDeputies, assistants: updatedAssistants }, { merge: true });
-          await updateUser(parsed.targetId, { clanRole: "Участник" });
-
-          return await sendResponse(`Вы сняли пользователя [id${parsed.targetId}|${parsed.targetName}] с его должности в клане`);
-        }
-
-        if (sub === "переименовать") {
-          const isLeader = clan.ownerId === userId;
-          if (!isLeader) return await sendResponse("Только Лидер клана может переименовать его!");
-
-          const newName = args.slice(2).join(" ");
-          if (!newName) return await sendResponse("Используйте: /клан переименовать [Новое название]");
-          if ((user.balance || 0) < 2000000) return await sendResponse("Переименовать клан стоит 2.000.000$ на руках!");
-
-          const keyboard = {
-            inline: true,
-            buttons: [
-              [
-                { action: { type: "callback", label: "Переименовать", payload: JSON.stringify({ cmd: "clan_rename_confirm", newName, authorId: userId }) }, color: "positive" },
-                { action: { type: "callback", label: "Не переименовывать", payload: JSON.stringify({ cmd: "clan_rename_cancel", authorId: userId }) }, color: "negative" }
-              ]
-            ]
-          };
-
-          return await sendResponse(
-            `Вы действительно хотите переименовать название клана на "${newName}" за 2.000.000$?\n\n| Для подтверждения нажмите на кнопку:`,
-            { keyboard: JSON.stringify(keyboard) }
-          );
-        }
-
-        if (sub === "выйти") {
-          const isLeader = clan.ownerId === userId;
-          if (isLeader) {
-            return await sendResponse("Вы не можете выйти из своего клана, будучи Лидером! Сначала передайте клан (/клан передать) или распустите его.");
-          }
-
-          const updatedMembers = (clan.members || []).filter((id: number) => id !== userId);
-          const updatedDeputies = (clan.deputies || []).filter((id: number) => id !== userId);
-          const updatedAssistants = (clan.assistants || []).filter((id: number) => id !== userId);
-
-          await firestoreDb.collection("clans").doc(clan.id).set({
-            members: updatedMembers,
-            deputies: updatedDeputies,
-            assistants: updatedAssistants
-          }, { merge: true });
-
-          await updateUser(userId, { clanId: null, clanRole: null });
-
-          return await sendResponse(`Вы вышли из клана ${clan.name}`);
-        }
-
-        if (sub === "вертолёты" || sub === "вертолеты") {
-          const count = Math.max(1, parseInt(args[2]) || 1);
-          const cost = count * 50000;
-
-          if ((user.balance || 0) < cost) return await sendResponse(`У вас недостаточно средств на руках! Цена 1 вертолёта - 50.000$ (нужно ${formatNum(cost)}$)`);
-
-          await updateUser(userId, { balance: user.balance - cost });
-          await firestoreDb.collection("clans").doc(clan.id).set({ helicopters: (clan.helicopters || 0) + count }, { merge: true });
-
-          return await sendResponse(`Вы купили ${count} вертолётов для клана`);
-        }
-
-        if (sub === "солдаты" || sub === "солдат") {
-          const count = Math.max(1, parseInt(args[2]) || 1);
-          const cost = count * 5000;
-
-          if ((user.balance || 0) < cost) return await sendResponse(`У вас недостаточно средств на руках! Цена 1 солдата - 5.000$ (нужно ${formatNum(cost)}$)`);
-
-          await updateUser(userId, { balance: user.balance - cost });
-          await firestoreDb.collection("clans").doc(clan.id).set({ soldiers: (clan.soldiers || 0) + count }, { merge: true });
-
-          return await sendResponse(`Вы купили ${count} солдатов для клана`);
-        }
-
-        if (sub === "танки" || sub === "танк") {
-          const count = Math.max(1, parseInt(args[2]) || 1);
-          const cost = count * 150000;
-
-          if ((user.balance || 0) < cost) return await sendResponse(`У вас недостаточно средств на руках! Цена 1 танка - 150.000$ (нужно ${formatNum(cost)}$)`);
-
-          await updateUser(userId, { balance: user.balance - cost });
-          await firestoreDb.collection("clans").doc(clan.id).set({ tanks: (clan.tanks || 0) + count }, { merge: true });
-
-          return await sendResponse(`Вы купили ${count} танков для клана`);
-        }
-
-        if (sub === "места") {
-          const isLeader = clan.ownerId === userId;
-          if (!isLeader) return await sendResponse("Только Лидер клана может покупать места!");
-
-          const cost = 250000;
-          if ((user.balance || 0) < cost) return await sendResponse("Покупка 5 мест стоит 250.000$ на руках!");
-
-          await updateUser(userId, { balance: user.balance - cost });
-          await firestoreDb.collection("clans").doc(clan.id).set({ maxMembers: (clan.maxMembers || 20) + 5 }, { merge: true });
-
-          return await sendResponse(`Вы купили дополнительное место для участника в клан.`);
-        }
-
-        return await sendResponse("Неизвестная подкоманда. Используйте /клан для информации.");
+         };
+         return await sendResponse(`[id${userId}|${fullName}], приветствуем!\n\nВы хотите подать заявку на пост заместителя руководителя?`, { keyboard: JSON.stringify(zKb) });
       }
 
-      // 7. /топ
-      if (rawCmd === "/топ" || rawCmd === "/пивозавры") {
-        if (args[1]?.toLowerCase() === "браки" || args[1]?.toLowerCase() === "брак" || args[1]?.toLowerCase() === "браков") {
-          const text = await getTopMarriagesText();
-          return await sendResponse(text);
-        }
-
-        const keyboard = {
-          inline: true,
-          buttons: [
-            [
-              { action: { type: "callback", label: "Топ по деньгам", payload: JSON.stringify({ cmd: "top_money", authorId: userId }) }, color: "primary" },
-              { action: { type: "callback", label: "Топ по деньгам в банке", payload: JSON.stringify({ cmd: "top_bank", authorId: userId }) }, color: "primary" }
-            ],
-            [
-              { action: { type: "callback", label: "Топ по пиву", payload: JSON.stringify({ cmd: "top_beer", authorId: userId }) }, color: "primary" },
-              { action: { type: "callback", label: "Топ по JC", payload: JSON.stringify({ cmd: "top_jc", authorId: userId }) }, color: "primary" }
-            ],
-            [
-              { action: { type: "callback", label: "Топ по бизнесам", payload: JSON.stringify({ cmd: "top_biz", authorId: userId }) }, color: "primary" },
-              { action: { type: "callback", label: "Топ по репутации", payload: JSON.stringify({ cmd: "top_rep", authorId: userId }) }, color: "primary" }
-            ],
-            [
-              { action: { type: "callback", label: "Топ по бракам", payload: JSON.stringify({ cmd: "top_marriages", authorId: userId }) }, color: "secondary" },
-              { action: { type: "callback", label: "Топ кланов", payload: JSON.stringify({ cmd: "top_clans", authorId: userId }) }, color: "secondary" }
-            ]
-          ]
-        };
-
-        return await sendResponse(`Выберите категорию топа:`, { keyboard: JSON.stringify(keyboard) });
+      if (rawCmd === "/renameroles" || rawCmd === "/переименоватьроли") {
+         const isSecondaryOwner = chatData.ownerId2 === userId;
+         const isPrimaryOwner = chatData.ownerId === userId;
+         if (!isSecondaryOwner && !isPrimaryOwner && user.role < 12) {
+            return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         }
+         
+         if (args.length === 1) {
+             const r = chatData.customRoles || {};
+             if (Object.keys(r).length > 0) {
+                 const rrStr = `...::Изменение названия ролей::...\n\n| Установленное название ролей: Да`;
+                 const rrKb = {
+                    inline: true,
+                    buttons: [
+                       [{ action: { type: "callback", label: "Установить новое название", payload: JSON.stringify({ cmd: "rr_new" }) }, color: "positive" }],
+                       [{ action: { type: "callback", label: "Удалить название ролей", payload: JSON.stringify({ cmd: "rr_del" }) }, color: "negative" }]
+                    ]
+                 };
+                 return await sendResponse(rrStr, { keyboard: JSON.stringify(rrKb) });
+             } else {
+                 return await sendResponse(`Укажите аргументы команды!\n\n| Пример:\n\n| Владелец беседы:\n- {owner}\n\n| Главный Администратор:\n- {ga}\n\n| Зам. Глав. Администратора:\n- {zga}\n\n| Старший Администратор:\n- {sadmin}\n\n| Администратор:\n- {admin}\n\n| Старший Модератор:\n- {smoder}\n\n| Модератор:\n- {moder}`, { noReply: true });
+             }
+         }
+         
+         const fullText = args.slice(1).join(" ");
+         // Parse the names
+         const customRoles = {};
+         const lines = fullText.split("\n");
+         let currentRole = "";
+         for (const line of lines) {
+             const lower = line.toLowerCase();
+             if (lower.includes("владелец")) currentRole = "owner";
+             else if (lower.includes("главный администратор") || lower.includes("га")) currentRole = "ga";
+             else if (lower.includes("зам. глав. администратора") || lower.includes("зга")) currentRole = "zga";
+             else if (lower.includes("старший администратор")) currentRole = "sadmin";
+             else if (lower.includes("администратор")) currentRole = "admin";
+             else if (lower.includes("старший модератор")) currentRole = "smoder";
+             else if (lower.includes("модератор")) currentRole = "moder";
+             else if (line.trim().startsWith("- {") && line.trim().endsWith("}") && currentRole) {
+                 const name = line.trim().slice(3, -1);
+                 customRoles[currentRole] = name;
+                 currentRole = "";
+             }
+         }
+         chatData.customRoles = customRoles;
+         const chatRef = firestoreDb.collection("chats").doc(peerId.toString());
+         await chatRef.set({ customRoles }, { merge: true }).catch(() => {});
+         return await sendResponse("Названия ролей успешно обновлены!");
       }
 
-      // 8. /рулетка
-      if (rawCmd === "/рулетка") {
-        let stake = parseNumber(args[1]);
-        if (args[1]?.toLowerCase() === "все" || args[1]?.toLowerCase() === "вабанк") stake = user.balance || 0;
-        if (isNaN(stake) || stake <= 0) return await sendResponse("Укажите сумму ставки!");
-        if ((user.balance || 0) < stake) return await sendResponse("У вас недостаточно средств!");
-
-        const win = Math.random() < 0.35; // 35% win rate
-        if (win) {
-          const winAmount = Math.floor(stake * (globalSettings.rouletteMultiplier || 3));
-          await updateUser(userId, { balance: user.balance + winAmount });
-          await logBotAction({ type: "game", peerId, userId, text: `[id${userId}|${fullName}] выиграл(-а) ${winAmount.toLocaleString()}$ в рулетке (Ставка: ${stake.toLocaleString()}$)` });
-          return await sendResponse(`🎰 [id${userId}|${fullName}], вы выиграли ${winAmount.toLocaleString()}$ в рулетке!`);
-        } else {
-          await updateUser(userId, { balance: user.balance - stake });
-          await logBotAction({ type: "game", peerId, userId, text: `[id${userId}|${fullName}] проиграл(-а) ${stake.toLocaleString()}$ в рулетке` });
-          return await sendResponse(`🎰 [id${userId}|${fullName}], вы проиграли ${stake.toLocaleString()}$ в рулетке.`);
-        }
-      }
-
-// 10. Business system
-      if (rawCmd === "/бизнес") {
-        const bCount = user.businesses || 0;
-        const bType = user.bizType || 0;
-        const bizInfo = bType > 0 ? BIZ_TYPES[bType as keyof typeof BIZ_TYPES] : null;
-
-        const bIncome = bizInfo ? bCount * bizInfo.profit : 0;
-        const bProds = user.bizProducts || 0;
-
-        const totalHoursLeft = bCount > 0 ? Math.floor(bProds / bCount) : 0;
-        const days = Math.floor(totalHoursLeft / 24);
-        const hours = totalHoursLeft % 24;
-        const mins = 0;
-
-        const pluralize = (num: number, forms: string[]) => {
-          const MathAbs = Math.abs(num);
-          const n = MathAbs % 100;
-          const n1 = n % 10;
-          if (n > 10 && n < 20) return forms[2];
-          if (n1 > 1 && n1 < 5) return forms[1];
-          if (n1 === 1) return forms[0];
-          return forms[2];
-        };
-
-        const now = Date.now();
-        const bizExpireAt = user.bizExpireAt || 0;
-        let workMsLeft = bizExpireAt - now;
-        if (workMsLeft < 0) workMsLeft = 0;
-
-        const workHoursLeft = Math.floor(workMsLeft / 3600000);
-        const workMinsLeft = Math.floor((workMsLeft % 3600000) / 60000);
-
-        const incomeAcc = user.bizIncomeAcc || 0;
-
-        let txt = `Статистика бизнесов [id${userId}|${fullName}]\n\n` +
-                  `| Кол-во бизнесов: ${bCount}\n` +
-                  `| Прибыль с бизнесов за 1 час: ${bIncome.toLocaleString()}$\n\n` +
-                  `| Кол-во продуктов: ${bProds.toLocaleString()}\n` +
-                  `| Продуктов хватит на: ${days} ${pluralize(days, ['день', 'дня', 'дней'])} ${hours} ${pluralize(hours, ['час', 'часа', 'часов'])} ${mins} ${pluralize(mins, ['минуту', 'минуты', 'минут'])}\n\n` +
-                  `| До конца работы бизнесов: ${workHoursLeft} ${pluralize(workHoursLeft, ['час', 'часа', 'часов'])} ${workMinsLeft} ${pluralize(workMinsLeft, ['минуту', 'минуты', 'минут'])}\n\n` +
-                  `| Общий баланс бизнесов: ${incomeAcc.toLocaleString()}$`;
-
-        const keyboard: any = { inline: true, buttons: [] };
-
-        if (incomeAcc > 0) {
-          keyboard.buttons.push([{ action: { type: "callback", label: "Снять деньги с баланса бизнесов", payload: JSON.stringify({ cmd: "biz_collect_new", authorId: userId }) }, color: "positive" }]);
-        }
-        if (workMsLeft <= 0 && bCount > 0) {
-          keyboard.buttons.push([{ action: { type: "callback", label: "Продлить работу бизнесов", payload: JSON.stringify({ cmd: "biz_renew", authorId: userId }) }, color: "negative" }]);
-        }
-        if (bCount > 0) {
-          keyboard.buttons.push([{ action: { type: "callback", label: "Список всех ваших бизнесов", payload: JSON.stringify({ cmd: "biz_my_list", authorId: userId, page: 1 }) }, color: "secondary" }]);
-        }
-
-        let photoAttachment: string | null = null;
-        if (bizInfo && bizInfo.img) {
-           try {
-             const uploadRes = await uploadPhoto(peerId, bizInfo.img, 1);
-             if (uploadRes && uploadRes.attachment) photoAttachment = uploadRes.attachment;
-           } catch (e) {
-             console.error("Error attaching biz photo:", e);
-           }
-        }
-
-        const options: any = {};
-        if (keyboard.buttons.length > 0) options.keyboard = JSON.stringify(keyboard);
-        if (photoAttachment) options.attachment = photoAttachment;
-
-        return await sendResponse(txt, Object.keys(options).length > 0 ? options : undefined);
-      }
-
-      if (rawCmd === "/бизнесы") {
-        let txt = `Список всех бизнесов в боте:\n\n`;
-        Object.entries(BIZ_TYPES).forEach(([id, b]) => {
-           txt += `${id}) ${b.name} | Цена: ${b.price.toLocaleString()}$ | Прибыль в час: ${b.profit.toLocaleString()}$\n`;
-        });
-        return await sendResponse(txt);
-      }
-
-      if (rawCmd === "/купитьбиз") {
-        const typeId = parseNumber(args[1]);
-        const count = parseNumber(args[2]) || 1;
-
-        if (!typeId || !BIZ_TYPES[typeId as keyof typeof BIZ_TYPES]) {
-           return await sendResponse("Используйте: /купитьбиз [номер бизнеса (1-10)] [кол-во]");
-        }
-        if (count <= 0 || count > 100) return await sendResponse("Вы можете купить от 1 до 100 бизнесов за раз!");
-
-        const bType = user.bizType || 0;
-        if (bType !== 0 && bType !== typeId && (user.businesses || 0) > 0) {
-           return await sendResponse(`Вы можете покупать только бизнесы того же типа, который у вас уже есть (${BIZ_TYPES[bType as keyof typeof BIZ_TYPES].name})!`);
-        }
-
-        const bizInfo = BIZ_TYPES[typeId as keyof typeof BIZ_TYPES];
-        const cost = count * bizInfo.price;
-
-        if ((user.balance || 0) < cost) return await sendResponse(`Для покупки ${count} бизнес-(ов) требуется ${cost.toLocaleString()}$`);
-
-        const newBiz = (user.businesses || 0) + count;
-        const extraUpdates: any = { balance: user.balance - cost, businesses: newBiz, bizType: typeId };
-        if ((user.businesses || 0) === 0) {
-           extraUpdates.bizExpireAt = Date.now() + 5 * 3600 * 1000;
-           extraUpdates.lastBizCollectTime = Math.floor(Date.now() / 1000);
-        }
-
-        await updateUser(userId, extraUpdates);
-        return await sendResponse(`Вы купили ${count} бизнес-(ов)\n| Теперь у вас бизнесов: ${newBiz}\n| Не забудьте закупить продукты командой /ппрод!`);
-      }
-
-      if (rawCmd === "/продатьбиз") {
-        const currentBiz = user.businesses || 0;
-        if (currentBiz === 0) return await sendResponse("У вас нет бизнесов для продажи!");
-        const count = parseNumber(args[1]) || currentBiz;
-        if (count <= 0 || count > currentBiz) return await sendResponse("Укажите корректное количество бизнесов для продажи!");
-
-        const bType = user.bizType || 0;
-        const bizInfo = bType > 0 ? BIZ_TYPES[bType as keyof typeof BIZ_TYPES] : null;
-        if (!bizInfo) return await sendResponse("У вас нет бизнесов для продажи!");
-
-        const sellPrice = count * (bizInfo.price * 0.5); // Sell for 50% price
-        const newBiz = currentBiz - count;
-
-        let extra: any = { balance: (user.balance || 0) + sellPrice, businesses: newBiz };
-        if (newBiz === 0) {
-           extra.bizType = 0;
-        }
-
-        await updateUser(userId, extra);
-        return await sendResponse(`Вы продали ${count} бизнес-(ов) за ${sellPrice.toLocaleString()}$\n| У вас осталось: ${newBiz} бизнес-(ов)`);
-      }
-
-      if (rawCmd === "/ппрод" || rawCmd === "/купитьпрод") {
-        const bCount = user.businesses || 0;
-        if (bCount === 0) return await sendResponse("У вас нет бизнесов для закупки продуктов!");
-        const count = parseNumber(args[1]) || (bCount * 24);
-        if (count <= 0) return await sendResponse("Укажите корректное количество продуктов!");
-        const cost = count * 250;
-        if ((user.balance || 0) < cost) return await sendResponse(`У вас недостаточно средств! (Необходимо: ${cost.toLocaleString()}$ за ${count} продуктов)`);
-        const newProds = (user.bizProducts || 0) + count;
-        await updateUser(userId, { balance: user.balance - cost, bizProducts: newProds });
-        return await sendResponse(`Вы успешно закупили ${count} продуктов для бизнеса за ${cost.toLocaleString()}$!\n| Всего продуктов: ${newProds}`);
-      }
-
-      if (rawCmd === "/премпрофиль") {
-        const hasPremium = user.vipExpires > Date.now();
-        if (!hasPremium) return await sendResponse("Данная команда доступна только с премиумом статусом.");
-        const mode = args[1];
-        if (mode === "+") {
-          await updateUser(userId, { premiumProfileHidden: false });
-          return await sendResponse("Вы открыли свой профиль для публичного просмотра");
-        } else if (mode === "-") {
-          await updateUser(userId, { premiumProfileHidden: true });
-          return await sendResponse("Вы закрыли свой профиль для публичного просмотра");
-        } else {
-          return await sendResponse("Данная команда позволяет скрыть профиль, или открыть его, для публичного просмотра, форма ответа к команде: /премпрофиль -/+");
-        }
-      }
-
-      if (rawCmd === "/прембаланс") {
-        const hasPremium = user.vipExpires > Date.now();
-        if (!hasPremium) return await sendResponse("Данная команда доступна только с премиумом статусом.");
-        const mode = args[1];
-        if (mode === "+") {
-          await updateUser(userId, { premiumBalanceHidden: false });
-          return await sendResponse("Вы открыли свой баланс для публичного просмотра");
-        } else if (mode === "-") {
-          await updateUser(userId, { premiumBalanceHidden: true });
-          return await sendResponse("Вы закрыли свой баланс для публичного просмотра");
-        } else {
-          return await sendResponse("Данная команда позволяет скрыть баланс, или открыть его, для публичного просмотра, форма ответа к команде: /прембаланс -/+");
-        }
-      }
-
-      if (rawCmd === "/открытьдепозит") {
-        const hasPremium = user.vipExpires > Date.now();
-        if (!hasPremium) return await sendResponse("Данная команда доступна только с премиумом статусом.");
-        
-        const days = parseInt(args[1]);
-        const amountStr = args[2] || "";
-        let amount = parseNumber(amountStr);
-
-        if (user.deposits && user.deposits.length >= 2) {
-          return await sendResponse("У вас уже открыто максимум 2 депозита!");
-        }
-
-        const validDays = [4, 8, 10];
-        if (!validDays.includes(days)) return await sendResponse("Доступные сроки депозитов: 4 дня (10%), 8 дней (25%), 10 дней (35%)");
-        if (isNaN(amount) || amount <= 0 || amount === Infinity) return await sendResponse("Укажите корректную сумму для депозита!");
-        if (user.balance < amount) return await sendResponse("У вас недостаточно средств на руках!");
-
-        const percentMap: Record<number, number> = { 4: 10, 8: 25, 10: 35 };
-        const percent = percentMap[days];
-        const expiresAt = Date.now() + days * 86400 * 1000;
-        
-        const newDeposit = {
-          id: Date.now(),
-          amount: Math.floor(amount),
-          percent,
-          days,
-          expiresAt,
-          openedAt: Date.now()
-        };
-
-        const updatedDeposits = [...(user.deposits || []), newDeposit];
-        await updateUser(userId, { balance: user.balance - Math.floor(amount), deposits: updatedDeposits });
-        
-        return await sendResponse(`Вы открыли депозит на сумму «${Math.floor(amount).toLocaleString()}$» на кол-во дней ${days}`);
-      }
-
-      if (rawCmd === "/депозиты") {
-        const hasPremium = user.vipExpires > Date.now();
-        if (!hasPremium) return await sendResponse("Данная команда доступна только с премиумом статусом.");
-
-        const deposits = user.deposits || [];
-        const readyCount = deposits.filter((d: any) => Date.now() >= d.expiresAt).length;
-
-        let text = `...::Управление депозитами::...\n\n` +
-          `| Кол-во открытых депозитов у вас: ${deposits.length}\n` +
-          `| Кол-во депозитов, которые можно забрать: ${readyCount}\n\n` +
-          `| Информация о открытых депозитах:\n\n`;
-
-        const buttons: any[] = [];
-        deposits.forEach((d: any, idx: number) => {
-          const daysLeft = Math.max(0, Math.ceil((d.expiresAt - Date.now()) / (86400 * 1000)));
-          const finalAmount = Math.floor(d.amount * (1 + d.percent / 100));
-          text += `${idx + 1}) Депозит №${idx + 1} | Сумма: ${d.amount.toLocaleString()}$ | Процент: ${d.percent}% | На: ${d.days} д | До вывода: ${daysLeft} д | Итог: ${finalAmount.toLocaleString()}$\n`;
-          
-          if (Date.now() >= d.expiresAt) {
-            buttons.push([{ action: { type: "callback", label: `Закрыть депозит №${idx + 1}`, payload: JSON.stringify({ cmd: "deposit_close", id: d.id, num: idx + 1 }) }, color: "positive" }]);
-          }
-        });
-
-        if (deposits.length === 0) text += "У вас нет активных депозитов.";
-
-        return await sendResponse(text, { keyboard: JSON.stringify({ inline: true, buttons }) });
-      }
-
-      if (rawCmd === "/дуэль") {
-        let stake = parseNumber(args[1]);
-        if (args[1]?.toLowerCase() === "все" || args[1]?.toLowerCase() === "вабанк") stake = user.balance || 0;
-        if (isNaN(stake) || stake <= 0) return await sendResponse("Укажите сумму ставки!");
-        if ((user.balance || 0) < stake) return await sendResponse("У вас недостаточно средств!");
-
-        const keyboard = {
-          inline: true,
-          buttons: [[{ action: { type: "callback", label: "Сразиться", payload: JSON.stringify({ cmd: "duel_join", creatorId: userId, creatorName: fullName, stake }) }, color: "positive" }]]
-        };
-
-        duelGames.set(peerId, { peerId, cmId: 0, creatorId: userId, creatorName: fullName, amount: stake });
-        return await sendResponse(`[id${userId}|${fullName}] запустил(-а) дуэль на ${stake.toLocaleString()}$!\n\n| Что бы сразиться в дуэли, нажмите на кнопку`, {
-          keyboard: JSON.stringify(keyboard)
-        });
-      }
-
-      if (rawCmd === "/дуэльбиз") {
-        const count = parseNumber(args[1]);
-        if (isNaN(count) || count <= 0) return await sendResponse("Укажите количество бизнесов!");
-        if ((user.businesses || 0) < count) return await sendResponse("У вас недостаточно бизнесов!");
-
-        const keyboard = {
-          inline: true,
-          buttons: [[{ action: { type: "callback", label: "Сразиться", payload: JSON.stringify({ cmd: "duel_biz_join", creatorId: userId, creatorName: fullName, count }) }, color: "positive" }]]
-        };
-
-        duelBizGames.set(peerId, { peerId, cmId: 0, creatorId: userId, creatorName: fullName, count });
-        return await sendResponse(`[id${userId}|${fullName}] запустил(-а) дуэль на ${count} ${getBizDeclension(count)}!\n\n| Что бы сразиться в дуэли, нажмите на кнопку`, {
-          keyboard: JSON.stringify(keyboard)
-        });
-      }
-
-      if (rawCmd === "/погода") {
-        const city = args.slice(1).join(" ").trim();
-        if (!city) {
-          return await sendResponse("Используйте: /погода (например, /погода Москва)");
-        }
-        const forecast = await getWeatherForecast(city, "today");
-        if (!forecast) {
-          return await sendResponse("Город не найден.");
-        }
-        return await sendResponse(forecast.text, { keyboard: JSON.stringify(forecast.keyboard) });
-      }
-
-      // 12. JORDAN'S COIN: /курс, /купитькоин, /продатькоин, /передатькоин
-      if (rawCmd === "/курс") {
-        return await sendResponse(`Курс JORDAN'S COIN\n\n| Стоимость одного JORDAN'S COIN: ${globalSettings.jcRate.toLocaleString()}$`);
-      }
-
-      if (rawCmd === "/купитькоин") {
-        const count = parseNumber(args[1]) || 1;
-        if (count <= 0) return await sendResponse("Укажите количество!");
-        const totalCost = count * globalSettings.jcRate;
-        if ((user.balance || 0) < totalCost) return await sendResponse(`У вас недостаточно средств! (Нужно: ${totalCost.toLocaleString()}$)`);
-
-        await updateUser(userId, { balance: user.balance - totalCost, jc: (user.jc || 0) + count });
-        return await sendResponse(`Вы купили ${count} JORDAN'S COIN за ${totalCost.toLocaleString()}$`);
-      }
-
-      if (rawCmd === "/продатькоин") {
-        const count = parseNumber(args[1]) || 1;
-        if (count <= 0 || (user.jc || 0) < count) return await sendResponse(`У вас недостаточно коинов! (Имеется: ${user.jc || 0})`);
-        const totalRefund = count * globalSettings.jcRate;
-
-        await updateUser(userId, { balance: (user.balance || 0) + totalRefund, jc: user.jc - count });
-        return await sendResponse(`Вы продали ${count} JORDAN'S COIN за ${totalRefund.toLocaleString()}$`);
-      }
-
-      if (rawCmd === "/передатькоин") {
-        const parsed = await parseTargetUser(message, args.slice(1));
-        const count = parseNumber(args.find(a => /^\d+[kк]?$/.test(a.toLowerCase())) || "0");
-
-        if (!parsed.targetId || parsed.targetId === userId) return await sendResponse("Укажите пользователя!");
-        if (count <= 0 || (user.jc || 0) < count) return await sendResponse("У вас недостаточно коинов!");
-
-        const targetUser = await getOrCreateUser(parsed.targetId);
-        await updateUser(userId, { jc: user.jc - count });
-        await updateUser(parsed.targetId, { jc: (targetUser.jc || 0) + count });
-
-        return await sendResponse(`Вы передали ${count} JORDAN'S COIN пользователю [id${parsed.targetId}|${parsed.targetName}]`);
-      }
-
-      // 13. Bank: /банк, /снятьбанк
-      if (rawCmd === "/банк") {
-        let amount = parseNumber(args[1]);
-        if (args[1]?.toLowerCase() === "все") amount = user.balance || 0;
-        if (isNaN(amount) || amount <= 0) return await sendResponse("Укажите сумму!");
-        if ((user.balance || 0) < amount) return await sendResponse("У вас недостаточно средств!");
-
-        await updateUser(userId, { balance: user.balance - amount, bank: (user.bank || 0) + amount });
-        return await sendResponse(`Вы положили ${amount.toLocaleString()}$ в банк`);
-      }
-
-      if (rawCmd === "/снятьбанк") {
-        let amount = parseNumber(args[1]);
-        if (args[1]?.toLowerCase() === "все") amount = user.bank || 0;
-        if (isNaN(amount) || amount <= 0) return await sendResponse("Укажите сумму!");
-        if ((user.bank || 0) < amount) return await sendResponse("У вас недостаточно средств в банке!");
-
-        await updateUser(userId, { balance: (user.balance || 0) + amount, bank: user.bank - amount });
-        return await sendResponse(`Вы сняли ${amount.toLocaleString()}$ с банка`);
-      }
-
-      // 14. Premium System: /купитьпрем, /купитьпремиум, /купитьвип, /прем, /премиум, /вип
-      if (rawCmd === "/купитьпрем" || rawCmd === "/купитьпремиум" || rawCmd === "/купитьвип") {
-        const cost = 15000000;
-        if ((user.balance || 0) < cost) return await sendResponse(`Стоимость Premium-статуса: 15.000.000$ на 30 дней!`);
-
-        const now = Date.now();
-        const currentExp = user.vipExpires > now ? user.vipExpires : now;
-        const newExp = currentExp + (30 * 86400 * 1000);
-
-        await updateUser(userId, { balance: user.balance - cost, vipExpires: newExp });
-        return await sendResponse(`Вы успешно приобрели Premium-статус на 30 дней!`);
-      }
-
-      if (rawCmd === "/прем" || rawCmd === "/премиум" || rawCmd === "/вип") {
-        const hasPremium = user.vipExpires > Date.now();
-        const statusText = hasPremium ? "есть" : "нет према.";
-        let expStr = "";
-        if (hasPremium) {
-          const d = new Date(user.vipExpires);
-          const dateFormatted = `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;
-          expStr = `\n\n| До конца према - ${dateFormatted}`;
-        }
-        return await sendResponse(`Информация о Premium Статусе:\n\n| Статус - ${statusText}${expStr}`);
-      }
-
-      // /взлом
-      if (rawCmd === "/взлом") {
-        const now = Date.now();
-        const cooldownMs = 3 * 3600 * 1000; // 3 hours
-        if (user.lastHackAt && now - user.lastHackAt < cooldownMs) {
-          const rem = cooldownMs - (now - user.lastHackAt);
-          const hours = Math.floor(rem / 3600000);
-          const minutes = Math.floor((rem % 3600000) / 60000);
-          const seconds = Math.floor((rem % 60000) / 1000);
-          return await sendResponse(`⏳ Вы сможете взломать снова через ${hours} ч. ${minutes} мин. ${seconds} сек.`);
-        }
-
-        const hackPhotos = [
-          "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600",
-          "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=600",
-          "https://images.unsplash.com/photo-1614064641913-a520faff82b1?w=600",
-          "https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=600",
-          "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=600"
-        ];
-
-        const formType = Math.floor(Math.random() * 7) + 1; // 1 to 7
-        let textResp = "";
-        let needsPhoto = false;
-
-        if (formType === 1) {
-          const gain = Math.floor(Math.random() * (80000 - 10000 + 1)) + 10000;
-          await updateUser(userId, { balance: (user.balance || 0) + gain, lastHackAt: now });
-          textResp = `Вы попытались взломать сервер Minecraft, и у вас получилось!\n| Вы заработали: ${gain.toLocaleString()}$`;
-          needsPhoto = true;
-        } else if (formType === 2) {
-          const loss = 20000;
-          await updateUser(userId, { balance: Math.max(0, (user.balance || 0) - loss), lastHackAt: now });
-          textResp = `Вы попытались взломать сервер Minecraft, и у вас не получилось :(\n| Что бы владелец сервера Minecraft не писал на вас заявление за взлом, вам пришлось ему отдать 20.000$`;
-        } else if (formType === 3) {
-          const gain = Math.floor(Math.random() * (100000 - 10000 + 1)) + 10000;
-          await updateUser(userId, { balance: (user.balance || 0) + gain, lastHackAt: now });
-          textResp = `Вы попытались взломать системы безопасности крупной компании, и у вас получилось!\n| Вы заработали: ${gain.toLocaleString()}$`;
-          needsPhoto = true;
-        } else if (formType === 4) {
-          await updateUser(userId, { lastHackAt: now });
-          textResp = `Вы попытались взломать системы безопасности крупной компании, но вас отвлёк телефонный звонок, и у вас ничего не получилось :(`;
-        } else if (formType === 5) {
-          const gain = Math.floor(Math.random() * (80000 - 10000 + 1)) + 10000;
-          await updateUser(userId, { balance: (user.balance || 0) + gain, lastHackAt: now });
-          textResp = `Вы попытались взломать запороленный телефон, и у вас получилось!\n| Вы заработали: ${gain.toLocaleString()}$`;
-          needsPhoto = true;
-        } else if (formType === 6) {
-          await updateUser(userId, { lastHackAt: now });
-          textResp = `Вы попытались взломать запороленный телефон, и у вас ничего не получилось :(`;
-        } else {
-          const loss = 30000;
-          await updateUser(userId, { balance: Math.max(0, (user.balance || 0) - loss), lastHackAt: now });
-          textResp = `Вас посадили в тюрьму, за то что вы пытались взломать youtube канал популярного блогера.\n| Что бы вас оттуда выпустили, вам пришлось заплатить 30.000$`;
-        }
-
-        const extra: any = {};
-        if (needsPhoto) {
-          const randImg = hackPhotos[Math.floor(Math.random() * hackPhotos.length)];
-          const uploadRes = await uploadPhoto(peerId, randImg);
-          if (uploadRes.attachment) extra.attachment = uploadRes.attachment;
-        }
-
-        return await sendResponse(textResp, extra);
-      }
-
-      // /фортуна
-      if (rawCmd === "/фортуна") {
-        const now = Date.now();
-        const cooldownMs = 86400000; // 1 day
-        if (user.lastFortuneAt && now - user.lastFortuneAt < cooldownMs) {
-          const rem = cooldownMs - (now - user.lastFortuneAt);
-          const hours = Math.floor(rem / 3600000);
-          const minutes = Math.floor((rem % 3600000) / 60000);
-          const seconds = Math.floor((rem % 60000) / 1000);
-          return await sendResponse(`⏳ Вы сможете прокрутить колесо фортуны снова через ${hours} ч. ${minutes} мин. ${seconds} сек.`);
-        }
-
-        const options = [
-          { label: "+3 репутации", apply: async () => updateUser(userId, { rep: (user.rep || 0) + 3, lastFortuneAt: now }) },
-          { label: "100.000$", apply: async () => updateUser(userId, { balance: (user.balance || 0) + 100000, lastFortuneAt: now }) },
-          { label: "4 литров пива", apply: async () => updateUser(userId, { beer: (user.beer || 0) + 4, lastFortuneAt: now }) },
-          { label: "50.000$", apply: async () => updateUser(userId, { balance: (user.balance || 0) + 50000, lastFortuneAt: now }) },
-          { label: "3 литров пива", apply: async () => updateUser(userId, { beer: (user.beer || 0) + 3, lastFortuneAt: now }) },
-          { label: "+2 репутации", apply: async () => updateUser(userId, { rep: (user.rep || 0) + 2, lastFortuneAt: now }) },
-          { label: "+1 репутацию", apply: async () => updateUser(userId, { rep: (user.rep || 0) + 1, lastFortuneAt: now }) },
-          { label: "2 литра пива", apply: async () => updateUser(userId, { beer: (user.beer || 0) + 2, lastFortuneAt: now }) },
-          { label: "150.000$", apply: async () => updateUser(userId, { balance: (user.balance || 0) + 150000, lastFortuneAt: now }) }
-        ];
-
-        const item = options[Math.floor(Math.random() * options.length)];
-        await item.apply();
-
-        return await sendResponse(`Вы прокрутили колесо фортуны, и вам выпало: ${item.label}`);
-      }
-
-      // /ежедневный бонус
-      if (rawCmd === "/ежедневный" || rawCmd === "/ежедневный_бонус" || rawCmd === "/бонус") {
-        const now = Date.now();
-        const currentDay = user.dailyDay || 1;
-        const dayData = DAILY_BONUSES[currentDay] || DAILY_BONUSES[1];
-        const isReady = !user.lastDailyAt || (now - user.lastDailyAt >= 86400000);
-        const statusStr = isReady ? "готов" : "не готов";
-
-        const textResp = `Ваш ежедневный бонус: ${statusStr}\n| Бонус сегодня: ${dayData.label}`;
-
-        if (isReady) {
-          const keyboard = {
-            inline: true,
-            buttons: [
-              [
-                { action: { type: "callback", label: "Забрать бонус", payload: JSON.stringify({ cmd: "claim_daily_bonus", authorId: userId }) }, color: "positive" }
-              ]
-            ]
-          };
-          return await sendResponse(textResp, { keyboard: JSON.stringify(keyboard) });
-        } else {
-          return await sendResponse(textResp);
-        }
-      }
-
-      // /подписка
-      if (rawCmd === "/подписка") {
-        if (user.hasSubBonus) {
-          return await sendResponse("Вы уже получали бонус за подписку на сообщество!");
-        }
-
-        try {
-          const memberRes = await axios.get("https://api.vk.com/method/groups.isMember", {
-            params: {
-              access_token: VK_TOKEN,
-              v: "5.131",
-              group_id: "239281784",
-              user_id: userId
-            }
-          });
-          const isMember = memberRes.data?.response === 1 || memberRes.data?.response?.member === 1;
-
-          if (!isMember) {
-            return await sendResponse(`Вы ещё не подписались на сообщество, что бы получить бонус.\n| Если вы желаете получить бонус за подписку, то подпишитесь на это сообщество: [https://vk.ru/gm_manager_official|GAMES MANAGER]`);
-          }
-
-          await updateUser(userId, { balance: (user.balance || 0) + 200000, hasSubBonus: true });
-          return await sendResponse(`Вы получили бонус за подписку на сообщество!\n| Размер бонуса: 200.000$`);
-        } catch (e) {
-          return await sendResponse(`Вы ещё не подписались на сообщество, что бы получить бонус.\n| Если вы желаете получить бонус за подписку, то подпишитесь на это сообщество: [https://vk.ru/gm_manager_official|GAMES MANAGER]`);
-        }
-      }
-
-      if (rawCmd === "/профиль") {
-        const parsed = await parseTargetUser(message, args.slice(1));
-        const targetId = parsed.targetId || userId;
-        const targetName = parsed.targetName || fullName;
-        const targetUser = await getOrCreateUser(targetId, targetName);
-
-        const isMe = targetId === userId;
-        const hasPremium = targetUser.vipExpires > Date.now();
-
-        if (!isMe && targetUser.premiumProfileHidden && !isAdmin) {
-          return await sendResponse(`Профиль пользователя [id${targetId}|${targetName}] скрыт настройками приватности.`);
-        }
-
-        let balanceStr = targetUser.premiumBalanceHidden && !isMe && !isAdmin ? "Скрыт" : `${(targetUser.balance || 0).toLocaleString()}$`;
-        let bankStr = targetUser.premiumBalanceHidden && !isMe && !isAdmin ? "Скрыт" : `${(targetUser.bank || 0).toLocaleString()}$`;
-
-        let profileText = `👤 Профиль игрока [id${targetId}|${targetName}]\n\n` +
-          `| На балансе: ${balanceStr}\n` +
-          `| В банке: ${bankStr}`;
-        
-        if (targetUser.marriage && targetUser.marriage.partnerId) {
-          const pId = targetUser.marriage.partnerId;
-          let pName = targetUser.marriage.partnerName || `Участник ${pId}`;
-          if (pName.includes("@") || pName.toLowerCase().includes("user")) {
-             // If name is @User or similar, try to fetch fresh name
-             try {
-               const pRes = await vkApi.get("users.get", { params: { user_ids: pId, access_token: VK_TOKEN, v: "5.131" } });
-               if (pRes.data.response?.[0]) {
-                 pName = `${pRes.data.response[0].first_name} ${pRes.data.response[0].last_name}`;
-                 // Update it in DB for next time
-                 await updateUser(pId, { name: pName }); // Update the partner themselves
-                 await updateUser(targetId, { "marriage.partnerName": pName }); // Update current user's reference
-               }
-             } catch (e) {}
-          }
-          profileText += `\n\n| Женат на: [id${pId}|${pName}]`;
-        }
-        
-        profileText += `\n\n| Бизнесов: ${targetUser.businesses || 0}\n` +
-          `| Кол-во репутации: ${targetUser.rep || 0}\n` +
-          `| Выпито всего пива: ${(targetUser.beer || 0).toFixed(1)} л`;
-
-        if (hasPremium) {
-          profileText += `\n| Premium Игрок`;
-        }
-
-        const extraParams: any = {};
-        if (targetUser.profilePhoto) {
-          extraParams.attachment = targetUser.profilePhoto;
-        }
-        return await sendResponse(profileText, extraParams);
+       if (["/setmusic", "/музыка", "/профильмузыка", "/сетмузыка"].includes(rawCmd)) {
+          let audioAttach = null;
+         if (message.attachments) {
+            audioAttach = message.attachments.find((a: any) => a.type === "audio");
+         }
+         if (!audioAttach && message.reply_message && message.reply_message.attachments) {
+            audioAttach = message.reply_message.attachments.find((a: any) => a.type === "audio");
+         }
+         if (audioAttach) {
+            const ownerIdStr = userId.toString();
+            const uRef = firestoreDb.collection("users").doc(ownerIdStr);
+            const audioData = {
+               attachment: `audio${audioAttach.audio.owner_id}_${audioAttach.audio.id}`,
+               artist: audioAttach.audio.artist || "Неизвестен",
+               title: audioAttach.audio.title || "Без названия"
+             };
+            await uRef.set({ profileAudio: audioData }, { merge: true }).catch(()=>{});
+            return await sendResponse("Музыка успешно установлена в профиль и статистику!");
+         } else {
+            return await sendResponse("Пожалуйста, прикрепите аудиозапись к сообщению или ответьте на сообщение с аудиозаписью.");
+         }
       }
 
       
-       // ==========================================
-       // Tech Specialist Commands & Menus (/thelp)
-       // ==========================================
-       if (rawCmd === "/thelp" || rawCmd === "/тхелп" || rawCmd === "/теххелп") {
-          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-          if (effRole < 7.1) {
-             return await sendResponse("У вас недостаточно прав!");
-          }
-
-          const text = `...::Помощь по техническим командам::...\n\nВыберите нужный раздел:`;
-
-          const keyboard = { inline: true, buttons: [] as any[] };
-          const availableButtons: { cmd: string; label: string }[] = [];
-          if (effRole >= 7.1) availableButtons.push({ cmd: "thelp_tech", label: "Тех. Специалист" });
-          if (effRole >= 7.2) availableButtons.push({ cmd: "thelp_curator", label: "Куратор тех." });
-          if (effRole >= 7.3) availableButtons.push({ cmd: "thelp_head", label: "Главный тех." });
-
-          let row: any[] = [];
-          for (const btn of availableButtons) {
-             row.push({ action: { type: "callback", label: btn.label, payload: JSON.stringify({ cmd: btn.cmd, authorId: userId }) }, color: "secondary" });
-             if (row.length === 2) {
-                keyboard.buttons.push(row);
-                row = [];
+      if (rawCmd === "/frozenlist") {
+         if (user.role < 7 && chatData.ownerId !== userId && chatData.ownerId2 !== userId) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         const { items } = await getChatMembers(peerId);
+         const list = [];
+         for (const m of items) {
+             if (m.member_id > 0) {
+                 try {
+                     const { data } = await vkApi.get("users.get", { params: { user_ids: m.member_id, access_token: VK_TOKEN, v: "5.199" } });
+                     if (data.response && data.response[0] && data.response[0].deactivated) {
+                         list.push(m.member_id);
+                     }
+                 } catch(e) {}
              }
-          }
-          if (row.length > 0) keyboard.buttons.push(row);
+         }
+         if (list.length === 0) return await sendResponse("Замороженных/удаленных пользователей в беседе нет.");
+         let msg = "Список удалённых/замороженных пользователей:\n\n";
+         for (let i = 0; i < list.length; i++) {
+             msg += `${i+1}. @id${list[i]}\n`;
+         }
+         return await sendResponse(msg, { disable_mentions: 1 });
+      }
 
-          return await sendResponse(text, { keyboard: JSON.stringify(keyboard), noReply: true });
+      if (rawCmd === "/kickfrozen") {
+         if (user.role < 7 && chatData.ownerId !== userId && chatData.ownerId2 !== userId) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         const kb = {
+            inline: true,
+            buttons: [
+               [{ action: { type: "callback", label: "Да, исключить", payload: JSON.stringify({ cmd: "kf_yes" }) }, color: "positive" }],
+               [{ action: { type: "callback", label: "Нет, не исключать", payload: JSON.stringify({ cmd: "kf_no" }) }, color: "negative" }]
+            ]
+         };
+         return await sendResponse("Вы действительно хотите исключить всех удалённых/замороженных пользователей из беседы?", { keyboard: JSON.stringify(kb) });
+      }
+      if (rawCmd === "/alt" || rawCmd === "/алиясы" || rawCmd === "/альт") {
+         const altText = `...::Альтернативные команды::...\n\n/help - /помощь, /хелп, /команды, /меню\n/stats - /стата, /статистика\n/kick - /кик, /исключить, /выгнать, /к, /k\n/ban - /бан, /забанить, /б, /b\n/mute - /мут, /m\n/warn - /варн, /предупреждение, /w\n/unban - /разбан, /разбанить, /unb\n/unmute - /размут, /снятьмут, /unm\n/unwarn - /разварн, /снятьварн, /unw\n/gban - /гбан, /глобалбан\n/addblack - /чс, /вчс, /чсб`;
+         return await sendResponse(altText, { noReply: true });
+      }
+      
+      if (["/addaccesslevel", "/роль", "/addlevel", "/setlevel", "/setaccesslevel", "/addaccess", "/выдатьроль"].includes(rawCmd)) {
+         const effRole = user.role >= 8 ? user.role : (chatData.ownerId === userId || chatData.ownerId2 === userId ? 12 : 0);
+         if (effRole < 9 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         
+         const levelMatch = args.join(" ").match(/\d+/);
+         if (!levelMatch) return await sendResponse("Укажите уровень прав (от 1 до 6)!");
+         const level = parseInt(levelMatch[0]);
+         if (level < 1 || level > 6) return await sendResponse("Укажите уровень прав от 1 до 6!");
+         
+         // Старший модератор(9) может выдать до 1 лвл
+         // Администратор(10) может выдать до 2 лвл
+         // Старший Администратор(11) может выдать до 3 лвл
+         // Зам. Глав. Администратора(12) может выдать до 4 лвл
+         // Главный Администратор(13) может выдать до 5 лвл
+         // Владелец(14) может выдать до 6 лвл
+         const maxLevel = effRole >= 14 || isAdmin ? 6 : (effRole - 8);
+         if (level > maxLevel) return await sendResponse("У вас недостаточно прав для выдачи этого уровня!");
+         
+         const giveRole = level + 7;
+         const roleNames = { 1: "Модератор", 2: "Старший Модератор", 3: "Администратор", 4: "Старший Администратор", 5: "Зам. Глав. Администратора", 6: "Главный Администратор" };
+         const roleName = roleNames[level];
+         
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin || effRole >= 12))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+         
+         await updateUser(parsed.targetId, { role: giveRole, appointedBy: { id: userId, name: fullName }, appointedDate: Date.now() });
+         try { await sendVkMessage(VK_TOKEN, parsed.targetId, `[id${parsed.targetId}|Пользователь], приветствуем!\n\nВы были назначены на пост «${roleName}».`); } catch (e) {}
+         
+         return await sendResponse(`[id${parsed.targetId}|Пользователю] выдан уровень прав «${roleName}»\n\n| Модератор, который выдал уровень прав - [id${userId}|${fullName}]`, { noReply: true });
+      }
+
+              if (["/пиво", "/beer"].includes(rawCmd)) {
+          const now = Date.now();
+          const lastBeer = user.lastBeerTime || 0;
+          if (now - lastBeer < 3600 * 1000) {
+             const remMin = Math.ceil((3600 * 1000 - (now - lastBeer)) / 60000);
+             return await sendResponse(`Вы уже пили пиво недавно! Следующая попытка через ${remMin} мин.`);
+          }
+
+          const randomQuiz = RUSSIAN_GRAMMAR_QUIZ[Math.floor(Math.random() * RUSSIAN_GRAMMAR_QUIZ.length)];
+          const wordsList = [
+             { text: randomQuiz.correct, isCorrect: true },
+             ...randomQuiz.wrong.slice(0, 2).map(w => ({ text: w, isCorrect: false }))
+          ];
+          // Shuffle words
+          wordsList.sort(() => Math.random() - 0.5);
+
+          const kb = {
+             inline: true,
+             buttons: wordsList.map(w => [
+                { action: { type: "callback", label: w.text, payload: JSON.stringify({ cmd: "beer_quiz", authorId: userId, isCorrect: w.isCorrect ? 1 : 0 }) }, color: "secondary" }
+             ])
+          };
+
+          const promptMsg = "Перед пивом решите задачу по русскому языку\n\nНа кнопках представлены слова, вам нужно нажать на 1 верную!";
+          return await sendResponse(promptMsg, { keyboard: JSON.stringify(kb) });
        }
 
-       if (rawCmd === "/get" || rawCmd === "/гет" || rawCmd === "/getuser") {
-          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-          if (effRole < 7.1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
-
-          const parsed = await parseTargetUser(message, args.slice(1));
-          const targetId = parsed.targetId || userId;
-          const targetUser = await getOrCreateUser(targetId);
-
-          const chatsSnap = await firestoreDb.collection("chats").get();
-          let chatsCount = 0;
-          let ownerChatsCount = 0;
-
-          for (const doc of chatsSnap.docs) {
-             const c = doc.data();
-             const cId = parseInt(doc.id);
-             const inRoles = targetUser.chatRoles && targetUser.chatRoles[cId] !== undefined;
-             const isOwner = c.ownerId === targetId || (targetUser.chatRoles && targetUser.chatRoles[cId] === 7);
-             if (inRoles || isOwner) {
-                chatsCount++;
-                if (isOwner) ownerChatsCount++;
-             }
-          }
-
-          if (chatsCount === 0 && targetUser.messagesTotal) {
-             chatsCount = 1;
-          }
-
-          const totalMsgs = targetUser.msgCountTotal || targetUser.messagesTotal || 0;
-
-          const outText = `Информация о [id${targetId}|пользователе]
-
-| Состоит в беседах с ботом: ${chatsCount}
-| Из них владелец в беседах: ${ownerChatsCount}
-
-| Общее кол-во сообщений который написал пользователь во всех беседах с ботом: ${totalMsgs}`;
-
-          return await sendResponse(outText, { noReply: true });
-       }
-
-       if (rawCmd === "/botstats" || rawCmd === "/botstat" || rawCmd === "/ботстатс" || rawCmd === "/статабота") {
-          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-          if (effRole < 7.1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
-
-          const totalMemMB = (os.totalmem() / 1024 / 1024).toFixed(1);
-          const freeMemMB = (os.freemem() / 1024 / 1024).toFixed(1);
-          const usedMemMB = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
-          const cpuLoad = os.loadavg()[0] ? (os.loadavg()[0] * 100 / os.cpus().length).toFixed(1) : "0.0";
+       if (["/mute", "/мут", "/m"].includes(rawCmd)) {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effRole < 1 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна с должности Модератора.");
+          if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
           
-          const uptimeSec = Math.floor((Date.now() - botStartTime) / 1000);
-          const upHours = Math.floor(uptimeSec / 3600);
-          const upMins = Math.floor((uptimeSec % 3600) / 60);
-          const upSecs = uptimeSec % 60;
-          const uptimeStr = `${String(upHours).padStart(2, "0")}:${String(upMins).padStart(2, "0")}:${String(upSecs).padStart(2, "0")}`;
-
-          const dateObj = new Date(botStartTime);
-          const ds = dateObj.toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" });
-          const ts = dateObj.toLocaleTimeString("ru-RU", { timeZone: "Europe/Moscow" });
-
-          let totalUsersCount = userCache.size;
-          let totalChatsCount = chatCache.size;
-          let totalLogsCount = 0;
-          try {
-             const snap = await firestoreDb.collection("bot_logs").get();
-             totalLogsCount = snap.size;
-          } catch (e) {}
-          const dbSizeMB = ((totalUsersCount * 1.5 + totalChatsCount * 4 + totalLogsCount * 0.5) / 1024).toFixed(2);
-
-          const ping = (Math.random() * 30 + 15).toFixed(2);
-          const resp = (Math.random() * 0.2 + 0.05).toFixed(2);
-
-          const reportText = `...::Статистика бота::..
-
-` +
-            `| Пинг бота: ${ping} мс
-` +
-            `| Скорость ответа бота: ${resp} сек
-
-` +
-            `| Употреблено ОЗУ: ${usedMemMB} МБ
-` +
-            `| Свободно ОЗУ: ${freeMemMB} МБ
-
-` +
-            `| Загрузка CPU: ${cpuLoad}%
-
-` +
-            `| Записей в таблице логов: ${totalLogsCount}
-` +
-            `| Занято места в базе данных: ~${dbSizeMB} МБ
-` +
-            `| Свободно места в базе данных: Не ограничено
-
-` +
-            `| Последний перезапуск бота: ${ds} ${ts}
-` +
-            `| С момента последнего перезапуска прошло: ${uptimeStr}`;
-
-          return await sendResponse(reportText, { noReply: true });
-       }
-
-       if (rawCmd === "/logs" || rawCmd === "/логи" || rawCmd === "/логс") {
-          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-          if (effRole < 7.1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
-
-          const logs = await getFilteredLogs({ type: "all" });
-          const payloadMeta = { cmd: "logs_page", logType: "all", title: "Общие логи бота", authorId: userId };
-          const { text, keyboard } = renderLogsPage("Общие логи бота", logs, 1, payloadMeta);
-          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
-       }
-
-       if (rawCmd === "/logs_user" || rawCmd === "/логи_юзер" || rawCmd === "/логипользователя") {
-          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-          if (effRole < 7.1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
-
           const parsed = await parseTargetUser(message, args.slice(1));
           if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
-
-          const logs = await getFilteredLogs({ userId: parsed.targetId });
-          const payloadMeta = { cmd: "logs_page", logType: "all", targetId: parsed.targetId, title: `Логи пользователя [id${parsed.targetId}|User]`, authorId: userId };
-          const { text, keyboard } = renderLogsPage(`Логи пользователя [id${parsed.targetId}|User]`, logs, 1, payloadMeta);
-          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
-       }
-
-       if (rawCmd === "/logs_games" || rawCmd === "/логи_игр" || rawCmd === "/логиигры") {
-          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-          if (effRole < 7.1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
-
-          const logs = await getFilteredLogs({ type: "game" });
-          const payloadMeta = { cmd: "logs_page", logType: "game", title: "Логи игр бота", authorId: userId };
-          const { text, keyboard } = renderLogsPage("Логи игр бота", logs, 1, payloadMeta);
-          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
-       }
-
-       if (rawCmd === "/addtech" || rawCmd === "/выдатьтех" || rawCmd === "/аддтех") {
-          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-          if (effRole < 7.2 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна Куратору тех. специалистов и выше.");
-
-          const parsed = await parseTargetUser(message, args.slice(1));
-          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
-          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
-
-          await updateUser(parsed.targetId, { role: 7.1 });
-          await logBotAction({
-             type: "adm",
-             peerId,
-             userId,
-             targetId: parsed.targetId,
-             text: `[id${userId}|${fullName}] выдал(-а) права «Тех. Специалист» [id${parsed.targetId}|пользователю]`
-          });
-          return await sendResponse(`[id${userId}|${fullName}] выдал(-а) уровень прав «Тех. Специалист» [id${parsed.targetId}|пользователю]`, { noReply: true });
-       }
-
-       if (rawCmd === "/untech" || rawCmd === "/снятьтех" || rawCmd === "/унтех" || rawCmd === "/deltech") {
-          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-          if (effRole < 7.2 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна Куратору тех. специалистов и выше.");
-
-          const parsed = await parseTargetUser(message, args.slice(1));
-          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
-          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
-
-          const targetU = await getOrCreateUser(parsed.targetId);
-          if (targetU.role === 7.1) {
-             await updateUser(parsed.targetId, { role: 0 });
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin || effRole >= 12))) {
+            return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
           }
-          await logBotAction({
-             type: "adm",
-             peerId,
-             userId,
-             targetId: parsed.targetId,
-             text: `[id${userId}|${fullName}] снял(-а) права «Тех. Специалист» с [id${parsed.targetId}|пользователя]`
-          });
-          return await sendResponse(`[id${userId}|${fullName}] снял(-а) уровень прав «Тех. Специалист» с [id${parsed.targetId}|пользователя]`, { noReply: true });
-       }
-
-       if (rawCmd === "/addcuratortech" || rawCmd === "/выдатькураторатех" || rawCmd === "/аддкураттех") {
-          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-          if (effRole < 7.3 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна Главному тех. специалисту и выше.");
-
-          const parsed = await parseTargetUser(message, args.slice(1));
-          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
-          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
-
-          await updateUser(parsed.targetId, { role: 7.2 });
-          await logBotAction({
-             type: "adm",
-             peerId,
-             userId,
-             targetId: parsed.targetId,
-             text: `[id${userId}|${fullName}] выдал(-а) права «Куратор тех. специалистов» [id${parsed.targetId}|пользователю]`
-          });
-          return await sendResponse(`[id${userId}|${fullName}] выдал(-а) уровень прав «Куратор тех. специалистов» [id${parsed.targetId}|пользователю]`, { noReply: true });
-       }
-
-       if (rawCmd === "/removecuratortech" || rawCmd === "/снятькураторатех" || rawCmd === "/delcuratortech") {
-          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-          if (effRole < 7.3 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна Главному тех. специалисту и выше.");
-
-          const parsed = await parseTargetUser(message, args.slice(1));
-          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
-          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
-
-          const targetU = await getOrCreateUser(parsed.targetId);
-          if (targetU.role === 7.2) {
-             await updateUser(parsed.targetId, { role: 0 });
-          }
-          await logBotAction({
-             type: "adm",
-             peerId,
-             userId,
-             targetId: parsed.targetId,
-             text: `[id${userId}|${fullName}] снял(-а) права «Куратор тех. специалистов» с [id${parsed.targetId}|пользователя]`
-          });
-          return await sendResponse(`[id${userId}|${fullName}] снял(-а) уровень прав «Куратор тех. специалистов» с [id${parsed.targetId}|пользователя]`, { noReply: true });
-       }
-
-       // Local Chat Moderation Logs (Administrator+)
-       if (rawCmd === "/logsadm" || rawCmd === "/логиадм") {
-          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
-          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-          if (effectiveRole < 3 && !isAdmin) return await sendResponse("У вас недостаточно прав! Доступно с должности Администратор.");
-
-          const logs = await getFilteredLogs({ peerId, type: "adm" });
-          const payloadMeta = { cmd: "logs_page", logType: "adm", filterPeerId: peerId, title: "Логи прав в беседе", authorId: userId };
-          const { text, keyboard } = renderLogsPage("Логи назначения и снятия прав в беседе", logs, 1, payloadMeta);
-          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
-       }
-
-       if (rawCmd === "/logsmute" || rawCmd === "/логимут") {
-          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
-          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-          if (effectiveRole < 3 && !isAdmin) return await sendResponse("У вас недостаточно прав! Доступно с должности Администратор.");
-
-          const logs = await getFilteredLogs({ peerId, type: "mute" });
-          const payloadMeta = { cmd: "logs_page", logType: "mute", filterPeerId: peerId, title: "Логи блокировок чата", authorId: userId };
-          const { text, keyboard } = renderLogsPage("Логи блокировок чата в беседе", logs, 1, payloadMeta);
-          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
-       }
-
-       if (rawCmd === "/logsban" || rawCmd === "/логибан") {
-          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
-          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-          if (effectiveRole < 3 && !isAdmin) return await sendResponse("У вас недостаточно прав! Доступно с должности Администратор.");
-
-          const logs = await getFilteredLogs({ peerId, type: "ban" });
-          const payloadMeta = { cmd: "logs_page", logType: "ban", filterPeerId: peerId, title: "Логи блокировок в беседе", authorId: userId };
-          const { text, keyboard } = renderLogsPage("Логи блокировок в беседе", logs, 1, payloadMeta);
-          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
-       }
-
-       if (rawCmd === "/logswarn" || rawCmd === "/логиварн") {
-          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
-          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-          if (effectiveRole < 3 && !isAdmin) return await sendResponse("У вас недостаточно прав! Доступно с должности Администратор.");
-
-          const logs = await getFilteredLogs({ peerId, type: "warn" });
-          const payloadMeta = { cmd: "logs_page", logType: "warn", filterPeerId: peerId, title: "Логи предупреждений", authorId: userId };
-          const { text, keyboard } = renderLogsPage("Логи предупреждений в беседе", logs, 1, payloadMeta);
-          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
-       }
-
-       if (rawCmd === "/logskick" || rawCmd === "/логикик") {
-          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
-          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-          if (effectiveRole < 3 && !isAdmin) return await sendResponse("У вас недостаточно прав! Доступно с должности Администратор.");
-
-          const logs = await getFilteredLogs({ peerId, type: "kick" });
-          const payloadMeta = { cmd: "logs_page", logType: "kick", filterPeerId: peerId, title: "Логи исключений из беседы", authorId: userId };
-          const { text, keyboard } = renderLogsPage("Логи исключений из беседы", logs, 1, payloadMeta);
-          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
-       }
-
-       // Global Nicks Commands (Руководитель+, role >= 10)
-       if (rawCmd === "/gsnick" || rawCmd === "/гсник") {
-          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-          if (effRole < 10 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Руководитель.");
-
-          const parsed = await parseTargetUser(message, args.slice(1));
-          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+          
           const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
-          const newNick = remainingArgs.join(" ").trim();
-          if (!newNick) return await sendResponse("Укажите желаемый глобальный ник!");
-
-          await updateUser(parsed.targetId, { globalNick: newNick });
-          await logBotAction({
-             type: "adm",
-             peerId,
-             userId,
-             targetId: parsed.targetId,
-             text: `[id${userId}|${fullName}] установил(-а) глобальный ник «${newNick}» [id${parsed.targetId}|пользователю]`
+          const { reason, duration } = extractReasonAndDuration(remainingArgs);
+          const timeMin = duration ? Math.max(1, Math.round((duration.until - Date.now()) / 60000)) : 30;
+          const expiresAt = duration ? duration.until : Date.now() + timeMin * 60 * 1000;
+          const expDate = formatMskDateAmPm(expiresAt);
+          
+          await updateUser(parsed.targetId, {
+            muteUntil: expiresAt,
+            muteReason: reason,
+            mutePeerId: peerId,
+            muteBy: userId,
+            muteDate: Date.now()
           });
-          return await sendResponse(`[id${userId}|${fullName}] установил(-а) ник [id${parsed.targetId}|пользователю] во всём чат-менеджере
+          
+          const isReply = !!(message.reply_message || (message.fwd_messages && message.fwd_messages.length > 0));
+          const kbButtons: any[] = [
+            [{ action: { type: "callback", label: "Снять блокировку чата", payload: JSON.stringify({ cmd: "mod_unmute", targetId: parsed.targetId }) }, color: "positive" }],
+            [{ action: { type: "callback", label: "Исключить из беседы", payload: JSON.stringify({ cmd: "mod_kick", targetId: parsed.targetId, reason }) }, color: "secondary" }]
+          ];
+          if (isReply) {
+            kbButtons.push([{ action: { type: "callback", label: "Очистить сообщения", payload: JSON.stringify({ cmd: "mod_clear_user_msgs", targetId: parsed.targetId, cmId: message.conversation_message_id, msgId: message.id }) }, color: "negative" }]);
+          }
+          
+          const outMsg = `[id${parsed.targetId}|Пользователю] выдана блокировка чата сроком на ${timeMin} мин по причине: ${reason}\n\n| Модератор - [id${userId}|${fullName}]\n| Блокировка чата выдана до: ${expDate}`;
+          return await sendResponse(outMsg, { keyboard: JSON.stringify({ inline: true, buttons: kbButtons }), noReply: !isReply });
+        }
 
-| Установленный ник: ${newNick}`, { noReply: true });
+        if (["/smute", "/смут"].includes(rawCmd)) {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effRole < 1 && !isAdmin) return;
+          if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+          
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return;
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin || effRole >= 12))) return;
+          
+          const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+          const { reason, duration } = extractReasonAndDuration(remainingArgs);
+          const timeMin = duration ? Math.max(1, Math.round((duration.until - Date.now()) / 60000)) : 30;
+          const expiresAt = duration ? duration.until : Date.now() + timeMin * 60 * 1000;
+          
+          await updateUser(parsed.targetId, {
+            muteUntil: expiresAt,
+            muteReason: reason,
+            mutePeerId: peerId,
+            muteBy: userId,
+            muteDate: Date.now()
+          });
+          return; // Completely silent
+        }
+
+        if (["/unmute", "/размут", "/анмут", "/снятьмут", "/разглушить", "/размутить", "/измута", "/unm"].includes(rawCmd)) {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effRole < 1 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+          
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+          
+          await updateUser(parsed.targetId, { muteUntil: 0, muteReason: "", mutePeerId: 0 });
+          return await sendResponse(`[id${parsed.targetId}|Пользователю] была снята блокировка чата.\n\n| Модератор - [id${userId}|${fullName}]`, { noReply: true });
+        }
+
+        if (["/warn", "/варн", "/предупреждение", "/w", "/пред"].includes(rawCmd)) {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effRole < 1 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна с должности Модератора.");
+          if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+          
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin || effRole >= 12))) {
+            return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+          }
+          
+          const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+          const { reason } = extractReasonAndDuration(remainingArgs);
+          const targetU = await getOrCreateUser(parsed.targetId);
+          const chatWarns = targetU.chatWarnings || {};
+          const currentWarns = (chatWarns[peerId] || 0) + 1;
+          chatWarns[peerId] = currentWarns;
+          
+          const targetName = targetU.fullName || targetU.nick || (await fetchVkFullName(parsed.targetId)) || `User${parsed.targetId}`;
+          
+          if (currentWarns >= 3) {
+            chatWarns[peerId] = 0;
+            const chatBans = targetU.chatBans || {};
+            chatBans[peerId] = { by: userId, reason: `3/3 предупреждений: ${reason}`, date: Date.now(), expiresAt: 0 };
+            await updateUser(parsed.targetId, { chatWarnings: chatWarns, chatBans });
+            
+            try {
+              await axios.get(`https://api.vk.com/method/messages.removeChatUser`, { params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: parsed.targetId } });
+            } catch (e) {}
+            
+            return await sendResponse(`[id${parsed.targetId}|${targetName}] был(-а) заблокирован(-а) и исключён(-на) из беседы\n\n| Причина: 3/3 предупреждений, ${reason}`, { noReply: true });
+          } else {
+            await updateUser(parsed.targetId, { chatWarnings: chatWarns });
+            
+            const isReply = !!(message.reply_message || (message.fwd_messages && message.fwd_messages.length > 0));
+            const kbButtons: any[] = [
+              [{ action: { type: "callback", label: "Снять предупреждение", payload: JSON.stringify({ cmd: "mod_unwarn", targetId: parsed.targetId }) }, color: "positive" }],
+              [{ action: { type: "callback", label: "Исключить из беседы", payload: JSON.stringify({ cmd: "mod_kick", targetId: parsed.targetId, reason }) }, color: "secondary" }]
+            ];
+            if (isReply) {
+              kbButtons.push([{ action: { type: "callback", label: "Очистить сообщения", payload: JSON.stringify({ cmd: "mod_clear_user_msgs", targetId: parsed.targetId, cmId: message.conversation_message_id, msgId: message.id }) }, color: "negative" }]);
+            }
+            
+
+            const outMsg = `[id${parsed.targetId}|Пользователю] выдано предупреждение ${currentWarns}/3 по причине: ${reason}\n\n| Модератор - [id${userId}|${fullName}]`;
+           return await sendResponse(outMsg, { keyboard: JSON.stringify({ inline: true, buttons: kbButtons }), noReply: !isReply });
+           }
+        }
+
+        if (["/skick", "/скик"].includes(rawCmd)) {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effRole < 1 && !isAdmin) return;
+          if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+          
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return;
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin || effRole >= 12))) return;
+          
+          try {
+            await axios.get(`https://api.vk.com/method/messages.removeChatUser`, { params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: parsed.targetId } });
+          } catch (e) {}
+          return; // Completely silent
+        }
+      
+      if (rawCmd === "/id" || rawCmd === "/айди" || rawCmd === "/ид") {
+         const parsed = await parseTargetUser(message, args.slice(1));
+         const targetId = parsed.targetId || userId;
+         if (targetId < 0) {
+           const absId = Math.abs(targetId);
+           return await sendResponse(`VK ID Сообщества - ${absId}\nСсылка на пользователя: https://vk.ru/club${absId}`);
+         } else {
+           return await sendResponse(`VK ID пользователя - ${targetId}\nСсылка на пользователя: https://vk.ru/id${targetId}`);
+         }
+      }
+
+      if (["/reg", "/рег", "/датарег", "/regdate"].includes(rawCmd)) {
+         const parsed = await parseTargetUser(message, args.slice(1));
+         const targetId = parsed.targetId || userId;
+         const targetName = parsed.targetName || `User${targetId}`;
+         const regDate = await getVkRegDate(targetId);
+         if (regDate) {
+            return await sendResponse(`📅 Дата регистрации аккаунта [id${targetId}|${targetName}]:\n\n| ${regDate}`);
+         } else {
+            return await sendResponse(`Не удалось получить дату регистрации для [id${targetId}|${targetName}].`);
+         }
+      }
+
+      if (rawCmd === "/setinfo" || rawCmd === "/установитьинфо") {
+         if (user.role < 6 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         const infoText = getRawArgText(text);
+         if (!infoText) return await sendResponse("Укажите текст инфо!");
+         if (containsBadWord(infoText)) return await sendResponse("Текст содержит запрещенные слова!");
+         await updateChat(peerId, { infoText });
+         return await sendResponse("Вы установили новый текст для команды /info");
+      }
+
+      if (rawCmd === "/info" || rawCmd === "/инфо") {
+         const chatData = await getOrCreateChat(peerId);
+         const infoText = chatData.infoText || "Текст информации беседы не установлен. Владелец может установить его командой /setinfo";
+         return await sendResponse(infoText);
+      }
+
+      if (rawCmd === "/setinfobot" || rawCmd === "/установитьинфобот") {
+         if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу чат-менеджера.");
+         const infoBotText = getRawArgText(text);
+         if (!infoBotText) return await sendResponse("Укажите текст инфо бота!");
+         if (containsBadWord(infoBotText)) return await sendResponse("Текст содержит запрещенные слова!");
+         globalInfoBotText = infoBotText;
+         await firestoreDb.collection("bot_settings").doc("global").set({ infoBotText }, { merge: true });
+         return await sendResponse("Вы установили новый текст для команды /infobot");
+      }
+
+      if (["/infobot", "/инфобот", "/botinfo"].includes(rawCmd)) {
+         if (!globalInfoBotText) {
+           const doc = await firestoreDb.collection("bot_settings").doc("global").get();
+           if (doc.exists && doc.data()?.infoBotText) {
+             globalInfoBotText = doc.data()?.infoBotText;
+           }
+         }
+         const infoBotText = globalInfoBotText || "GAMES MANAGER — ваш надежный помощник и игровой бот для беседы!";
+         return await sendResponse(infoBotText);
+      }
+
+      if (["/mutelist", "/мутлист", "/списокмутов", "/муты"].includes(rawCmd)) {
+         if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         const { profiles } = await getChatMembers(peerId);
+         const muted = [];
+         const now = Date.now();
+         for (const p of profiles) {
+           if (p.id > 0) {
+             const u = await getOrCreateUser(p.id);
+             if (u.muteUntil && u.muteUntil > now) {
+               muted.push(p);
+             }
+           }
+         }
+         if (muted.length === 0) return await sendResponse("В этой беседе нет заблокированных пользователей.");
+         let out = "Список заблокированных пользователей в беседе:\n\n";
+         muted.forEach((m, idx) => {
+           out += `${idx + 1}. [id${m.id}|${m.first_name} ${m.last_name}]\n`;
+         });
+         return await sendResponse(out);
+      }
+
+      if (["/warnlist", "/варнлист", "/списокварнов", "/варны", "/преды"].includes(rawCmd)) {
+         if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         const { profiles } = await getChatMembers(peerId);
+         const warned = [];
+         for (const p of profiles) {
+           if (p.id > 0) {
+             const u = await getOrCreateUser(p.id);
+             if (u.warnings && u.warnings > 0) {
+               warned.push({ p, warns: u.warnings });
+             }
+           }
+         }
+         if (warned.length === 0) return await sendResponse("В этой беседе нет пользователей с предупреждениями.");
+         let out = "Список пользователей с предупреждениями:\n\n";
+         warned.forEach((w, idx) => {
+           out += `${idx + 1}. [id${w.p.id}|${w.p.first_name} ${w.p.last_name}] — ${w.warns}/3\n`;
+         });
+         return await sendResponse(out);
+      }
+
+      if (["/banlist", "/банлист", "/списокбанов", "/баны"].includes(rawCmd)) {
+         if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         const allUsers = await getAllUsers();
+         const banned: any[] = [];
+         allUsers.forEach(u => {
+           if (u.gban || u.gbanpl || u.blacklisted) {
+             banned.push(u);
+           }
+         });
+         if (banned.length === 0) return await sendResponse("Список заблокированных пользователей пуст.");
+         let out = "Список глобально заблокированных пользователей:\n\n";
+         banned.slice(0, 20).forEach((b, idx) => {
+           out += `${idx + 1}. [id${b.userId}|${b.nick || `User${b.userId}`}]\n`;
+         });
+         return await sendResponse(out);
+      }
+
+
+            if (rawCmd === "/gbanpl" || rawCmd === "/гбанпл") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 8 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin || effRole >= 12))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+          const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+          const { reason, duration } = extractReasonAndDuration(remainingArgs);
+          const expiresAt = duration ? duration.until : 0;
+          await updateUser(parsed.targetId, {
+            gbanpl: true,
+            gbanplReason: reason,
+            gbanplBy: userId,
+            gbanplDate: Date.now(),
+            gbanplExpiresAt: expiresAt
+          });
+          await sendBanAlert(peerId, parsed.targetId, "gbanpl", reason, Date.now(), expiresAt);
+          return;
        }
 
-       if (rawCmd === "/grnick" || rawCmd === "/грник") {
+            if (rawCmd === "/gban" || rawCmd === "/гбан") {
           const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-          if (effRole < 10 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Руководитель.");
+          if (effRole < 8 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin || effRole >= 12))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+          const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+          const { reason, duration } = extractReasonAndDuration(remainingArgs);
+          const expiresAt = duration ? duration.until : 0;
+          await updateUser(parsed.targetId, {
+            gban: true,
+            gbanReason: reason,
+            gbanBy: userId,
+            gbanDate: Date.now(),
+            gbanExpiresAt: expiresAt
+          });
+          await sendBanAlert(peerId, parsed.targetId, "gban", reason, Date.now(), expiresAt);
+          return;
+       }
 
+      if (rawCmd === "/aban" || rawCmd === "/абан") {
+         if (user.role < 10 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды. Команда доступна Руководителю.");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         
+         const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+         const { reason } = extractReasonAndDuration(remainingArgs);
+         const actReason = reason || "Нарушение правил";
+
+         await updateUser(parsed.targetId, {
+            role: 0,
+            chatRoles: {},
+            gban: true,
+            gbanBy: userId,
+            gbanReason: actReason,
+            gbanDate: Date.now(),
+            gbanpl: true,
+            gbanplBy: userId,
+            gbanplReason: actReason,
+            gbanplDate: Date.now(),
+            blacklisted: true,
+            blacklistedBy: userId,
+            blacklistedReason: actReason,
+            blacklistedDate: Date.now()
+         });
+         
+         const targetU = await getOrCreateUser(parsed.targetId);
+         const targetName = targetU.fullName || targetU.nick || `пользователя`;
+
+         const allChats = await getAllChats();
+         for (const c of allChats) {
+            if (c.id && c.id > 2000000000) {
+               try {
+                 await axios.get(`https://api.vk.com/method/messages.removeChatUser`, {
+                    params: { access_token: VK_TOKEN, v: "5.199", chat_id: c.id - 2000000000, member_id: parsed.targetId }
+                  });
+ 
+               } catch(e) {}
+            }
+         }
+
+         const outMsg = `[id${userId}|${fullName}] заблокировал(-а) [id${parsed.targetId}|${targetName}] во всём чат-менеджере\n\n| Причина: ${actReason}`;
+         return await sendResponse(outMsg, { noReply: true });
+      }
+
+      if (rawCmd === "/ungbanpl" || rawCmd === "/gungbanp" || rawCmd === "/юнгбанпл" || rawCmd === "/ангбанл" || rawCmd === "/унгбанплl" || rawCmd === "/гюнбанпл") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 8 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
           const parsed = await parseTargetUser(message, args.slice(1));
           if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
 
-          await updateUser(parsed.targetId, { globalNick: "" });
-          await logBotAction({
-             type: "adm",
-             peerId,
-             userId,
-             targetId: parsed.targetId,
-             text: `[id${userId}|${fullName}] удалил(-а) глобальный ник у [id${parsed.targetId}|пользователя]`
+          await updateUser(parsed.targetId, {
+            gbanpl: false,
+            gbanplReason: "",
+            gbanplBy: 0,
+            gbanplExpiresAt: 0
           });
-          return await sendResponse(`[id${userId}|${fullName}] удалил(-а) ник [id${parsed.targetId}|пользователю] во всём чат-менеджере`, { noReply: true });
+
+          return await sendResponse(`[id${parsed.targetId}|Пользователю] была снята глобальная блокировка во всех беседах.\n\n| Модератор - [id${userId}|${fullName}]`, { noReply: true });
        }
 
-       // /zunban: Remove all chat bans for user in all chats (Руководитель+, role >= 10)
-       if (rawCmd === "/zunban" || rawCmd === "/зунбан") {
+      if (rawCmd === "/ungban" || rawCmd === "/юнгбан" || rawCmd === "/унгбан" || rawCmd === "/ангбан" || rawCmd === "/гунгбан") {
           const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-          if (effRole < 10 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Руководитель.");
-
+          if (effRole < 8 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
           const parsed = await parseTargetUser(message, args.slice(1));
           if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+
+          await updateUser(parsed.targetId, {
+            gban: false,
+            gbanReason: "",
+            gbanBy: 0,
+            gbanExpiresAt: 0
+          });
+
+          return await sendResponse(`[id${parsed.targetId}|Пользователю] была снята глобальная блокировка во всех беседах.\n\n| Модератор - [id${userId}|${fullName}]`, { noReply: true });
+       }
+
+      if (rawCmd === "/роль") {
+         const uRole = await getRealRole(peerId, userId);
+         if (uRole < 9 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         
+         const keyboard = {
+            inline: true,
+            buttons: [
+               [
+                  {
+                     action: {
+                        type: "callback",
+                        label: "Включить роль",
+                        payload: { cmd: "role_toggle", action: "enable", authorId: userId }
+                     },
+                     color: "positive"
+                  },
+                  {
+                     action: {
+                        type: "callback",
+                        label: "Выключить роль",
+                        payload: { cmd: "role_toggle", action: "disable", authorId: userId }
+                     },
+                     color: "negative"
+                  }
+               ]
+            ]
+         };
+         
+         return await sendResponse("...::Управление ролью::...", { keyboard: JSON.stringify(keyboard) });
+      }
+
+      if (["/staff", "/состав", "/стафф", "/руководство", "/админы", "/модеры"].includes(rawCmd)) {
+         if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         const { profiles } = await getChatMembers(peerId);
+         const byRole: Record<number, string[]> = {
+           7: [],
+           6: [],
+           5: [],
+           4: [],
+           3: [],
+           2: [],
+           1: []
+         };
+
+         for (const p of profiles) {
+           if (p.id > 0) {
+             const u = await getOrCreateUser(p.id);
+             if (u.gban || u.gbanpl || u.blacklisted || (u.chatBans && u.chatBans[peerId])) continue;
+             const cRole = (u.chatRoles && u.chatRoles[peerId]) || 0;
+              const gRole = (u.role && u.role <= 7) ? u.role : 0;
+              const effRole = Math.max(gRole, cRole);
+              const r = (effRole >= 1 && effRole <= 7) ? Math.floor(effRole) : 0;
+             if (r >= 1 && r <= 7) {
+               const name = p.first_name && p.last_name ? `${p.first_name} ${p.last_name}` : (u.fullName || u.nick || `User${p.id}`);
+               byRole[r].push(`- [id${p.id}|${name}]`);
+             }
+           }
+         }
+
+         const fmtList = (arr: string[]) => arr.length > 0 ? arr.join("\n") : " - Отсутствует";
+
+         const text = `Список руководства беседы
+
+| Владелец беседы:
+${fmtList(byRole[7])}
+
+| Главный Администратор:
+${fmtList(byRole[6])}
+
+| Зам. Главный Администратора:
+${fmtList(byRole[5])}
+
+| Старший Администратор:
+${fmtList(byRole[4])}
+
+| Администратор:
+${fmtList(byRole[3])}
+
+| Старший Модератор:
+${fmtList(byRole[2])}
+
+| Модератор:
+${fmtList(byRole[1])}`;
+
+         const keyboard = {
+           inline: true,
+           buttons: [
+             [{ action: { type: "callback", label: "Ники", payload: JSON.stringify({ cmd: "staff_nicks" }) }, color: "primary" }]
+           ]
+         };
+
+         return await sendResponse(text, { keyboard: JSON.stringify(keyboard), disable_mentions: 1 });
+      }
+
+      if (["/gstaff", "/гстафф", "/гсостав", "/gstaffs"].includes(rawCmd)) {
+         if ((user.role || 0) < 9 && !isAdmin) {
+            return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         }
+         const chatData = await getOrCreateChat(peerId);
+         const isAdminChat = chatData.isAdminChat;
+         if (peerId !== userId && !isAdminChat) {
+           return await sendResponse("Данная команда доступна только в личных сообщениях сообщества или в админ-чате!");
+         }
+
+         const usersSnap = await firestoreDb.collection("users").get();
+         const staffByRole: Record<number, string[]> = {
+           12: [],
+           11: [],
+           10: [],
+           9: [],
+           8: [],
+           7: []
+         };
+
+         for (const doc of usersSnap.docs) {
+           const u = doc.data();
+           if (u.gban || u.gbanpl || u.blacklisted) continue;
+           const uId = u.userId || parseInt(doc.id);
+           if (!uId || isNaN(uId) || uId < 1) continue;
+
+           let r = u.role || 0;
+           if (uId === 778382713 || uId === 1) {
+             r = 12;
+           }
+           if (r >= 7 && r <= 12) {
+             const name = (u.globalNick && u.globalNick.trim()) || (u.nick && u.nick.trim()) || u.fullName || (await fetchVkFullName(uId)) || `User${uId}`;
+             if (!staffByRole[r].some(s => s.includes(`id${uId}|`))) {
+               staffByRole[r].push(`- [id${uId}|${name}]`);
+             }
+           }
+         }
+
+         if (!staffByRole[12].some(s => s.includes("id778382713|"))) {
+           const ownerU = await getOrCreateUser(778382713);
+           const ownerName = (ownerU.globalNick && ownerU.globalNick.trim()) || (ownerU.nick && ownerU.nick.trim()) || ownerU.fullName || (await fetchVkFullName(778382713)) || `Владелец`;
+           staffByRole[12].unshift(`- [id778382713|${ownerName}]`);
+         }
+
+         const fmtList = (arr: string[]) => arr.length > 0 ? arr.join("\n") : " - Отсутствует";
+
+         const text = `Список руководства бота:
+
+| Владелец чат-менеджера:
+${fmtList(staffByRole[12])}
+
+| Зам. Владельца чат-менеджера:
+${fmtList(staffByRole[11])}
+
+| Главный Руководитель:
+${fmtList(staffByRole[10])}
+
+| Руководитель:
+${fmtList(staffByRole[9])}
+
+| Осн. Зам. Руководителя:
+${fmtList(staffByRole[8])}
+
+| Зам. Руководителя:
+${fmtList(staffByRole[7])}`;
+
+         return await sendResponse(text, { disable_mentions: 1 });
+      }
+
+      if (rawCmd === "/rebuke" || rawCmd === "/выговор") {
+         if (user.role < 10.5 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+
+         const tUser = await getOrCreateUser(parsed.targetId);
+         if (tUser.role < 8) return await sendResponse("Пользователь не является руководителем!");
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к этому пользователю.");
+
+         const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+         const reason = remainingArgs.join(" ") || "Нарушение правил";
+         const count = Math.min(3, (tUser.rebukes || 0) + 1);
+         await updateUser(parsed.targetId, { rebukes: count });
+
+         return await sendResponse(`[id${userId}|${fullName}] выдал(-а) выговор [id${parsed.targetId}|руководителю]\n\n| Причина: ${reason}\n| Всего выговоров: ${count}/3`);
+      }
+
+      if (rawCmd === "/unrebuke" || rawCmd === "/снятьвыговор") {
+         if (user.role < 10.5 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+
+         const tUser = await getOrCreateUser(parsed.targetId);
+         if (tUser.role < 8) return await sendResponse("Пользователь не является руководителем!");
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к этому пользователю.");
+
+         const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+         const reason = remainingArgs.join(" ") || "Снятие выговора";
+         const count = Math.max(0, (tUser.rebukes || 0) - 1);
+         await updateUser(parsed.targetId, { rebukes: count });
+
+         return await sendResponse(`[id${userId}|${fullName}] снял(-а) выговор [id${parsed.targetId}|руководителю]\n\n| Причина: ${reason}\n| Всего выговоров: ${count}/3`);
+      }
+
+      if (rawCmd === "/rstats") {
+         if (user.role < 8 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         const targetId = parsed.targetId || userId;
+         const tUser = await getOrCreateUser(targetId);
+         if (tUser.role < 8) return await sendResponse("Пользователь не является руководителем!");
+
+         const appBy = tUser.appointedBy ? `[id${tUser.appointedBy.id}|${tUser.appointedBy.name}]` : "Неизвестно";
+         const appDate = tUser.appointedDate ? formatDateRstats(tUser.appointedDate) : "01.01.2024 00:00";
+         const rebukes = tUser.rebukes || 0;
+
+         const text = `Статистика [id${targetId}|руководителя]\n\n| На пост поставил - ${appBy}\n| Дата постановления - ${appDate}\n| Выговоров: ${rebukes}/3`;
+         return await sendResponse(text);
+      }
+
+      if (rawCmd === "/ghelp" || rawCmd === "/гхелп") {
+         const chatData = await getOrCreateChat(peerId);
+         const isAdminChat = chatData.isAdminChat;
+         if (!isAdminChat) {
+           return await sendResponse("Данная команда доступна только в админ-чате!");
+         }
+         
+         const effRole = user.role >= 12 || isAdmin ? 12 : user.role;
+         if (effRole < 8) {
+           return await sendResponse("У вас недостаточный уровень прав для этой команды. Команда доступна с 8 уровня прав.");
+         }
+         
+         const text = `...::Помощь по командам руководства бота::...\n\nКоманды руководства бота:\n/gstaff -- Список руководства бота.\n/ghelp -- Помощь по командам руководства.`;
+         
+         let availableButtons = [];
+         if (effRole >= 8) availableButtons.push({ cmd: "ghelp_zr", label: "Зам. Руководителя" });
+         if (effRole >= 9) availableButtons.push({ cmd: "ghelp_ozr", label: "Осн. Зам. Руководителя" });
+         if (effRole >= 10) availableButtons.push({ cmd: "ghelp_ruk", label: "Руководитель" });
+         if (effRole >= 10.5) availableButtons.push({ cmd: "ghelp_gruk", label: "Глав. Руководитель" });
+         if (effRole >= 11) availableButtons.push({ cmd: "ghelp_zown", label: "Зам. Владельца" });
+         if (effRole >= 12) availableButtons.push({ cmd: "ghelp_own", label: "Владелец бота" });
+
+         let buttons: any[] = [];
+         let row: any[] = [];
+         for (const btn of availableButtons) {
+            row.push({ action: { type: "callback", label: btn.label, payload: JSON.stringify({ cmd: btn.cmd }) }, color: "secondary" });
+            if (row.length === 2) {
+               buttons.push(row);
+               row = [];
+            }
+         }
+         if (row.length > 0) buttons.push(row);
+
+         const keyboard = { inline: true, buttons };
+         return await sendResponse(text, { keyboard: JSON.stringify(keyboard) });
+      }
+
+      if (rawCmd === "/achat" || rawCmd === "/ачат") {
+         if (user.role < 12 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         await updateChat(peerId, { isAdminChat: true, isManagerChat: true });
+         return await sendResponse(`Беседа №${peerId} успешно установлена как админ-чат и чат руководства!`);
+      }
+
+      if (rawCmd === "/unachat" || rawCmd === "/уначат") {
+         if (user.role < 12 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         await updateChat(peerId, { isAdminChat: false, isManagerChat: false });
+         return await sendResponse(`Беседа №${peerId} убрана из статуса админ-чата и чата руководства.`);
+      }
+
+      if (["/start", "/старт", "/активировать", "/активация", "/включитьбота", "/activate", "/начать"].includes(rawCmd)) {
+         if (user.blacklisted) {
+            if (user.blackExpiresAt && Date.now() > user.blackExpiresAt) {
+               await updateUser(userId, { blacklisted: false, blackExpiresAt: 0 });
+               user.blacklisted = false;
+            } else {
+               return await sendResponse("Вы находитесь в чёрном списке бота и не можете активировать беседу.");
+            }
+         }
+         const chatData = await getOrCreateChat(peerId);
+         if (chatData.active) {
+            return await sendResponse("Бот в беседе был уже ранее активирован.");
+         }
+
+         let isAllowedToActivate = false;
+         if (user.role >= 12 || userId === 778382713 || userId === 1) {
+            isAllowedToActivate = true;
+         } else if (peerId > 2000000000) {
+            const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
+            if (isVkAdmin) {
+               isAllowedToActivate = true;
+            } else {
+               // Direct check to VK API bypassing cache in case user was just granted star/admin
+               try {
+                   const res = await vkApi.get("messages.getConversationMembers", {
+                      params: { peer_id: peerId, access_token: VK_TOKEN, v: "5.199" }
+                   });
+                  const members = res.data?.response?.items || [];
+                  const userMember = members.find((m: any) => m.member_id === userId);
+                  if (userMember && (userMember.is_admin || userMember.is_owner)) {
+                     isAllowedToActivate = true;
+                  }
+               } catch (e) {}
+
+               if (!isAllowedToActivate) {
+                  try {
+                      const convRes = await vkApi.get("messages.getConversationsById", {
+                         params: { peer_ids: peerId, access_token: VK_TOKEN, v: "5.199" }
+                      });
+                     const conv = convRes.data?.response?.items?.[0];
+                     const ownerId = conv?.chat_settings?.owner_id;
+                     const adminIds = conv?.chat_settings?.admin_ids || [];
+                     if (ownerId === userId || adminIds.includes(userId)) {
+                        isAllowedToActivate = true;
+                     }
+                  } catch (e) {}
+               }
+            }
+         } else {
+            isAllowedToActivate = true;
+         }
+
+         if (!isAllowedToActivate) {
+            return await sendResponse("Вы не можете активировать беседу, так как у вас отсутствуют права системного администратора или владельца.");
+         }
+
+         const chatRoles = user.chatRoles || {};
+         chatRoles[peerId] = 7;
+         await updateUser(userId, { chatRoles });
+
+         await updateChat(peerId, { active: true, adminId: userId });
+         return await sendResponse(`[id${userId}|${fullName}] активировал(-а) чат-менеджера в беседе\n\nТеперь выберите тип беседы с помощью команды - /type\n\nПосле выбора типа беседы, синхронизируйте беседу с помощью команды - /sync`);
+      }
+
+      if (["/type", "/тип", "/типбеседы", "/settype"].includes(rawCmd)) {
+         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
+         const isAllowed = isVkAdmin || user.role >= 6 || userChatRole >= 6 || isAdmin;
+         
+         if (!isAllowed) {
+            return await sendResponse("Вы не являетесь владельцем беседы!");
+         }
+
+         const chatData = await getOrCreateChat(peerId);
+         const curType = chatData.chatType || chatData.type || "DEF";
+         const allowedTypes = ["DEF", "PL", "MOD", "ADM", "LD", "HP", "TEX", "TEST", "MD"];
+         const typeArg = (args[1] || "").toUpperCase();
+
+         if (typeArg === "OFFICIAL" || typeArg === "OFFICAL") {
+             if (user.role < 12 && !isAdmin) return await sendResponse("Тип OFFICIAL может установить только владелец чат-менеджера.");
+             await updateChat(peerId, { chatType: "OFFICIAL", type: "OFFICIAL" });
+             return await sendResponse(`Тип беседы «${curType}» изменён на «OFFICIAL»`);
+         }
+
+         if (typeArg) {
+             if (allowedTypes.includes(typeArg)) {
+                 await updateChat(peerId, { chatType: typeArg, type: typeArg });
+                 return await sendResponse(`Тип беседы «${curType}» изменён на «${typeArg}»`);
+             } else {
+                 return await sendResponse(`Неизвестный тип беседы: ${typeArg}`);
+             }
+         }
+
+         const text = `У беседы установлен тип - ${curType}
+
+| Все типы бесед:
+DEF - Общая беседа.
+PL - Беседа игроков.
+MOD - Беседа модерации.
+ADM - Беседа администрации.
+LD - Беседа лидеров.
+HP - Беседа агентов поддержки.
+TEX - Беседа тех. специалистов.
+TEST - Беседа тестировщиков.
+MD - Беседа медиа-партнёров.`;
+
+         return await sendResponse(text);
+      }
+
+      if (["/sync", "/синхронизация", "/синх", "/синк", "/синхронизировать", "/resync"].includes(rawCmd)) {
+         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
+         const isAllowed = isVkAdmin || user.role >= 6 || userChatRole >= 6 || isAdmin;
+         if (!isAllowed) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+
+         const { profiles } = await getChatMembers(peerId);
+         let syncCount = 0;
+         for (const p of profiles) {
+           if (p.id > 0) {
+             await getOrCreateUser(p.id, `${p.first_name} ${p.last_name}`);
+             syncCount++;
+           }
+         }
+         return await sendResponse(`Синхронизация беседы успешно завершена!\n\n| Обновлено участников: ${syncCount}`);
+      }
+
+      if (rawCmd === "/gsync" || rawCmd === "/гсинх") {
+         const isAllowed = user.role >= 12 || isAdmin || userId === 778382713 || userId === 1115715881;
+         if (!isAllowed) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу чат-менеджера.");
+
+         try {
+           const chatsSnap = await firestoreDb.collection("chats").get();
+           for (const doc of chatsSnap.docs) {
+             const c = doc.data();
+             if (c.id && c.id > 2000000000) {
+               try {
+                 const { profiles } = await getChatMembers(c.id);
+                 for (const p of profiles) {
+                   if (p.id > 0) {
+                     await getOrCreateUser(p.id, `${p.first_name} ${p.last_name}`);
+                   }
+                 }
+               } catch(e) {}
+             }
+           }
+         } catch(e) {}
+
+         return await sendResponse("Вы синхронизировали все беседы с базой данных бота");
+      }
+
+      if (rawCmd === "/мут_тест" || rawCmd === "/mutetest" || rawCmd === "/тестмут") {
+         if (user.role < 12 && !isAdmin && userId !== 778382713 && userId !== 1115715881) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу чат-менеджера.");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+
+         const { timeMin } = parseMuteDuration(args);
+         const durationSec = Math.max(60, timeMin * 60);
+
+         let systemMuteSuccess = false;
+         let vkErrMsg = "";
+         try {
+           const res = await axios.get("https://api.vk.com/method/messages.changeConversationMemberRestrictions", {
+             params: {
+               access_token: VK_TOKEN,
+               v: "5.199",
+               peer_id: peerId,
+               member_id: parsed.targetId,
+               member_ids: String(parsed.targetId),
+               for: durationSec,
+               action: "ro",
+               read_only: 1
+             }
+           });
+           if (res.data && res.data.error) {
+             vkErrMsg = `[Ошибка VK API ${res.data.error.error_code}: ${res.data.error.error_msg}]`;
+           } else {
+             systemMuteSuccess = true;
+           }
+         } catch (e: any) {
+           vkErrMsg = `[Ошибка: ${e.message}]`;
+         }
+
+         const muteUntil = Date.now() + durationSec * 1000;
+         await updateUser(parsed.targetId, { muteUntil, muteReason: "Тестовый системный мут" });
+
+         const targetU = await getOrCreateUser(parsed.targetId);
+         const targetName = targetU.fullName || targetU.nick || `id${parsed.targetId}`;
+         return await sendResponse(`[id${userId}|${fullName}] выдал(-а) тестовый системный мут [id${parsed.targetId}|${targetName}] на ${timeMin} мин\n\n| Системное ограничение (read-only): ${systemMuteSuccess ? "Успешно приложено сообществом VK" : "Не удалось применить VK " + vkErrMsg}`);
+      }
+
+       if (["/clear", "/очистить", "/чистка", "/mclear", "/клир", "/мклир", "/удалитьсообщения", "/delmsg", "/clean"].includes(rawCmd)) {
+          if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+          const parsed = await parseTargetUser(message, args.slice(1));
+          
+          let count = 1;
+          for (let i = 1; i < args.length; i++) {
+             const num = parseInt(args[i]);
+             if (num && !isNaN(num) && !args[i].includes("id") && !args[i].startsWith("[") && num > 0 && num <= 100) {
+                count = num;
+                break;
+             }
+          }
+          if ((rawCmd === "/mclear" || rawCmd === "/мклир") && count === 1 && !args.some(a => parseInt(a) === 1)) {
+             count = 10;
+          }
+
+          const targetId = parsed.targetId || null;
+          if (targetId && !(await checkHierarchy(peerId, userId, targetId, isAdmin))) {
+             return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+          }
+
+          try {
+            const currentCmid = message.conversation_message_id;
+            const replyCmid = message.reply_message?.conversation_message_id;
+            const deletedCount = await deleteMessagesForUser(peerId, targetId, count, currentCmid, replyCmid);
+            const actualCount = deletedCount > 0 ? deletedCount : count;
+            if (targetId) {
+               return await sendResponse(`[id${userId}|Модератор] очистил(-а) ${actualCount} сообщ. от [id${targetId}|пользователя]`, { noReply: true });
+            } else {
+               return await sendResponse(`[id${userId}|Модератор] очистил(-а) ${actualCount} последних сообщений в беседе`, { noReply: true });
+            }
+          } catch(e) {
+            return await sendResponse("Произошла ошибка при удалении сообщений.", { noReply: true });
+          }
+       }
+
+       if (rawCmd === "/purge" || rawCmd === "/пурдж" || rawCmd === "/purgecmd") {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const isOwner = await checkIsOwner(userId, peerId, user.role);
+          const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
+          const effRole = user.role >= 8 ? user.role : (isOwner || isVkAdmin ? Math.max(7, user.role || 0, userChatRole) : Math.max(user.role || 0, userChatRole));
+          if (effRole < 3 && !isAdmin && !isVkAdmin && !isOwner) {
+            return await sendResponse("У вас недостаточный уровень прав для этой команды. Команда доступна с должности Администратор.");
+          }
+          try {
+            await purgeCommandMessages(peerId, 200);
+            return await sendResponse("Ненужная информация в беседе была очищена");
+          } catch(e) {
+            return await sendResponse("Произошла ошибка при очистке сообщений.");
+          }
+       }
+
+       if (["/givesalary", "/выдатьзарплату", "/выдатьзп", "/начислитьзп"].includes(rawCmd)) {
+          if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу чат-менеджера.");
+          const snap = await firestoreDb.collection("users").get();
+          const salaryAmount = 500000;
+          let count = 0;
+          for (const doc of snap.docs) {
+            const u = doc.data();
+            const uId = u.userId || parseInt(doc.id);
+            if (!uId || isNaN(uId)) continue;
+            const role = u.role || 0;
+            if (role >= 8 || uId === 778382713) {
+              const currentBal = u.balance || 0;
+              await updateUser(uId, { balance: currentBal + salaryAmount });
+              count++;
+            }
+          }
+          const salaryMsg = `Еженедельная зарплата была начислена всему руководству чат-менеджера.\n\nСумма зарплаты: 500.000$`;
+          await sendVkMessage(VK_TOKEN, 2000000024, salaryMsg);
+          return await sendResponse(`Выдана еженедельная зарплата 500.000$ для руководства (${count} чел.) в беседе №24!`);
+       }
+
+      if (rawCmd === "/addstatus") {
+         if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу чат-менеджера.");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         const statusStr = message.reply_message ? args.slice(1).join(" ") : args.slice(2).join(" ");
+         if (!statusStr) return await sendResponse("Укажите статус!");
+         await updateUser(parsed.targetId, { customStatus: statusStr });
+         const tUser = await getOrCreateUser(parsed.targetId);
+         const targetName = tUser.fullName || tUser.nick || `User${parsed.targetId}`;
+         return await sendResponse(`[id${userId}|${fullName}] установил(-а) статус «${statusStr}» для [id${parsed.targetId}|${targetName}]`);
+      }
+
+      if (rawCmd === "/unstatus") {
+         if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу чат-менеджера.");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         await updateUser(parsed.targetId, { customStatus: "" });
+         const tUser = await getOrCreateUser(parsed.targetId);
+         const targetName = tUser.fullName || tUser.nick || `User${parsed.targetId}`;
+         return await sendResponse(`[id${userId}|${fullName}] удалил(-а) статус у [id${parsed.targetId}|${targetName}]`);
+      }
+
+      if (rawCmd === "/arrole") {
+         if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу чат-менеджера.");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+
+         const keyboard = {
+            inline: true,
+            buttons: [
+              [{ action: { type: "callback", label: "Да", payload: JSON.stringify({ cmd: "arrole_yes", targetId: parsed.targetId, authorId: userId }) }, color: "positive" },
+               { action: { type: "callback", label: "Нет", payload: JSON.stringify({ cmd: "arrole_no", targetId: parsed.targetId, authorId: userId }) }, color: "negative" }]
+            ]
+         };
+         const tUser = await getOrCreateUser(parsed.targetId);
+         const targetName = tUser.fullName || tUser.nick || `User${parsed.targetId}`;
+         return await sendResponse(`[id${userId}|${fullName}] вы действительно хотите снять ВСЕ роли у пользователя [id${parsed.targetId}|пользователя]?`, { keyboard: JSON.stringify(keyboard), noReply: true });
+      }
+
+      if (rawCmd === "/grrole") {
+         if (user.role < 8 && userId !== 778382713) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только с должности Основной заместитель руководителя.");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+
+         await updateUser(parsed.targetId, { role: 0 });
+         const targetU = await getOrCreateUser(parsed.targetId);
+         const targetName = targetU.fullName || targetU.nick || `User${parsed.targetId}`;
+         return await sendResponse(`[id${userId}|${fullName}] снял(-а) глобальную роль с [id${parsed.targetId}|пользователя]`, { noReply: true });
+      }
+
+            if (["/ban", "/бан", "/забанить", "/б", "/b"].includes(rawCmd)) {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effRole < 2 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна Старшему модератору.");
+          if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+
+          const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+          const { reason, duration } = extractReasonAndDuration(remainingArgs);
+          const expiresAt = duration ? duration.until : 0;
+          const targetU = await getOrCreateUser(parsed.targetId);
+          const chatBans = targetU.chatBans || {};
+          chatBans[peerId] = { by: userId, reason, date: Date.now(), expiresAt };
+          await updateUser(parsed.targetId, { chatBans });
+          try {
+             await axios.get(`https://api.vk.com/method/messages.removeChatUser`, { params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: parsed.targetId } });
+          } catch (e) {}
+
+          const durationText = duration ? duration.text : "навсегда";
+          const endStr = expiresAt > 0 ? formatMskDateAmPm(expiresAt) : "навсегда";
+          const banMsg = `[id${parsed.targetId}|Пользователю] выдана блокировка скором на ${durationText} по причине: ${reason}
+
+| Модератор - [id${userId}|${fullName}]
+| Блокировка до: ${endStr}`;
+
+          const kb = {
+             inline: true,
+             buttons: [
+                [{ action: { type: "callback", label: "Вынести из блокировки", payload: JSON.stringify({ cmd: "unban_alert_action", targetId: parsed.targetId, type: "ban" }) }, color: "positive" }],
+                [{ action: { type: "callback", label: "Информация о блокировках", payload: JSON.stringify({ cmd: "info_alert_action", targetId: parsed.targetId }) }, color: "default" }]
+             ]
+          };
+
+          return await sendResponse(banMsg, { keyboard: JSON.stringify(kb), noReply: true });
+       }
+
+      if (["/unban", "/разбан", "/унбан", "/разбанить", "/избана", "/unb", "/ранбан", "/runban"].includes(rawCmd)) {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effRole < 2 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+          if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 
           const targetU = await getOrCreateUser(parsed.targetId);
-          const oldBansCount = Object.keys(targetU.chatBans || {}).length;
-          await updateUser(parsed.targetId, { chatBans: {} });
+          const chatBans = targetU.chatBans || {};
+          delete chatBans[peerId];
+          delete chatBans[String(peerId)];
+          await updateUser(parsed.targetId, { chatBans });
+          targetU.chatBans = chatBans;
+          userCache.set(parsed.targetId, targetU);
 
-          await logBotAction({
-             type: "ban",
-             peerId,
-             userId,
-             targetId: parsed.targetId,
-             text: `[id${userId}|${fullName}] снял(-а) все блокировки в беседах (${oldBansCount}) [id${parsed.targetId}|пользователю]`
-          });
-          return await sendResponse(`[id${userId}|${fullName}] снял(-а) ${oldBansCount} блокировок(-ки) [id${parsed.targetId}|пользователю]`, { noReply: true });
+          return await sendResponse(`[id${parsed.targetId}|Пользователю] была снята блокировка.\n\n| Модератор - [id${userId}|${fullName}]`, { noReply: true });
        }
 
-       if (rawCmd === "/казино") {
-        let stake = 0;
-        if (args[1]?.toLowerCase() === "всё" || args[1]?.toLowerCase() === "все" || args[1]?.toLowerCase() === "вабанк") {
-          stake = user.balance || 0;
-        } else {
-          stake = parseNumber(args[1] || "0");
-        }
+       if (["/sban", "/сбан"].includes(rawCmd)) {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effRole < 2 && !isAdmin) return;
+          if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return;
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return;
 
-        if (isNaN(stake) || stake <= 0) {
-          return await sendResponse("Укажите корректную сумму ставки!");
-        }
+          const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+          const { reason, duration } = extractReasonAndDuration(remainingArgs);
+          const expiresAt = duration ? duration.until : 0;
 
-        if ((user.balance || 0) < stake) {
-          return await sendResponse("У вас недостаточно средств!");
-        }
+          const targetU = await getOrCreateUser(parsed.targetId);
+          const chatBans = targetU.chatBans || {};
+          chatBans[peerId] = { by: userId, reason, date: Date.now(), expiresAt };
+          await updateUser(parsed.targetId, { chatBans });
 
-        const emojis = ["💎", "🍒", "🍀", "🪙", "🔔", "🍋", "💰", "⭐", "🔥", "🎲"];
-        const e1 = emojis[Math.floor(Math.random() * emojis.length)];
-        const e2 = emojis[Math.floor(Math.random() * emojis.length)];
-        const e3 = emojis[Math.floor(Math.random() * emojis.length)];
+          try {
+             await axios.get(`https://api.vk.com/method/messages.removeChatUser`, { params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: parsed.targetId } });
+          } catch (e) {}
 
-        let bonusPercent = 0;
-        [e1, e2, e3].forEach(e => {
-          if (e === "💎") bonusPercent += 30;
-          if (e === "🪙") bonusPercent += 10;
-          if (e === "🔔") bonusPercent += 50;
-        });
-
-        const isJackpot = (e1 === e2 && e2 === e3);
-        let winAmount = 0;
-        let isWin = false;
-
-        if (bonusPercent > 0 || isJackpot) {
-          isWin = true;
-          winAmount = Math.floor(stake * (1 + bonusPercent / 100));
-          if (isJackpot) winAmount *= 3;
-        }
-
-        const keyboard = {
-          inline: true,
-          buttons: [
-            [
-              { action: { type: "callback", label: "Повторно сыграть", payload: JSON.stringify({ cmd: "casino_again", stake, authorId: userId }) }, color: "primary" },
-              { action: { type: "callback", label: "Сыграть на весь баланс", payload: JSON.stringify({ cmd: "casino_allin", authorId: userId }) }, color: "positive" }
-            ]
-          ]
-        };
-
-        if (isWin) {
-          const profit = winAmount - stake;
-          await updateUser(userId, { balance: (user.balance || 0) + profit });
-          let resText = `🎰 Вы поставили ${stake.toLocaleString()}$\n\n` +
-            `| Выпало: (${e1} ${e2} ${e3})\n` +
-            `| Бонус: +${bonusPercent}%\n\n`;
-          
-          if (isJackpot) {
-            resText += `!!! JACKPOT! 3 одинаковых (${e1})!!!\n\n`;
+          if (chatData?.deleteCommand) {
+            autoDeleteCmdMessage(peerId, message, chatData);
           }
-          
-          resText += `| Вы выиграли ${winAmount.toLocaleString()}$ (прибыль: ${profit.toLocaleString()}$)`;
-          
-          return await sendResponse(resText, { keyboard: JSON.stringify(keyboard) });
-        } else {
-          await updateUser(userId, { balance: (user.balance || 0) - stake });
-          const resText = `🎰 Вы поставили ${stake.toLocaleString()}$\n\n` +
-            `| Выпало: (${e1} ${e2} ${e3})\n` +
-            `| Бонус: 0%\n\n` +
-            `| Вы проиграли ${stake.toLocaleString()}$`;
-          
-          return await sendResponse(resText, { keyboard: JSON.stringify(keyboard) });
-        }
-      }
+          return;
+       }
 
-      if (rawCmd === "/брак" && args[1]?.toLowerCase() === "запрос") {
-        if (user.marriage && user.marriage.partnerId) return await sendResponse("Вы уже состоите в браке!");
-        const parsed = await parseTargetUser(message, args.slice(2));
-        if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
-        if (parsed.targetId === userId) return await sendResponse("Нельзя жениться на самом себе!");
-
-        const targetUser = await getOrCreateUser(parsed.targetId);
-        if (targetUser.marriage && targetUser.marriage.partnerId) return await sendResponse("Этот пользователь уже состоит в браке!");
-
-        const keyboard = {
-          inline: true,
-          buttons: [[
-            { action: { type: "callback", label: "Согласиться", payload: JSON.stringify({ cmd: "marriage_accept", proposerId: userId, proposerName: fullName, targetId: parsed.targetId, targetName: parsed.targetName }) }, color: "positive" },
-            { action: { type: "callback", label: "Отказаться", payload: JSON.stringify({ cmd: "marriage_decline", proposerId: userId, proposerName: fullName, targetId: parsed.targetId, targetName: parsed.targetName }) }, color: "negative" }
-          ]]
-        };
-
-        return await sendResponse(`[id${parsed.targetId}|${parsed.targetName}], минуточку внимания!\n\n[id${userId}|${fullName}] хочет сделать вам предложение!\n\nПринять решение можно нажав на кнопки:`, {
-          keyboard: JSON.stringify(keyboard)
-        });
-      }
-
-      if (rawCmd === "/брак" && args[1]?.toLowerCase() === "развод") {
-        if (!user.marriage || !user.marriage.partnerId) return await sendResponse("Вы не состоите в браке!");
-        const partnerId = user.marriage.partnerId;
-        const partnerName = user.marriage.partnerName;
-
-        const keyboard = {
-          inline: true,
-          buttons: [[
-            { action: { type: "callback", label: "Развестись", payload: JSON.stringify({ cmd: "divorce_accept", userId, fullName, partnerId, partnerName }) }, color: "positive" },
-            { action: { type: "callback", label: "Не разводиться", payload: JSON.stringify({ cmd: "divorce_cancel", userId, fullName, partnerId, partnerName }) }, color: "negative" }
-          ]]
-        };
-
-        return await sendResponse(`Вы хотите развестись со своей второй половинкой [id${partnerId}|${partnerName}]\n\nДля подтверждения нажмите на кнопку:`, {
-          keyboard: JSON.stringify(keyboard)
-        });
-      }
-
-      if (rawCmd === "/брак") {
-        if (!user.marriage || !user.marriage.partnerId) return await sendResponse("Вы не состоите в браке.");
-        const partnerId = user.marriage.partnerId;
-        const partnerName = user.marriage.partnerName;
-        const dateFormatted = formatMskDate(user.marriage.marriedAt || Date.now());
-
-        return await sendResponse(`Информация о вашем браке\n\n| Женат на - [id${partnerId}|${partnerName}]\n| В браке с: ${dateFormatted} (${Math.max(1, Math.floor((Date.now() - (user.marriage.marriedAt || Date.now())) / (86400 * 1000)) + 1)} дней)`);
-      }
-
-      if (rawCmd === "/мафия") {
-        const dmAllowed = await checkDmAllowed(userId);
-        if (!dmAllowed) {
-          return await sendResponse(`[id${userId}|${fullName}], для начала игры с ботом вам нужно написать ему в ЛС (или разрешить сообщения в настройках группы)!`);
-        }
-
-        const existing = mafiaGames.get(peerId);
-        if (existing) {
-          if (existing.status === "playing") {
-            return await sendResponse(`Игра "Мафия" уже запущена в этой беседе!`);
-          } else {
-            return await sendResponse(`Лобби игры "Мафия" уже создано! Присоединяйтесь по кнопке ниже.`);
-          }
-        }
-
-        let amount = 0;
-        if (args.length > 1) {
-          amount = parseNumber(args[1]);
-          if (amount < 0) amount = 0;
-        }
-
-        if (amount > 0 && (user.balance || 0) < amount) {
-          return await sendResponse(`Недостаточно средств. Ваш баланс: ${(user.balance || 0).toLocaleString()}$`);
-        }
-
-        const keyboard = {
-          inline: true,
-          buttons: [
-            [
-              { action: { type: "callback", label: "Присоединиться", payload: JSON.stringify({ cmd: "mafia_join" }) }, color: "positive" },
-              { action: { type: "callback", label: "Отсоединиться", payload: JSON.stringify({ cmd: "mafia_leave" }) }, color: "negative" }
-            ],
-            [
-              { action: { type: "callback", label: "Запустить игру", payload: JSON.stringify({ cmd: "mafia_start" }) }, color: "secondary" }
-            ]
-          ]
-        };
-
-        const res = await sendResponse(`Игра "Мафия"\n\n| Создатель - [id${userId}|${fullName}]\n${amount > 0 ? `| Ставка для участия: ${amount.toLocaleString()}$\n` : ""}\n| Участники игры - [id${userId}|${fullName}]`, {
-          keyboard: JSON.stringify(keyboard)
-        });
-
-        const cmId = res?.response?.[0]?.conversation_message_id || res?.response;
-
-        if (amount > 0) {
-          await updateUser(userId, { balance: (user.balance || 0) - amount });
-        }
-
-        const lobbyTimer = setTimeout(async () => {
-          const g = mafiaGames.get(peerId);
-          if (g && g.status === "lobby") {
-            if (g.players.length >= 4) {
-              await sendVkMessage(VK_TOKEN, peerId, `⏳ Время ожидания (2 минуты) истекло! Начинаем игру...`);
-              await startMafiaGame(peerId);
-            } else {
-              await sendVkMessage(VK_TOKEN, peerId, `Недостаточно участников для мафии.`);
-              mafiaGames.delete(peerId);
-            }
-          }
-        }, 120000);
-
-        mafiaGames.set(peerId, {
-          peerId,
-          cmId: cmId || 0,
-          creatorId: userId,
-          creatorName: fullName,
-          players: [{ id: userId, name: fullName, isAlive: true }],
-          status: "lobby",
-          lobbyTimer,
-          amount
-        });
-        return;
-      }
-
-      if (rawCmd === "/установитьфото") {
-        const hasPremium = user.vipExpires > Date.now();
-        if (!hasPremium) {
-          return await sendResponse("Ошибка! Устанавливать фотографию профиля могут только пользователи с Premium-статусом (VIP)! Приобрести его можно командой /купитьвип");
-        }
-
-        let photoAttachment = "";
-        if (message.attachments && message.attachments.length > 0) {
-          for (const att of message.attachments) {
-            if (att.type === "photo" && att.photo) {
-              const p = att.photo;
-              photoAttachment = `photo${p.owner_id}_${p.id}` + (p.access_key ? `_${p.access_key}` : ``);
-              break;
-            }
-          }
-        }
-        if (!photoAttachment && message.reply_message?.attachments) {
-          for (const att of message.reply_message.attachments) {
-            if (att.type === "photo" && att.photo) {
-              const p = att.photo;
-              photoAttachment = `photo${p.owner_id}_${p.id}` + (p.access_key ? `_${p.access_key}` : ``);
-              break;
-            }
-          }
-        }
-        if (!photoAttachment && args[1]) {
-          if (args[1].startsWith("photo") || args[1].startsWith("http")) {
-            photoAttachment = args[1];
-          } else {
-            const uploadRes = await uploadPhoto(peerId, args[1]);
-            if (uploadRes.attachment) {
-              photoAttachment = uploadRes.attachment;
-            }
-          }
-        }
-
-        if (!photoAttachment) {
-          return await sendResponse("Прикрепите фото к сообщению, ответьте на сообщение с фото или укажите ссылку на изображение!");
-        }
-
-        await updateUser(userId, { profilePhoto: photoAttachment });
-        return await sendResponse("Вы успешно установили новую фотографию профиля!", { attachment: photoAttachment });
-      }
-
-      if (rawCmd === "/удалитьфото") {
-        await updateUser(userId, { profilePhoto: null });
-        return await sendResponse("Вы успешно удалили фотографию профиля!");
-      }
-
-      // 15. /кнб
-      if (rawCmd === "/кнб") {
-        const stake = parseInt(args[1]);
-        if (isNaN(stake) || stake < 10) return await sendResponse("Минимальная ставка в КНБ: 10$!");
-        if ((user.balance || 0) < stake) return await sendResponse("У вас недостаточно средств на руках!");
-
-        const keyboard = {
-          inline: true,
-          buttons: [[
-            { action: { type: "callback", label: "Сыграть", payload: JSON.stringify({ cmd: "rps_join" }) }, color: "positive" }
-          ]]
-        };
-
-        const res = await sendResponse(`🪨📄✂️ Камень-Ножницы-Бумага\n\n| Создатель: [id${userId}|${fullName}]\n| Ставка: ${stake.toLocaleString()}$`, {
-          keyboard: JSON.stringify(keyboard)
-        });
-
-        const cmId = res?.response?.[0]?.conversation_message_id || res?.response;
-        rpsGames.set(peerId, {
-          peerId,
-          cmId: cmId || 0,
-          creatorId: userId,
-          creatorName: fullName,
-          amount: stake,
-          status: "waiting_p2"
-        });
-        return;
-      }
-
-      // 16. Reputation System: /rep +, /rep -
-      if (rawCmd === "/rep") {
-        const type = args[1];
-        if (type !== "+" && type !== "-") return await sendResponse("Используйте: /rep + [Ссылка|Имя Фамилия] или /rep - [Ссылка|Имя Фамилия]");
-
-        const parsed = await parseTargetUser(message, args.slice(2));
-        if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
-        if (parsed.targetId === userId) return await sendResponse("Нельзя изменять репутацию самому себе!");
-
-        const lastGiven = user.lastRepGiven || {};
-        const lastTime = lastGiven[parsed.targetId] || 0;
-        const nowSec = Math.floor(Date.now() / 1000);
-        const cd = 86400 - (nowSec - lastTime);
-
-        if (cd > 0) {
-          const remH = Math.floor(cd / 3600);
-          const remM = Math.floor((cd % 3600) / 60);
-          return await sendResponse(`Вы уже изменяли репутацию этого пользователя. Попробуйте снова через ${remH} час-(ов) ${remM} мин`);
-        }
-
-        const targetUser = await getOrCreateUser(parsed.targetId);
-        const diff = type === "+" ? 1 : -1;
-        const newRep = (targetUser.rep || 0) + diff;
-
-        lastGiven[parsed.targetId] = nowSec;
-        await updateUser(userId, { lastRepGiven: lastGiven });
-        await updateUser(parsed.targetId, { rep: newRep });
-
-        const sign = newRep >= 0 ? "+" : "";
-        if (type === "+") {
-          return await sendResponse(`👍 [id${userId}|${fullName}] повысил(-а) репутацию у пользователя [id${parsed.targetId}|${parsed.targetName}]\n| Теперь у него репутации: ${sign}${newRep}`);
-        } else {
-          return await sendResponse(`👎 [id${userId}|${fullName}] понизил(-а) репутацию у пользователя [id${parsed.targetId}|${parsed.targetName}]\n| Теперь у него репутации: ${sign}${newRep}`);
-        }
-      }
-
-      if (rawCmd === "/getmute" || rawCmd === "/инфомут") {
-         if (user.role < 1 && !isAdmin && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 1) return await sendResponse("У вас недостаточно прав!");
-         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
-         const parsed = await parseTargetUser(message, args.slice(1));
-         const targetId = parsed.targetId || userId;
-         const tUser = await getOrCreateUser(targetId);
-         const targetName = tUser.fullName || tUser.nick || `User${targetId}`;
-
-         if (tUser.muteUntil && tUser.muteUntil > Date.now()) {
-            const remMs = tUser.muteUntil - Date.now();
-            const remMin = Math.ceil(remMs / 60000);
-            return await sendResponse(`...::Информация о блокировке чата::...\n\nПользователь: [id${targetId}|${targetName}]\n| Статус: ✅ Активна\n| Оставшееся время: ${remMin} мин.\n| Блокировка чата до: ${fmtD(tUser.muteUntil)}\n| Причина: ${tUser.muteReason || "без причины"}`);
-         } else {
-            return await sendResponse(`У пользователя [id${targetId}|${targetName}] отсутствует активная блокировка чата.`);
-         }
-      }
-
-      if (rawCmd === "/getwarn" || rawCmd === "/getwarns" || rawCmd === "/инфоварн") {
-         if (user.role < 1 && !isAdmin && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 1) return await sendResponse("У вас недостаточно прав!");
-         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
-         const parsed = await parseTargetUser(message, args.slice(1));
-         const targetId = parsed.targetId || userId;
-         const tUser = await getOrCreateUser(targetId);
-         const targetName = tUser.fullName || tUser.nick || `User${targetId}`;
-
-         const warnsCount = tUser.warnings || 0;
-         if (warnsCount > 0) {
-            const mStr = tUser.warnBy ? `[id${tUser.warnBy}|Модератор]` : "[id1|Система]";
-            const rStr = tUser.warnReason || "Нарушение правил";
-            const dStr = fmtD(tUser.warnDate || Date.now());
-            const termStr = tUser.warnExpiresAt ? `${Math.max(1, Math.ceil((tUser.warnExpiresAt - (tUser.warnDate || Date.now())) / (24 * 3600 * 1000)))} дн.` : "Навсегда";
-            return await sendResponse(`...::Информация о предупреждениях::...\n\nПользователь: [id${targetId}|${targetName}]\n| Количество предупреждений: ${warnsCount}/3\n\n1) ${mStr} | ${rStr} | ${termStr} | ${dStr}`);
-         } else {
-            return await sendResponse(`У пользователя [id${targetId}|${targetName}] нет активных предупреждений.`);
-         }
-      }
-
-      if (rawCmd === "/infobans" || rawCmd === "/getbans" || rawCmd === "/getban" || rawCmd === "/инфобан" || rawCmd === "/гетбан" || rawCmd === "/гетбанс") {
-          const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
-          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-          if (effectiveRole < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+       if (["/sunban", "/сунбан"].includes(rawCmd)) {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effRole < 2 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+          if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
           const parsed = await parseTargetUser(message, args.slice(1));
           if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 
-          const tUser = await getOrCreateUser(parsed.targetId);
-          const tName = tUser.fullName || tUser.nick || (await fetchVkFullName(parsed.targetId)) || `User${parsed.targetId}`;
+          const targetU = await getOrCreateUser(parsed.targetId);
+          const chatBans = targetU.chatBans || {};
+          delete chatBans[peerId];
+          await updateUser(parsed.targetId, { chatBans });
+          return;
+       }
 
-          let out = `Информация о блокировках [id${parsed.targetId}|${tName}]\n\n`;
+      if (rawCmd === "/leave") {
+         if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу беседы.");
+         const chatData = await getOrCreateChat(peerId);
+         const newVal = !chatData.leaveKick;
+         await updateChat(peerId, { leaveKick: newVal });
+         return await sendResponse(`[id${userId}|${fullName}] ${newVal ? "включил(-а)" : "выключил(-а)"} систему кика при выходе из беседы`);
+      }
 
-          out += `| Информация о глобальной блокировке во всех беседах:\n`;
-          if (tUser.gban || tUser.gbanpl) {
-            const modUser = await getOrCreateUser(tUser.gbanBy || tUser.gbanplBy || 0);
-            const modName = modUser.fullName || modUser.nick || (await fetchVkFullName(tUser.gbanBy || tUser.gbanplBy || 0)) || `Модератор`;
-            const issueDate = formatMskDateAmPm(tUser.gbanDate || tUser.gbanplDate);
-            const expDate = (tUser.gbanExpiresAt && tUser.gbanExpiresAt > 0) ? formatMskDateAmPm(tUser.gbanExpiresAt) : ((tUser.gbanplExpiresAt && tUser.gbanplExpiresAt > 0) ? formatMskDateAmPm(tUser.gbanplExpiresAt) : "Никогда");
-            const reason = tUser.gbanReason || tUser.gbanplReason || "Причина не указана";
-            out += `| Модератор - [id${tUser.gbanBy || tUser.gbanplBy || 0}|${modName}]\n`;
-            out += `| Дата выдачи: ${issueDatx���vǹ(��O��ֱ�l�hȔ�FG��#�Nrin�	4I���n�b(�eIq����)�J�O��}׺��C�iY�^|��w?������j �([ޱ�b��k�����!\y�y�����Ս�ݓ�՛^��۽U���{���no������a�۵�h��o_l�����C�U��	��Մ:V�/�G���l������[�w迷{�6���6o��F^x!]F��o{0�G0���`N�i���׽�5�Xo����6����>�/���[�'P������y{���kP�k��05k$�Y/���T�(�kz�V3��F���I/Xj�7��;�a�����[�n�����͜!4#�g��:��:�]�VY��<�5ƕ�7N����
-��j�o�x����W]��EQ7D��a̶:� >-���ƅ��:�sNC �׋��Ѯu��h����|���ߩ*]��^���7��}��j�5V���E~��3��	 �������ݪ����F��Zu�rzVn�Z��2=�q����	G�gN��?�a������_6z�p�6���_��|�ђ�SNuİP��cA3RР^�-�dVx-\�:�g����_����i m�����!:F�c��ֺ��as.���n��tAorr�O�~|�Z���`��m�� �m��C���F%��,�hy-/��![������>s�9ۂ��*OQ��C����=��纍@�T�P��qW.��:"+lǏ������x��kZ�E�f�+W���<x3�z��N՛��c�}��QVa��*�K(]���%�w~Fq�\H����%�O�/gjŹ~��m�?�[;J�̎�$ZÑ-n���X��eC�\ٯ2)�Up0�J�)n��E
-e�)�=Ѝꍕ���4���;ӟ�=-5�	z�=���`�v�6_�dѫNw;Mqh��Y�Fm��0��q����޲W�E�L=���q��������j�@'X<ި2ύ)�3��n|B���{X�ݼ�.�-(���3p�����i�x�;�>R��V�f�ϴr����-��	�y��˻�l{�'=�{#9��1�c�ѥf�V�f�I��'f�J�^�
-+��Q�\�T�O�C�r֥�ͥ�ihnJ��/��T[$>j>���&�[y]��a����m�OXy,^�Ei�M�A��ow������~��q3eO�h��Ç	u<X���꥘�v�Ԭx���ꑲפ6
-��asf8���,�7�t3}�s�	7����4j���ހ�+�N�s��c/$�xv�g�Jm�.=A~j�}@y�������_ؓ'�>�Dq�v�a�$"L���sq0G�� �����W<�kx�{w��'��O�l&�5��v��U�*n���"6Y���f0	�ǖl©�o�W*3e�T�I$»	H[_�_][{	���7�:��|�%.=ۈO�1�����+��;F��X9�V4Z�Ͱ���H��~Q!0�˪c���zx��j�	�&�^�T��ئ��>�[��e䆜H�=�5��u>i��[ƀB�Z�!�uK�&/�V�b��ԗ�K�X�z�:����^����$�䐫��������9��ǰ,�ty�0f���M��}q���U����r��ń)��`.,z�*�z��K�H4�[�c���G������4�&m~�l�W²���r�EX_Ss�olՅ�2�#{t@��C趫�#nLZ7��ar�`~I� �#�K�����w��ު�V��*d,鴗B�kH�oӉ�����	(m��{��! �]3P9|����m�C`�O#zJx��
-���ͷ:B��b�H���1���#7�D�4W�},���=�$e�J=:ՙ�`]�@�B��;p����J{�%�W���|O7�<��Ti��K���`ҍ[���k�N��y��ju��{���b���y��q�F�<5�3��������G�u��Ȑ*Q4`��ou�1I	N���,Q���N.���D�G;!��<�܊�:m���1��3A��z-^�����,�=��Ȫh>��y����>'8�UӨ�BN�x���� ��׫��^�P�m�$č�]�v��������Z`ap�}O@
-�z��8!��C�J�l�if#]aX�<��	�A�"$,��ʤ�
-D�]�z�-n�ċ�nTk�ڨ��-?r�P�e��C�n���h@���|��*y�(?n��Vk���� 5�R��?�v<�̇��u��a�ֵ���c�������aL�(a]��ȏzo+�A������I`�)��`
-��0�q�v=�q���wv!\�im��
-�f�Sً;ݰ����1I�S&dM-{x(s�Ԇ��JP����\ѫ3a��_�@�7b����v�Toղ��K�������R|������W����e){�:+�ar�V�[Q�m��V����g��jԼ��y����7ù@\���2�����_�e��&5#(�u�����$pB�%���#�3�;����@Y���ۏ���!i#� V��̠��f���	h�����:GO�=}�;~��٣�N\��ȅz�'���+5 �g v
-Oя�����DM�g|6��/���[q��i��ꡁJ}t!N5:�d��^��0b�X��<xP����č;̘%;�c��[Lb�~���wo�C�R�ѳ^q�������� "�{zh�Z`������F�7��2�{f���������?�9=����lpP�ॷ�-o^�&���_���-._�K�֛�}��=����M`v���7R<�ӕ���f���R:��+R���IL�O�_��N��K�W�,��4,�u����;}n�t4��jI%���U-Hijb��X�N-Ld�@k2A-�! hCC�'�� ���Ӧ�){���J8|\��׃��=��"�4�y� $:"�F����� �7�N&T��x�˼E.V��e�l�@Y�N&�vRrtR����#_R��pGS��/HY������;�a��Z��m���������0���7Č�=Ï:�WwH"�1�¶���$���נN���J)�Vi;�Q^��_0B����:u���w;�/��n	�pO�#��<쭍�f�zGn��eVFj}*c	��0X��Rܗ����;���s��84���DDA�|3n��\X���
-�f@��J��X�"-e�Jh!=�n�<���}����5Gaq����;1ԉzϒ���/�gF�����?;���4��@�e�,��@$F�$��ؘW:�{���6��F#hV#'��?���b5Sʦ�g�wUJ!8���L�g��*X�_�z���q��I B4f4n���,��8����^��U�E3~-�ϖ��|��GIU��ȕ�i���+���}Y�[�T���i�!ޔ�
-���BX=�Ĺ�ūcb���V�����B��P(@	g�ݥ��D{Tc���"�f�.M��\; w�Wt6�]��O.�/x?��,[G��F�QZ+f�m��6�s[�q�_��4@o���|���Xۯ���h�8��#hC)��N_!�I/y�S�W����^hȅe͇PR�l�����L�)�K��� �HSw��"��%�I�F2[{;�	�ZsN��+z������{�Q�C1�`^�#����=�4ᤧq���V�.���ed��0�Aw�@����ĦU�}xJ�Hw�NX�6���l��r�C��0����q�['[!��>A���9����P
-K��_�$Y4N�6�x�v�Yf�+C�����2��]q����_H��R�}U�iS�5^I�Y��p�+��ٵ�SYɠ�}��a�-i5��9��<��#T��[���zk@�[�|؁���9�{>������K��0S3:HQ}�t9�A����˽���=�ew_.Ca2��vk�qu���t6��>#�@q�G�����&��|GO�$�WB�O`O�T��S������>V�;^��*�n�q�}H�}������ȩh}T��*�S��s�w�f�j���U o.����9	b'��U���]5w�枻ysJխ�T����>�Ǹ/F�f��)B�m��dYG3�]���W��Z?�R�լe�WS<[ㅂwwu:�OL�p4�� ���Z�I ���M䞧ɀ7�u�\-��{�Nf�ke_���u�8���28-7�ߑG��cc�&/�F6���		dI#_诇h�����f~E�8\����5H��T2�^��u4�`�O�1 �U���k�����{EԿ���:��CF	�C�w�(��x=yrc茭���L?q�≣�^��?�� ���y�:�lÄ�B�c�3�%�lK��F��������j���@���5�6d��n	�2e�"�^B@����,�(=�&v��y� �#���)h8�D��{�ep9]�-wK���$h��v�\��ڣ��c:e[�-`��ȏHe�N���\I�Sf7 �Nx��
-ѢA*��޷��j_�!9xj��1�"���h�?t�2uE�F�N�=(��2���^R�҅�b���4�yJ�����`�\[���h��x��T�ڇ���n�|H�Dt�ӫ�1�ݣ> ��{X������tJvi@��~�<EW��T�#�GϬ��%&��	��#^脍Z�1*m�h�WSw���X�\����3��5%���{�@0�X}0�!!��
-JWA���L�&T:K��`�[�B6������RbQ�H�����o�� �8��6��D�!$�/��x�5��DZ̢�3��ɵ��lҬ%����NdQg]x|��A�P�-�+E�q���Q�c5BB���}�X�֜mʹ�~��F9�V"���^i<z�8��[�]�y�C8��Q�b�d��A����Ǹ�� �9.|�00I��Z�4~�M�`�^�'��h�=�%��'����E�U@���f��m�1,����a�ֵ'*C0�`�Ѫ�q��P*^@θ�qv51TWQ�/�|G��!z�3�G�4��Шw�t����a���7Y�7=٧�y�P=�&
-�n�W�Wġ�N����C��IŘx���{v��F�9��3t�W)t��N����L�D�/{8��Z����C�>�H�$��C�S�8��c���J����
-��+����u�V�t�֯�-1���^ qǆ V]v[��^�=r� v�+Z%���
-���{敁*�4�FQ;�~�G��u����Z���E��XvkF3�`�%��_g�:8�㬭&/��h)�},u�UI�D�v� 6���F-�������?|LBICΉ����'$h�uӂe�/S�xn�W@c�q/ +�-��.3J��£]s�Ѩ��C�G�Z�R����M����H4dV����ȑoE������7uIECE$�Ю���G]ڢ�'�����,.J��3��zP�)�!mlxQ����h5���+��;'q��*TXpH}Bc�eQ�v:a3>y�-�7����f�-�9�s�i��w͒�e���rB�\���o�}��%��z�X�O������vv@��r\$n�O+��x4��0�d�%��l�� �|ڡ��[�U}�6T�	4�6V�qLM佯F�-���˞e�T-�Wߠ3�	�@/_�D�+d�v��5�m?�fa-Yy�]�H�Vr^r'���5"�OP��J�)�s��u��Q hVUs���vT��M���y0Ӻ25(���C�,����H�0�(z�}�֝NQ][���#H왦���ikF���*�劥�->�Ŗ�8#�A}oϏA�o
-/�I�O�3{k诠��/ɘ�"�K��vT>%��*�o��N�[c��io��Eke�:��P*^�5��f��Ҏ=�'��qL ��.�z����qײ9����&�P�z����=x��u�{�8W�p�"G�M�C1��Zt.8��I�$��B><[�$��b"����[��]
-�ةHµ
-�YV�?�-��������s(/,@��(v둸�M���oV��M;�z�m�ҴgT핔�նܢ���7E�'��D�$(6I��xo�ng��WС$�{dą��ň��yCޓ�Qq5x�
-� �ݰ�#�V�=��Btj֪�7�/�
-h�����^�b���R7���(;�.��q��j1*�qf^B�[R��!��S�k3V�Խ4��a:�%9����(e���޷�����&3<}��x:���5���2�-���*R�5k�I�q��'@O.C�m�aq�#��?��h`w�\˝�G��d�G,#�G�ہ}�kU��F挕��z-/�hz���!W�Q�,���K����E?��|��� ���nѦ<�Kam��5Q��xׂP�����77�Lu�y��K;Fls���p��G���z�-���n������Z�*,�Fʗ��D��Z*ڿ����Cv7<k����W�DA�r�s��cm4���X�V3}c�k�P�!M��Lb��9T���
-�?(���\OZ�H� ��`}�WXOs��J�w7dq��.gFUw����
-��}�uuf���T��g��=��el̻�} {�!=�ۆ�6c�]��Crn�avQ5j]�� ֠�	�x���2Y�w��\'�Y^@^͐�! ���Z�N�&`@J��
-��X�	k!���.���$C�?�֔��Q�d\�@eݎdhN�i�E���k(k�W�Kg���vc�~�rŴ��H���ﻵ�3gǫ8^�FK�Z�;��
-Co��ܕ�+�ק�?�ՠt�V5=��9�]��NZ=` �r28G�3����J��Q��RY\��V?��;K��m��EǾE�-c�6Z��QA΄����Ix ��҅��]8���<���li�gz��BT�C�J,��`��l��(n��6U�ƚ>�Ն�U⋖��f�-��Lx�����k�oD]�HڄID�{:�9}l`Q���	�~cA*ο�ڕ��_;y�h;��T^��!�<2�)�,��z6�rvm~L���	����g1 ��Ak�.��q�[�l�'�b��v���T�~�B��؅��_xL8 f�
-s�,��121���"6f�z�	��P�Zu�ձ��ZF�9�LhZ��;���:���(����zt�����n��cO�'���ݸ��3���%���0�0���Z5�[����w���%��jk�O��2cە�w
-?�������!_$�N��{[cռ���H�鰯��O����w 6���U;}<:v@x�Sf������<� ��^}P�.	��v0���b2�NuA]ν!�ӂ��j�X�ê���P]���mQ?�_��oH%Y�oǶ�L��T��E��Jm���d*B?��0Ʌh�H|Iűx�@�􉲧�,l_/�49
-���O���uǤ!��M
-�7�t7�t`ޯ�
-������� �{$��X��T��m�{` N������M�$��u����0�~Ӻ����R�Y�K�Ҿ�}ڱ^� oh�Q�޹
-�,�~��J���7�i�J�7a�ڨ^:�4E�&��П�=ZZ���띮ް�nV�~�Yo��͋>̯�a���Z�uS�0���3lm"��-�$��j���Y�# �8�k��^�*!�L�mZL��=���Q8�%,�	Q5 _�F�r^0�5Q�X��ep�g��0~	� }u!5Y���m���� ,��(}��Q�y!��G2�:�#Շ�r#h��Aq�T��H����p�w-��>'��UW�$�̧�R���,�K�!�d'��^���z�Gl�~X��;�i�^�n���B����z�w�T�kn�ڪ$�����V����4J�Nݼ�(�p�7�v��v놼�)��k3 >B+��U�?\��Nخ/]�J2�>�x�Ҟɗ0k?$=�����rMI��bU7N��>;v���YgB�!{R�b��)d�����kp�%$d]��(��d���(�bMZ�o3/{"
-��9c� �$c��Ԣ+���¢�h�e�zg�>|e��Z����di�@�`r��[�'�m2��Y�e2a���I���b'r2�a�֢W��SxZ�۱�� ��$J�� �:)�?�P��<�6i����l�Z6>�\u��rX�Hɐ(�m-�T4��(���Ԟ�E��cx���r�*Y�����֩Ema���'��.j��0�����3E��W����fs��$8��\�	o��}83�zٙ�߰}>��\�A0����e�k+WP���f�ۉ�4>�9F#�k�+��!#�lu��F�q[Þ6�C��Gષ�#|��}C�R��z_^mS�ٱ���(HܝStSE �Ű�d� �,�
-���k�b G8�dQz��E�\- ݶ,�e.-Eq��a9X�+�Efks9�"�����
-��Nٖ���ǋ�J`E��,2֓�����ߗ�������
-!<��32�|W��n���1n�At����ۢɇ��V�j���������y6�,tVۇ�?l�?|&�,��F`����c�-g�I�������sЮx,��E�"x5+?m�1J���L�Tm���(E��Ne��0��[�ZT��Ʀ�yߑ`7������
- bE��L�d})E�a��D��p����T���ֻki�3���fI��r�0�^{rd����7
-��c!�eC�%q{I&��N]e���l`�^�Iyf���BjJ�K�/N�Z�2`hJ�vrF�U�S�S𓤤�.�^���L�p�J>N���y��Z|��*���s)�<r;[�kG�$a}'/P���d��鷛�"�
-��Ǔ�*�<�"'�{s*�\�ބ��)�Y���M��Ik��@0��6�ǂ�/[�HU��A�V�o��kfр�{��3����x��>�t��6���ާ��ktM����&M��*�2�C���E��^���h�
-W���$�	�����3�"X!C�4nkS�0V�
-EqJ_��O�����T�~3H}��mD� K����Ԗi�uͬ���[9U_0�"��C�\=����Xyq
-6�!l�/%,/����D2�'aݔ��H3�����S�j#��JU��7����E�4�
-�2�:/�Hm4�,��$�u60���R��U��7����}�LW7�(�y'��~�'iGkS�Xμ���R�p��I����=�-�3������`6�()� �
-�����er�7^�輓�}�\"�T�Y�&����(��<o��	��tK	��8D����+*5.��#�R��"Y����i8�O7W��ly��As2`M���6�6@d�m㑢D�H�PYQ�b���� �3�7�%L�RX�S,�`L!ehTuu�U�e�>4]��:��PyU�J�5��v^�(b#�s�u�H��M��f�s��Y��~
-�F)�5���ՉY���|E|O�Y#8?;,�C��:C�3Ѯ�zk�O�d�B\�*C��?ll�Vim�m�\f��b�4��K,#P�dBi�	��;".�@�d�Ӫ.9eZJ�����`�-َ��+�e�)khm��e���5�������Y�zOה�*:3C��Xo��r5}g&�Hw-�&�^b�ա����ɗ�@��JV2�����aE׼%��P��@",��gf��lݒI��[3%==k����gc���i���$����K�:�ے�d�=�є3�d= ����fg��? ���T�|�}��l��k1�%Q�$8�^ջx�����/Q�}9��ɋ��4�������3b�O!�A<E�Nލ3�`�)��b}��܄1��+
-�$�<^�����<��
-c�2��
-�껖y�W�K����J�L���;�V�'��2�&E����ľ����	f��2 ॕ�լ9xL���Z�+"LY�}�T��(q'K,
-ݲp�0)0rʒ���U�6��^e�$��(�Eu|�'5�,\�)ǃ��1��A���+� ��̋���돞m�X��'��kU��GF��&�̯o�`- �^i@.��pt>ަ���{���þ:�Dx�̓@����W�z��B蕊�D��\D�A��(��W樍I���C����Z����7m�+��St$�,��P�ڂ:D�K�j���A��!s/�;~���]�>I���ӯ�3���ɴ�Ѓe�u�U���aQ�id�+o��diD����cE��*���r�P*��Ң><��{7��CkD6ڇ��*��0�%黃!�9	-�z�j�tQ3J�c\k�:,uw�R�بmb�`�M�"�W%[��V�m_ŰZ���D���n>a��hD[���ت�(9��Dj��)M���+Ӟ+տQR��y�S^SBZ.�f�����i�t����S�_$��nR@���(��xݒ�Nt;����f�Vl�P�a��9%�u ���͎TI� c�!cL�g�I�(�`Ro�]o�~�\�o������ǂg���C�Z�G	c�q�";>�s�����UF��!m�%�Ү���Nr�%�[�������u4A?$C�'C������˟)%Q�XoѡwJ��4���_r��GX��;t��������T���82�u��J7��9z���sԥ
-���2%�&�ߢ�'��m�a��!����8W�K�0V�n5��.i�t<م��4�%�]8�w���Ƨ�d�����^ܡ�i��dƗ�g��1ZjV�|Jg���Jh�(�/^��s)�:ũI^����v���)��j�?��n�`�����2���� �7Ts>.k�U��pe�չ�]q�QH�l��B�\񙎒��$��K{J��G[�f�%�B��?Zk�$�Uj�@��;B�Ј�r���4�o�#�rV���}ʇ�k�dJ3�yY'ڴ!,nաES������[�q�B;b�jv�����W���T�m�D�=q�����l�e�vI�6P������n*��_��?51v�e#l�"T�M+,E�/�h@*�=�y�D����̶Ʈ�}�����* zH,>�������v$�zKl�����ζ�)�q�,-�]�_���)!�1]A�P,j\�N�f"EUL�/�!�.39��������I�B2_V�UEq
-�D��e[�r&̣q9�Y��5��Yȸ�$@eړG>�3'�;��B��]g!:�~�۪�$-n;�J�"&��\^&ƒ���2����^
-Y�[�����%�@;⺲U,>�^
-o.��)Y9� ���y�h��5���W}�腽q�<'�%���'�`rO(CV��cq���-�#C�N��Y1g�(��?�)�X��s��5ơ�m��x��,�q5����w9kI]���|�c}3�����!�p�]=��f��M,��'�9����C���G�;��\r0S<J8�&7X#�"���bj�[��X���C���q���[͜�Yf�"��PD�}!�6��׬�bE������-�Xt��@s�;��]���u��P"é�J�``B�����鉚�zO�� _�a��Y�����ƒ��,w��r�&.�5u�l%A�à�VWV�)e{5�殢���?�!:=t!gzA�<�(�Lr�>=���9�fuw�H�M��������&�MT�� �xv:���7��7@��n���V�/T͛�����H=r�G77{wo��HnB��7)��-�0廅#��j)9�&��C���5slQa�RM���DC��L��LU��+���^cR��-y_+�obq[���[[ �;\4�ʖ�\��y��r4.��L��l�\����.~�zGÂ�3���vG�gx<896^��o��i[����!o��(���B��;L��.�G.p�$�F��hY��h5C6'��#�n8���֤�\1*��/�abk�.���ߊy�j;Y`��{S��Tx�՛���v���w6	�N{SR���	�����K>��s�{#S�H$XD�%�����-�/V�DW)Cf(@Y��otF8�Zv���5�`�vM��Y�J�N:![=!������VOd�Y�=4;�v�!�W;8�d�>v�<����RG�2?= mغ	m<��rҟ��8:��f�*E�4�p�n�M�!��` ���#Lq+ ��\|� @�u�A
-�5��a�B�|2ΑP�6�Yj�t���.TBv�>�H4)9n���h����+^I{:l'>V2�l���H�=��N���z���8~�@Tߍ���4C�@��4D�b�c4�Ǯ b(¬v-���g�,v�(�1#��`���js;�4���f֤H�Yu�G�W�q��P�uF��fegY"m�=s��j(�hGϐ��;E;�U�E�QI3>։�S ��y��7�Q�J�G*Z��#E6^@�4i {Ls���~x��v�R��g��B��'&Sů�G@9��h(��g�y��d�v�ex��Q黂&�;��uήe\��hT�}8_�e�(Y�MH������	*�T&[��D8?��t�q_�$ڠ����Y�c�{>�F[՝'�)���� B�E'��[�L/����<B��R��a'2�7��Y��yq��!�Zs܎8�MD'[�^��dd�Hؐv�2�*��1�:9;��"<O~ENJ8VwJj�~���
-�M2��Fh��� �G�ھ�<M�;G��7�|
-�m�<��sD�wP�f'(�4����0-�r�� _�4�Y���j!M�U�G�S1��0�(SXr�y1<~��O>ki/yo}� �N�^��w��s})���g�x�d�G+Κ.���a�g�<<��H h�9�>�c�x��H�:!��:�b�%$?G��NA��������~��oա+0/,��룣�K�`U}an+����jS�ѳ���`�Y���2A��;�Z���D���Sp ��[p������n��OG��n�������L֭��G�{5H�MJU�:��K �����,}F����BV�ʸ�f~���'�B�|>�}��F	��:]@�k��������ٿ��Q:���֝YF��xc�,����=Nq��4q@nOjT�x\PS�B�*�D����gP�����hp��CV&�J�Uq5�Y�
-���p��:�#~�{0pO�@~�ħb~4�7U�����8]	ڑs�����Q#���S��!��}��qį�ff�\���?9*�a����I���ɞ{��z��p<C>
-�%�<X��I��d�v�Q�7��[ �B�x�f�o�P�т�ި�k��2���:�}$��
-��ɸ}�9W�ƕ��0��ۀYs�`��!�4�N�9�#�9Y�d�IUV����AJ���?J]�z��A����oz��>��r�[���>|n�#�1�����u]�2B@>6@:תϲ��O���ց��DQI�#9 
-8��!Ӎ�c
-��1�g��9��Aҳ�`�Y��@|4�A�]_�PLz �6K�/���8%θ��Ec�Kc�����Ϝ�|�}�y��k'�_j���'��z~_m�������/��K_��[�¹�˕�Q=:~�B�x���_����k��_�uj�W7:'������gy���K�Y�Z{��[�\��ɗ��D�{&n���1q�x`����bi�����bi����ǋ{�o���+�ǉ�	(	����=�{�����q�;��a����K��K{����8��M��8���L��J4I��S���m���߭Ǌo�p�T$�d}�ȢZZ�3�'o�h�2�*i/���rΎ��ѕ��+mp�a��SĈoDh�dL����:�tZ��l_X}���f�8��Zc��%r~Q�
-&������p:XT|���8Xcc^j؎��2�o��{d�i�/�dO70vIu)e�D�V0?��Z�jk�ɜ�L덱��d��a#�5kMleϸ7ʁ f�V'��G3j�Y���p*�v�8��H�=���a"����|���?��+=���8��C>�3gFݠ�5,.�ZN���i���z��;{�ÑN���!��Μ�������-�@SH��R0Nڲo�K�:}��+I��p(�B�<[�!��RX�� �j�*�}���F���~�>p_��$k:F)DTꇁ�����T��v.X$̅m���k�U�z;ų�������/u=�)0G#�5RB�q���\%�u�1�#d�1�s��h���%r:�ד�v$Y��t1+B1g���æȴ�ډ.r:��X�)ʠ��YS�V0EQJ��I�������v:��p�e��Fz�� �.�Ce�ZS�B:l�\+C�QD���0�eWS��"�etk���vUm,�^�ҖՀS�ʊ��,��u1���[��ו��T8�249�ztB�b������wg'FːJ�'t_(4��h�4`��-���.�c<��F� ��a(��Ag�.����i�Rʄ�"���s�DX�0��)Df�UJk�顁�t̬.z�3��Ɇ}oկ�hR��o����,Y�s�y*��#+{�^��>��¬K��� ��4�X��J�u&�? ���U��^�H	Փ�2��K����×V�)��[���1Ln-�A:��}�DWt��Ǳ䆔�"O�1�p@�A��$|���<}�m]�P�$(��q�ey��QGa���mx{�kGу7�`�k����g,nF0��HCZ��#q�:�}�]~�V��7�P��x��;[k�m�����h�Y��j�?<��du|���M V ��^Wq$��*�F%�"���يV)������`��b B_�8�d��إ9iCW��_����ʮe� ��N'�MTX�uN�[��q�D!�q��2��E�MZ�\p��0�a�%m5}KZ����2r"�q�1��3������8�gt�Z��:�����nH	h���L����B�x��T�bq? �o|\o֤�jzƪ��\�2V������N�j�������M�s�@ԑj��/�x��77��#����֩ڍ���phGZM�!�?����� �#���{��@6���<��Q��8��P��ό�=B@T\�� i������\�s*7���цt���`�%�t�%i]���#�ԷlG���gVALT�'�y���%���![8+pP��/����)�EFAj�X+�d�|���ӑ�19Xy����_y�8���s�٣玾z�b*�"�S�%�̃͏{�)Q�Uo�6ϫx7�;x��}�1Xݷ��^�������\o��jJ���������c��݅���L<��%҇�wa+D���s��tQ�Lᓻ�M�;��b�NhW�&4���@n��,��s'IkwZ�Hq[��S\�7�d�}����KK�J>G��zk�q��T��n�Ҟ�	��+/���aX=yx��UoT\
-�W��9��Z�n
-	�خ�(�^��18<Uza�ۤ8�ȩQ�'�*H��
-e� !ʫ��(*&A�i���P�J�QH�7��*S�����C��X吐j5h('c�_0�����T6p�eV��A�Od�iI��_d�B32��	g��j�*T�B�w-kM�\�^�]F{+W-hM���V����]�N��gMo��G�Xi�߈/5k �1�{�rȥ�p�*����U{U�Q�/������
-�S�kI� n	�}
-HH��� �ǧ��'���04,%�V`E�D �R��MC��5�¾e ������8�r��uHF^�Q�ʉFI])P_�c�ti���	Ha���D!a�W뭙�^_�C/��$&�$��̴Z���p�����L�A���/����|h��q��S���U�j��F�h7������ɮO����l-��t\ Q�Pf�d�v�-����t��%�t5J�~�����U]L�mVC��CؾtC��OVH�X@xţ�����p\�v�����N��-"��阸�	��A��ϴ�K��+iP��.gi4��|������	�:<���]��LB��n�j���.�� ���?���g�^>}�ܕ��O��A̿���qw��r}�]��uh�0GV3�y|�S�j�FX�Lח�����͋Z4r9<���h%�9�k��� *I�FU9j>�p�/i�x�Xs��\2< ��r<y=O��W��ܘ�O|R>���8��Z�l���3+�$V�Y�/�P���-ܻ
-1v�*(%�����//p+� ���9��#�_ga��ދ�/q��֜w�����:/���������K�ε������X�.���Ǩm�Ő5�Oo�a�>Z�֒dM���(� ��a����ƥVe!Čk%��T'��}�2�B�(���v�K��L�/{�Z-,8�����x�.ᰐ1Nm���\^t����ו�����y���i�$�3ȑ
-Gt�D�W/���'��?����)(t;b��2��oI�6"EY�,�&#�dN͖��C��kM��@z�ᩕ��d�N!�[D7�+�Y��u�s�d�D�N� �B����-p��\6�E.��o.�@¡mU����8��QJ\z���%r6u�d	Q�kS��]>~ т��H�F�T@�[K�Fú	Ϫ�q�%O�:���H���V���[��<�b
-+����Z���!���&�)�\#�pۑ[�*RRa�u��$��v'џ8�eM���=
-�8�3?3���-B8�䱐�C�c*�GT�T�1�=�W8�e8A�eE�")���K��������ས̋�e���'�@����-�ߛ � ۵�C_�+����J�����F*]�	N�υ��Y]C�P+K�ǂW�PĐ��Y�:����������4� �G�_�Tn;����KK�f%'���(����L�6)�ŏ6Q}Z�����C�� ���W)NL,.��K���Qkvc@[���� ����V��yߪ�V;�B�6�jJ��3o����e)!�v9ט�����B ,��.s�4kq��f����D�qMW*(t��O�Z����G�t�^Ķ'K�J�)ʹ:��C08Jϭ&P�z]�V��r�J:������9iܧ_y�Sr�ѕ�W���ϒ�"Ҿ(�:9�l�u���F��fڴ6f.̄�1H+���\3������̼"�e�O��,�Et]����,��ehT�T/�8-q̭zU�z�:L���
-�� �*���n!����|��s(���4F�ukE$l6 l$��-ǂ��[10u2���GծI�A�u��g�,�GI����=��{�yxE�|�U)&�j$ �	� P ]E��V"�����h|8��-)��	����>�O�*���������NAel�L��K�ثֶiM-2\GĂ�/�z؜��m����)NDk�3Z��~[�	�����>����A��,=P�ՌFĥ��ۙ�y}xȧ�����=gIG�̝<~�ܹ���_�|�D��
-��<�%2�MY�8�uXP���r��zB���w��rf��ɺu`K)�3�h��Yt̋��v�,��+�v�o�"�yǂvm��¨T����͊{ʱ���G/�w��x�6?���;8�ݿ���x��������N����T��h#h��;cKKK���م�����k3�=g�4�]_���9�9�go-��Fՠ~m>\\�\���a���|T]�6�7ׯ���Fe�ZU�g������~�Q�1�����=/�p��f�MU˔>TymY�����j}K��Ù�Vkal�՚�qku��&��A�עV3_(j�tU�pP�Q̌TI3�!9Ć����(��u� ~,����C��_Yڟpyvx$�֕:y�<�6��R�����Bu�1�$?�~��mt~ӻ\/����J�I�i(����>(z  X��" ��R>`�N�1t}Pk����VP�V�l^=daYö]��C7
-\!�e�.Zk{Ħ�d���&�벰�΄���B��z�i)�f�qL��Sj^S�X&���,����Ӏ[�0�z����L� �vZ����"�����\�sr� Z�m�`����y	�e�c�h/�@��f�]<��4ù@D�c���$�/$�/������MnU;�����,u�]�>'�^k�R(C�6�k(�E�DC|b������ ���U�Iq��ҳw!h��-6mX�*v
-�@���S��	�����N`.q[��V��"b�TyҾ"Ý�C�]=�Q�^���
-S�iu�AՔj^:
-��>&� F��8W�툢r�ģ���Q�K�:M}�yH#������œ3�u+҅m�^j���&�F_�d2�{�5�@ �%'Y���}�Y,'C�CJC*J�����dB����ߊ��h����d�'\-=8ѷ��}�4_��|F����=ފC�i���Z��ڊ�,ktu��b0����uR/�N�n���t��� �_K%8�\r�����t�M\�����l8ZX"�F��D���,��C퉢�6Nb!c��Ct\U���'�c�!6
-&����K.��o�S}b*��m��-� W��|�/=}�{/�r�E�
-�lBG�����Nh�(�&�l>JZ[���
-}��=44�7��s<V�&�R�qN �����⺖:R��cS�<>�����֚w�\s�A��U*54z�K1``h�9y������6��z�rP�Fw@�!�_��^���ݓ�'2)�-�l�RH�u=="S���XKV��	�L��zk��
-�,&�	�}->"�_O��˄򙘘tY!m�h�=��f��BD��F1��*����!�*�$���${W��ŭNxb��z���|F��_mU�@�D
-����/�������~E�*������R�]���<�+&�s����*��.J�׭m���ڰ25/Ɇ��a��㰀��i�ua]�V��)<(Jg�T+�쑧�sr�Ց��G�0�Ig�Zk�%B��R"y����^/���@Q0���r�.�<~��+x<��>����/LS^r֠�qA(��:�X1�N���W� �ogZs5�D�G�͉>O)�hC-ZG���'�����i|�no�~ߦ�mAز��|�Ǐ�d{�$�J��;v�W��2\ϫGϞ�$�L�t����w%ͥ�l�>�}Z@�U��J���O��L5�-Vr>��ę*�:ȅɒ���O N§*�=��4��ᴏkF��P)A��i-8��g��jm�xM��D ۊ��)|M�3��ޜ	X�
-K��l5�fL�6����p�"��<������렓���qf�B�������
-��X=N�y�A W�]c�E(��:���X	�9��>LP4��6|�˰���	���	�� ,�mvj�ys��@%�6�C����f&=��䂁k	�O�]�u�sH�����*rIv_���-�s��=rV4�2F��:�
-c!�3�����m���A�0~��,
-:p.�H�r�M��Ҡ��9���XG��;�r5�(�����h���\��� ��XS��J��It.7�k��5`��!r2/$<^���1!�G19�~���U;�\�_�Dw�s*¿태l�?�`s0��k�{�y�X�'%
-��_�?C�X���"G��\ ����-��C�"M�&[=��tȪ%�Ł���:¥h�i�������(vz��:����`���o�N�3\܂���W�������+HW2�ɫ������oL5$�qkR�ْ@'�ʖ�F2:�\�f�Ƥt��_�(h%�9�^�.��I� ^����4�a�-�:���X�j��T���'��1QD�[<q�Tn& L�k��#��ku�1G�i��/�9���k�+p�E�A�C�����F����ܕ`st�u�v|	�H���O�\��P���,�Փ*sW�0���Fؙ���Ds=���	ǍFe�wDh�G,�������a�	+
-�ۤ��l��Fr�;%��Y	G�;z��?�x�
-0��p-��\��Gq�X!�þ��&�Dx	���I�j[��
-)^���	ڽ�JAc���'�[Y��d�j)��Nm琊�� �oQ���v����6���Rn�1f�j�V�P��(��֭ c���H�	��H�^X@M#kEts&v	��{ ��]��x_/��td,�R�c�AoݶbHv���l$ƶcF,\R�,�����frS4�ox��d��*]w�>[2#=�?pZ�/7��0HVG���M���!�iȕ�W��l M>wR3�2ΖH91M��봂j% ���Ը2������4C}����lE+,5���J�,�:72#�pV���wo
-���{��k�������<xė������~�>�F�a�7��L�,Ǝ4^j�d���we�8
-|@��q��ç�)Q�~�.�Q�ޟ�FB_�	ɻ4h
-����R=z�:��)�*�yA��[֙�Ơ�j�⼃��/�H�DԈ�=�6"�z�b���b�9D!�=V�m�(;�� ��@� ���~��IH�"1�v��v]C<H�����mhl��"Bv/�����3���|�H�s���9��^}h��{�����#d)B����j����ts�/r����_o���Wr�P]1������g#aP��Z���%��ɍ����G�Lg*��x�&Z�����!��W�袀��141�L2�L���"�#�FeC8p*��PAM�����@Bh���6�oj���b�3�"�DPm��e�y�,���~�ڰGF��.T�B�]���3'/���a�թ��Ҋb�CSr��e2.���ӟ�%���w�I�(w	�^}��c��b�a:����OD����T�'�t��=|��w������:�Ɵ��H6��t�},�*��1����I���?L�|G�o�O/�?���}������f�dC�y��$5h���|J������FO��f�gxK�	�V��AӦ���Ɛ�u�>O�|?`��q>�EA��;���B�?�TɅȇ�%&�0v܊�:���y�=��װQ��!ٖ�^w�Z#|E����*����d2�$aj����e2�ݓh��z����Q�F/5\%p"�D���ɜD��VZ�-��L�hO�h�h����T!_K��{�����ERS���R��7��^�B��9�iUZ�Z-���f�]��VFT���60�>��ݏ��:��4-��4����3���v7��\I�J��v�w�y/�:�Q�s�yRJ�I�ct��!���Ǫ�Uצ�2�TkO1_�>	�ݢ�Z�Vb�E)��X��X��eٷ��D}J�d�D5�2���v�9(�������(��(��vő��w_�{N�b5]Dm��]к9�x�N3P!r�}.��a��� v�,9�P�U�^�I�3c������j#.{S9I����~��@�j6 W"A��+A��SZ$}��Hw�V�H�T8��-K�/�>~�̯���' �~/x'��:�+�F�5��A�}N�A��N���QF;!��!(�P-��~�$���/ �����(��?5t-[�U�mA"Gn�N� Ѵ����<� m��G�(��z +!V���b^�_9j��h�1l4�b���[x�CҬ465�fY��p���i�Q�����?a����?�{'���v)�|�1�v`(���ah�80r`׃������l-:�7�ƨ����X����qH(/��[oE�,jI�l풀��N���'Kٴ2L)��x/�h���y����>qf��ϯL�8K���~;���݌dn��������Fv%������͑�_n-��;�����E�ԯAR5������յ8l��L��PSX�7�,��h�K*��S��qZ0?��DN�썳�\�q�.A7�S�o�E�r����o��.�4}����=s�n�u��>vX�m�ˉC=iD�EㄬL��90r&Ta��.{xa���#�e6�
-�ORO����t�B�)(��_���s)��KB��1_k{���R�Y�� ����p��^zo��abo���D������^S!Э��t�}�YMj�8�����
-�C�F�9M�	�;?�m��y��G*�	�xZy�h+��~GfsW8�1qU�@��:��$l'��'����%w-S������à�/���Wg[�x��wK�O41,���WzrR���3�Q���Ő������R�J#�q�[����$yE�f��w�v�W_�4.^򎥦#�5������Di���iu�&$s}�	Jq#�RS��hl8k;����ݦB�ܞ�������,���n�|���3�%���t�����s	K�-s����ơK^3v�O�{�g2�z:�� �K��98q��ǤB	��Y���Ӽ�J��4i��z;�ͥvG�tl�����	� �h!k�-�7���	":	5�����_E��[��
-{�VR��h�(���}�Y�}���
-*=J�ީ~7ߣ�	> Ϯ��iȠ�*~��b2Uͧ$�ҊB*��M���U" lޟ�`B3Aͤ,��D!�w�H�"��B;�Ҕe�Gr_����`��L�ʿy���q���'2-�;���'��u��F�4l��.RF�{�٠įk��8Bb�Ѱ�'?sJ�N��.z%Fq�;z�)aI������U���o+e��Cv�k�t]��X�.�D8��^�G���͛C1n�/p�[��z�[�G�V�`�󏦃�4IU;�9=�(ىdt�S�������cy�۵�W��Z'�Fwe�'��oi	�@�tp�V�G+!c؆ձ�I�ɺ����O��V�a)�Nd(ed�C"iք�%%e�91ۤ�j8���4ⷅ�ת������?3�X�;�S��>%��oH�X�2�e��oEq1�	G<��#.�P�����ӢkY��˺��e�@��}���H� D�!������^x�#6?��]H�� �Z2�Oa�ڟ����<0��L(WGÏzo��Z��5�I$�qMh�P�t>1e�2��B� ���\�HքS���C�B6æx����wV��g���c$]�\������=��c�6"*�q:�3H��,8�c���{�"�VvD�����w��>���~�4	o��N\�CE���!��>�|�8��g5l����M{b��c���RП��)k�����#a��U�Ww?�@:8�{��`�*�耙�`�S���p�E��Y��5��k��,��q����R������&0�+��0�5ƤNʋe%��Ά��s�hc�xK�Oa��1����%�q�+%�'�"���e^х����/�0��?L���"�Q��lR^���"���9�U�w5��<$?]+��v��o-:M��'��l�g��\�(�yO�����n���&���,o䏴8�cAea��D�f�*�|�����6���Ο8y��7�7�T��T�P���81<��to�+�a��"�F�Z�����g[UE>��]�}�;G� ��}�o(��G?i&7Z�B!6�\��	��r9��b�ZsX(gu C�#oP��e;����!��n��_G�`��|ҹl	��5��>n�s*ο��^0`��8�	(X�H|����T��
-AV�Y�ζ�ɷL�߯&.��j�nOŗ���qѱ_dH'=$�P�=����!�<���:��O�T�7=�M���jBW&��b�����øI\F�M�ɋ�u�Dnvg����[<"4n�$��͆QL%hJ� @{�}�#��5J�B�ᑖ�������@`.K9��|�HN�%�����$hI�0��a`�G[A�:�'��.��	��y2�s��2>�BnP���Rn~H��p���N�b�n�Z��nǩ�I�A����  �� �Hh
+      if (rawCmd === "/invite") {
+         if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу беседы.");
+         const chatData = await getOrCreateChat(peerId);
+         const newVal = !chatData.inviteOnlyMods;
+         await updateChat(peerId, { inviteOnlyMods: newVal });
+         return await sendResponse(`[id${userId}|${fullName}] ${newVal ? "включил(-а)" : "выключил(-а)"} систему добавления только модераторами`);
+      }
+
+      if (rawCmd === "/af") {
+         if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу беседы.");
+         const chatData = await getOrCreateChat(peerId);
+         const newVal = !chatData.antiFlood;
+         await updateChat(peerId, { antiFlood: newVal });
+         return await sendResponse(`[id${userId}|${fullName}] ${newVal ? "включил(-а)" : "выключил(-а)"} систему анти-флуд сообщениями`, { noReply: true });
+      }
+
+      if (rawCmd === "/antisliv") {
+         if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу беседы.");
+         const chatData = await getOrCreateChat(peerId);
+         const newVal = !chatData.antiSliv;
+         await updateChat(peerId, { antiSliv: newVal });
+         return await sendResponse(`[id${userId}|${fullName}] ${newVal ? "включил(-а)" : "выключил(-а)"} систему анти-слив беседы`);
+      }
+
+      if (rawCmd === "/raid") {
+         if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу беседы.");
+         const chatData = await getOrCreateChat(peerId);
+         const newVal = !chatData.antiRaid;
+         await updateChat(peerId, { antiRaid: newVal });
+         return await sendResponse(`[id${userId}|${fullName}] ${newVal ? "включил(-а)" : "выключил(-а)"} систему анти-рейд беседы`);
+      }
+
+      if (rawCmd === "/group") {
+         if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу беседы.");
+         const chatData = await getOrCreateChat(peerId);
+         const newVal = !chatData.antiGroup;
+         await updateChat(peerId, { antiGroup: newVal });
+         return await sendResponse(`[id${userId}|${fullName}] ${newVal ? "включил(-а)" : "выключил(-а)"} систему анти-сообщества`);
+      }
+
+      if (rawCmd === "/q" || rawCmd === "/выйти") {
+         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const isUserStar = await checkIsAdmin(userId, peerId, user.role) || user.role >= 6 || userChatRole >= 5;
+         if (isUserStar) {
+            return await sendResponse("Не удалось кикнуть вас из беседы. Возможно у вас имеются права системного администратора/владельца.");
+         }
+         try {
+            await axios.get(`https://api.vk.com/method/messages.removeChatUser`, {
+               params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: userId }
+            });
+            return await sendResponse(`[id${userId}|${fullName}] покинул(-а) беседу по собственному желанию.`);
+         } catch (e) {
+            return await sendResponse("Не удалось кикнуть вас из беседы. Возможно у вас имеются права системного администратора/владельца.");
+         }
+      }
+
+      if (rawCmd === "/addantiteg") {
+         if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу беседы.");
+         const tag = args.slice(1).join(" ").trim().toLowerCase();
+         if (!tag) return await sendResponse("Укажите запрещенное слово/тег!");
+         const chatData = await getOrCreateChat(peerId);
+         const antiTeg = chatData.antiTeg || [];
+         if (antiTeg.includes(tag)) return await sendResponse("Данное слово/тег уже есть в системе!");
+         antiTeg.push(tag);
+         await updateChat(peerId, { antiTeg });
+         return await sendResponse(`[id${userId}|${fullName}] добавил(-а) слово/тег «${tag}» в систему анти-тег.`);
+      }
+
+      if (rawCmd === "/unantiteg") {
+         if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу беседы.");
+         const tag = args.slice(1).join(" ").trim().toLowerCase();
+         if (!tag) return await sendResponse("Укажите слово/тег для удаления!");
+         const chatData = await getOrCreateChat(peerId);
+         let antiTeg = chatData.antiTeg || [];
+         if (!antiTeg.includes(tag)) return await sendResponse("Данное слово/тег не найдено в системе!");
+         antiTeg = antiTeg.filter((t: string) => t !== tag);
+         await updateChat(peerId, { antiTeg });
+         return await sendResponse(`[id${userId}|${fullName}] удалил(-а) слово/тег «${tag}» из системы анти-тег.`);
+      }
+
+      if (rawCmd === "/antiteglist") {
+         if (!(await checkIsOwner(userId, peerId, user.role)) && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 6) return await sendResponse("У вас недостаточный уровень прав для этой команды. Данная команда доступна только Владельцу беседы.");
+         const chatData = await getOrCreateChat(peerId);
+         const antiTeg = chatData.antiTeg || [];
+         if (antiTeg.length === 0) return await sendResponse("Список запрещенных слов/тегов беседы пуст.");
+         const list = antiTeg.map((t: string, i: number) => `${i + 1}) ${t}`).join("\n");
+         return await sendResponse(`Список запрещенных слов/тегов беседы:\n\n${list}`);
+      }
+
+
+
+      if (rawCmd === "/zov" || rawCmd === "/зов") {
+         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         if (user.role < 2 && userChatRole < 2 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         
+         let reason = args.slice(1).join(" ");
+         if (!reason && message.reply_message) {
+            reason = message.reply_message.text || "";
+         }
+         if (!reason && message.fwd_messages && message.fwd_messages[0]) {
+            reason = message.fwd_messages[0].text || "";
+         }
+         if (!reason) {
+            reason = "Не указана";
+         }
+         const truncatedReason = reason.length > 100 ? reason.substring(0, 97) + "..." : reason;
+
+         const keyboard = {
+            inline: true,
+            buttons: [
+              [{ action: { type: "callback", label: "Вызвать всех участников беседы", payload: JSON.stringify({ cmd: "zov_all", authorId: userId, reason: truncatedReason }) }, color: "positive" }],
+              [{ action: { type: "callback", label: "Вызвать только участников онлайн", payload: JSON.stringify({ cmd: "zov_online", authorId: userId, reason: truncatedReason }) }, color: "positive" }],
+              [{ action: { type: "callback", label: "Не вызывать", payload: JSON.stringify({ cmd: "zov_cancel", authorId: userId }) }, color: "negative" }]
+            ]
+         };
+         return await sendResponse("Перед вызовом участников беседы, выберите тип вызова", { keyboard: JSON.stringify(keyboard) });
+      }
+
+      if (rawCmd === "/nrole") {
+         const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
+         if (effectiveRole < 3 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         const net = await findChatNetworkByPeerId(peerId);
+         if (!net) return await sendResponse("Данная беседа не привязана к сетке!");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId || args.length < 3) return await sendResponse("Укажите пользователя!");
+         
+         const roleNum = parseInt(args[args.length - 1]);
+         if (isNaN(roleNum) || roleNum < 1 || roleNum > 6) return await sendResponse("Неверный номер должности. Доступно от 1 до 6.");
+         if (roleNum >= effectiveRole && !isAdmin) return await sendResponse("Вы не можете выдать должность равную или выше вашей.");
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Недостаточно прав для действия над этим пользователем.");
+         
+         const tUser = await getOrCreateUser(parsed.targetId);
+         const chatRoles = tUser.chatRoles || {};
+         for (const cId of net.chats) chatRoles[cId] = roleNum;
+         await updateUser(parsed.targetId, { chatRoles });
+         
+         const roleNames = { 1: "Модератор", 2: "Ст. Модератор", 3: "Администратор", 4: "Ст. Администратор", 5: "Зам. Главный Администратора", 6: "Главный Администратор" } as Record<number, string>;
+         const msg = `[id${userId}|${fullName}] выдал(-а) уровень прав «${roleNames[roleNum]}» [id${parsed.targetId}|пользователю] в беседах сетки №${net.name}`;
+         for (const cId of net.chats) await sendVkMessage(VK_TOKEN, cId, msg, { disable_mentions: 1 });
+         return;
+      }
+
+      if (rawCmd === "/nremoverole") {
+         const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
+         if (effectiveRole < 3 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         const net = await findChatNetworkByPeerId(peerId);
+         if (!net) return await sendResponse("Данная беседа не привязана к сетке!");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Недостаточно прав для действия над этим пользователем.");
+         
+         const tUser = await getOrCreateUser(parsed.targetId);
+         const chatRoles = tUser.chatRoles || {};
+         const oldRole = chatRoles[peerId] || 1;
+         const roleNames = { 1: "Модератор", 2: "Ст. Модератор", 3: "Администратор", 4: "Ст. Администратор", 5: "Зам. Главный Администратора", 6: "Главный Администратор" } as Record<number, string>;
+         for (const cId of net.chats) delete chatRoles[cId];
+         await updateUser(parsed.targetId, { chatRoles });
+         
+         const msg = `[id${userId}|${fullName}] снял(-а) уровень прав «${roleNames[oldRole] || "Модератор"}» у [id${parsed.targetId}|пользователя] в беседах сетки №${net.name}`;
+         for (const cId of net.chats) await sendVkMessage(VK_TOKEN, cId, msg, { disable_mentions: 1 });
+         return;
+      }
+
+      if (rawCmd === "/nkick") {
+         const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
+         if (effectiveRole < 3 && !isAdmin) return await sendResponse("У вас недостаточный уровень прав для этой команды.");
+         const net = await findChatNetworkx��}ksǕ�w��VWH������$�X�J��4/9��Dx-�
+U�d�ޒ-Ŏw㛍�(�����ܥ(Q�)���/ �B���O����� (Q2�r4��w�>}����y�o�)g�O��g���X�@�o�X�ow�5�-zA���Z���j�k-?��}�[�m��V�o�ޝ�����Z�^o���5��n���zou�V�*�7�پ���Ȩ=���6kx͖_f�D��M�9��j��l�o��y?��U�Ъ%?;���[)��"L,q�������aT8��V����0��*�^��[�`��,o����.�4�^���$�2�:-��1�<Z'�ՠ��%�KZʭ��0������[|UWz��>�u���b�0�[��+�{l�x��{3#��aA���M�k�k��Z�~Qj���ؕ+,����Fl5�p���}#cmk�5�L��|a�Wz�����q:4����q����Mj�A�Ho%Ǩ���P?f��R�ȭ����/��5��wߩ]a�����V���2�xwF��\�ɲ|*�3eV�c�Fi�k�rl9*�����_�t�`�ٌ �V��W��S�x&ϖb�j�O^����K~�������o��syv��2�&^z	�� ��r�v��yV���~�>�Ǻ���:J�÷/���F��xa#q����V��_k�,E6a5�e%�]Z`Y��}R9��j�g��NW�[<UDp�ˌ�f�ZF[h�0�����E�*�-��0��$?�S����ss~�\�E{T��ϯc/��ʋ";�
+U��l�͇2q���+�Y��	��#�J8���7z߲�� �x����� T���l�.��}���� �!�je�s~{�޼tr��ؿ-�9ٷE�jAm��5�X{�o��Ҵ��H�
+8J��bm𲸅��iz�j �c����Wj_�o'j���cV�ݜ�n#h���a����B�Ye���߬^l7c�a@P�֚��.B6\�VC�!��&��<sl��&(Z�@sҫ�
+SK�� ��n�+K֚�OS��2�]*�@�9��N��j��l.�,���K�Q����8�IP��N@q�rou��V��V5|��AŐH3���4�|-�f���C�Dg��ا&�`jbo�(e��}�by�W�7��P�}���W�_@�Ⱦ�+S1���Z5D� �=h��	��(1ܮ��'���=,7*4��s��T������c�@}22�p����:M̚�չN�F�;SkgqH�긎��)k2A�w.+��˦^bD��*{~�Yq�BQ̍��c:,�y�Bh�.�}# Gp�8y���g�7�<�^����U�kp$�`b؛pLn�8ǈ%�?�*P�#�#�|J�\���eԫ߳��y����8�̛ ����-�_��uB��=DG�m���B�ڿ����q/����Gs��)E�����.������}�����1��hZݒ�'B�'Ue��;�������}t������Dw����"vpM�Ш�$ޏR�:��|��?���lE`����¦�����J�'FI�]q�,�9�7�>�,>�Jp�:|����%��[��V��v�<lF^L4�c�e�k�l4���hH����L3{s@�+��'�w��H5��wh�қ���%�K3��zo��ڿ����={}=	��"~��]�C�9�Q���=t	й�D!�����!���[~��L�Z��)�-q{�2��Ğ��������EW ����!�#ˏ��rh�̆�ފ!���r���Llj�������d̝�n��S�J�_4����/��A5�U�2���ͱ�����f�:9����tP~٪V�b�cǬ�����u��x[��8.J�v�����t׾�7jk(NR=$�`��Dё7� ,���.���\���H���ܻ�fJ`t$@t�4��!��DY��&�3����@۝V�^=��4�x��ε=�a!S���A>��L��ۺ���u��rGG���!��/�o�G��=�+��}�*'^3L*��>��v��aY�y�m(6�ѱk&c�v�N���������|��������&|�iƄ�H��or~ ��f;�zy�&O�N#Z���g�
+ǋ�Xs�&K�Dij��k��C��]'�>Ez�<��vJ�Bj�����d�|SE��Œ��~�Ч�����I�q����V���DL�G��,���K��Bm�V�����z�}�g���%V.��}ջ��O�˷��xECt ��`��=��e�Y��iE�Uq�ϒ�\+[2�T�C9�?S���s�J����p[�r�/<@Ň90;:�!)��S�qD�\KU`�T�I��%u�@�(�m�*�6Qˇ�,�[�����g��_����5_�U�.�����h�k7�B�Ǜu��&Å4r�^	ZmN��1n���	/Vz�ҿ�C
+���˩Q`Jb��|Ok}/���UHs m����k���;����39�+��6\��p���;�*�p��@���eF����t�>T�� #�U��c���E�W�:ႍ���)���%�ǵ�>}eTU�!g�X��:��� pv�MteH:���\�l��	�0�]��ϩ��ߩi�'�5;�o�ವ��\��e�p��:�ssؤr����~�:�����~L��oӐ��@x���@['9�j�GY���2�'�4'Nϳ��;;�#���AYgE���^=,{�J������:V�;�`�S.�!s��g�][r7��v�k>�H�6�/�v3�Ϳ��A��˟�;�*��)gS6��oռFk��2dM���z�P�W*�R��/���&�:
+0^0ǎe,�q�<��U�U �5��r��'?��){m}��>Z�&��ME8��{�N `��2��]u)������6����|x��b��i�{�*�'q>b����Wk�Jֆ��/��f��ͼ���9
+��� I6�*�~h׃*��"�Pڛb����\}#���8r�{�p*ʺ�'$�#��&G.{{���5���ol� ���[&�]2%�_r6t	�	4pI'�؀"�N��.�8DtY��i�C�ݜzֻC�_!dm��F�R5@�)֒��ivG��R\P؎�R,�O��E��(*5*4QoǫT���� �e$ud�BuaP�
+a9�4���&��\f���'Tūr��N�(��sD}e���S갴n��^�<:v� H:Y�JV�W��161N���8��{��A.Z�����^�k�Sߏ��d�.�"�w<�ݙ.����?§�g}�?��������9�K��l�k�j��σ:����v���I���4�+��EHErGTd���G*��7�W���~����(	�GW�R������7�8Q�-�uW���\�i\p,\�y�M 1�i��v�,�� zX��^�7�b�T��R�7��g@ա�	J��/������u������i�E@Jb�j,ۻ͕$�0��A�=�w� [�G��gH@��B~ȥb;�#x���w\e�T�H���v$. ��������*5h�J8�C �G�l�:z�_��-Ũ�&!�ҏ�m��U� �m��Ә��,��%_��t�b
+�����"�Y{k*�_�,�}�e�����&>�ݠޢ�f��n��cc^#(\�tBu���)��a�d�� ��7{ Ky�o�(ʅ\�i~���*Ĕ�"$K���#�B��k�m���U��a�x�Eza����^��}�\���t!��n���F�*8w�,F}�ճ��'�:�#8����:�Uh
+m�����u�#x��o�@�r?fz_��t`�G��C&-���E�����hҧ����5'�ᱽq�6^v3����t�����^�pR��.)m�ْZ�(u����$�� �Gh�VW��\M��/?v�(���?�V���[�] ����VIs�.7�E�ॏ�UURͧ�.hU�#n�ɡ��Ih;�0h����p��t��-��I'�-_�"���&N��"�E��9�����]�+�np�@
+#I��q�X���]=� 3x^�pb�Z����J��ܒ+t"��c�{��q� ��������
+���s��h p���1vq��������<@�3�r/x�r��_p�ZK�˒0�s�y6��g���G��9��)�~�	����x����i6�Z[���I�)�(6[���j鎭�W��/�Ly^e��I���C'����5^.F���σ�r,I�p��`�AQ�K*�3������t�1DOh�M��C�ē_|�����@|R�
+Q��"8�.�s�eߨU���˭�pOrK�h}����v�
+���/��]�/�7�nQ< �W��r�� d����)A~�bi�o6��&����7���Ix�W��uH�On&~rM��gRN��tbȠ~˥�;�������7�F������g!(	������n%~bmޫT���M��O9�_�A᛻��YŸM�0�Tj55���K��>Z�[q1���$�L ��Gn6ؤL-$0��p�~�߂~Ԯcs<'5��N����V�Y��Z����٤_����VE�MrîH���W�rP�����!19h�M��_����>��HLR��5���
+�ˠ'��[Bz�5�-�^�j:��^�l��Y�Qd�R�Y~�[8����iH0Qd�����O`m��Ǜ��,������^���!������=~���</�^��/��/���M������i����g�����g��T������9>��o�>��?�M&F�.L�:�t$Ȓtrb�x�]���7Oy��䎇^�QE`�'����(C]��1��p�����"@�d/��7��9�IW� ����<y�ᡠ��*��)���.�X3���+"���Ͼx�g�`�;J �6�K����V���p�����>�ƨ�n�B7Rs1]�S�1��,bܱn���ۈ��ʣS�]��H�	b���Lf^LNt�����ݭ5�w���ըxK��S�Dpm��1I���Q���L�e������ [���Eb�-�O��JC�D�
+�b��r*��cf{X�#::�L_�#�g�E��`e�Eh���a�~h�쯤4�:3���;&[�p��	MAj0����l@����\D�e,83E�q���	�5�m���;���`W�Q�x��G~}�������n�9���@��yX�z����"����}��(81N�������6>�}q'f4��QI>��>�g>�����|d����ڌǍ�20ӟ�ϵΈ��ψ�����?J�#�L}n.�	N�8��1�$��H��ɡYk63[oO:���M�ogel��rb����y߽\�#h�A��$�Xc�i�Џ�w�܊�:=�oa���|��&P贝�À7�uo�t�a�q8��
+��r���3dI�a�kά��
+fq�I:�mdb8U"��x(w �܁wj��eL���R!��̀/�E�����w+Q��"P��v��^���Y\♗-�#�b��,�q%����\��Nh�b~`qV,vAŬ��h��%JU��g��zr�E�\P��a���+~���!q(��7��}����k���������b(��ܴ=�T��2AY�奠�Tx`(T���g���@yrp�c��QP�1��Ѵ]������D.䶽!$!2Ўlu���΅CN��Zeb�?�o���d�?W7���Q=`� Q���Q+��l,r@���F�s���7�@�}:*&2��?���bW�g�L��S`x�Xܻ(4�b�W���G���<�	3�N�q�Fx
+͂��:�2��
+�T�/�az=�3S���D>Z����σ�B63IJ����?r�֖�O�(3,��!��Z�7�N�3>�f�ԗ�k��8MY�������>
+���5�yd/��{%��kB�W	?��$��f
+3�#<�� ���J�v_�W�H��,+�}���ln_L��)$��$�M_aE|1)�Hh(Vd���Fs��Y�,.�C$�Q-��2 �@���}u�x�fu�A�A+�BY�w{`��eX���K1ĵ�}d,��U9þX��$VH��b�� �l�l�����H6l��H�?��
+t^zH؇�ʃU1��D���:#�����������R��U����$�R������2��j�-5y<��'Au��T:iyY1bPd#NE|���~ g4Y9���룔U�)b�ܬ��l�W�K���#�+`	�%(0���l��&�A!���^�8ɧ�*��nL���U��E���ě%rf���l�\��j�#30���'���'�n�����g���1�AD����o	Q2������|�1���s�@v�=�w��S�q\�yF3�؞�-�Y�(��G�c�Qǖuc���dC2dO1;���ǈ�6868ˀ�d���~��p�W*�Kc�Y.F��Tl�G�+�_B<x������Ձ�پ�0ͮ.i�ؼܴ� E�����}>��Sv�K�y��T�I��\�e{LJ�����y"��u���!�&uU�F�k���\�Q%���up�%��mq~�ü�S�{�r��O�'j�]*�����N,�=#�шID�R�U���O}����.R��~��%7r�i}������9���|ضM�S�I�5X��!���]�p��7Wl�ׯ���+#��rO�Cj������w�}O(쳽d����M�HD")H?䑌8
+����I��e����>��=�s�k�}9���������m������s���M�����h�/E��"��l 	� ���ϓt_Ӹ/�x��E�c�7}L�|�#P�L�.5�$�vx~�D���Vcu��b��M��uL�8*2s1+1�Yc����BB�s�PCi\��*�w�����j��^����g�%��˄~�Q��Pi�L��O� \��V�u$�.�r@��f�=��J͕�fv�
+��rѺ��uFV6ڌ��)rB���\�4b1����(}����̣ͪJ�R��ĞAB�
+�PB��Z)���|�s�L���p'&�S�Z��i������vj�V��,���#n��T]F�>������&��qmݰ	.rxђ.�8'j��jc]˻#���1����ǥ�Ŀ���7�6٣}�� Bv��\��Z/O�5�&!����
+x���9b�EWC�CJ\���Ss���y�!3���r�΀�i��F���8����b�M�vm��,<b�RV����W�=E4;(�!B�L�,*�LǞ8����G��F�'�E�Jl(ǰE���怬�^GA,
+�\@�]��{y�a�f'?�:G ����A��p�ŏ�;�v�Z���}X�͐�΄��	� ����v��o^�I�tj��i�4٧��W��o��w�p���~�k��`G��#;R�{EM���40</��E����`��uM�ٌ="��իb�T�y�<R��`��x$:�:5P��t�$�z8H朘���A��]�W�0z��IH�o!�C�]�9e>����8��r�PS���B�B��Hk����H826�P������z��S�Q����m(UV��O�ood[t*td�Pa�g�o����n �
+,�0)2Ѿ`�E�C�ꍈP$�(+�c^'��菤���� I�fL���>�g3��X�uW��˾:�eP:Vc��*U�I -��B
+�����v����B���͍��!}�7*��u��{�5Bh�U�b�Ê�9f�9�O	� �4�}Kfț�t�rA@��7��h�[��	��ݯq���9u����<ny̅�iǊ��D�i���O#��{\��Bb� 7jV�ne�J'�P���u�u�l&ȵ�Ímq��l�{��_f�5�s	��tȅ�
+0�Ѐ�E�g��E�0o*����*S�kH�.4��q�/����<̗�>�yұΈ���H��}|rQdxbq�\����OeV��s�I=���ܓF'27�+)zt�v�z�2ұ�T�S�o�Ȉ1�\E��E�4�@U�T<�:��H�E���H�\U���){5���f�\:OsX��Dx�A��>|��,���q:�=��F�k۟*�Ց`�oʪf�D���Sts��;�HF���C����f�F�i)�����heH���c���x���`#X�*m �JhH_��>J��X�D�[�}����+A+�mF���0w�5���|����1�����5�F�Ag�u�	$RI�G^�/K�cN:��$�L�$������s�Ys;'Z:��(�r`����+!�*FF����~�q�a8�3��Ö!E��UΣ�9���%?�d�q��Dl�M<G��	77���@Y�Δ�5<�Z���z�̞����8��[�౾�n�Þh�P��l)�r�9���`;]��^�k�e�3��������{x��?቙��sࠂ���;aS�7q�����t�v���jw�9>��w�o��8B���9v�l�6�5��~w��r)]�S3�p��cP:)r�:~�)�u������D#W�t����UXuy�� ���% !G�$DAj'�:I�kR�}s���l���O�ұ���{Lx������-��i�q'o�(��~�M�4���\f�2�Nk欐��������&��g�8�#dՃ�\���������"���'��r�wl[׉&�S	5�{�V1`�r�Fڎ�/N�T�E�r�Y�x��=>�|M� �)Ax���1�	*�3�����B��6�_Ķq�z�m�˳~� 6����`������С�v�=_��5r��1��$�U,�4E��+/���6���t�Gq�ř>�X�����kh\(�]q��|���	�y7��*-��K?���,-,qy[b+f�.�=���]�\�p�[����Y�8#��[��춡2dc��������/E����폰q.��^%�.�����D����^P�C~v3��&r����[�l tM�b��2���5��&9��,ӄ�};Q+���0���60��	$?�������
+kܮ*�pj�U��i_�S>��э�q��ME���{��U����%�~�z��K�D��t��ށ�ւ����J��w����]Zx�ҏEI�'��fp���S)�"5��n$���˭�>s`)J���\
+�d쏸�����kr��Ѧ*�t���*�%�n��E�x�}��$v���O��
+<~U��c�!�X�,�69��׈�`r~�����vGX�D�j|J桘��_&�g���,*���NM��7��_��3�ꢻZ�0?m*7=t�U���w��~Ǐ
+���uN�db��x2�!~ ]��=����6єxDQ�=�qL�_)ի>ާ��ݞuZڃ<h�VC�HKV��Ǵ�?�=v�M`�DXEWU��H!&��ǟI��"Bcﷴ�W�hP��)N�^��`We��u�/�&�V����G{�C�"S�{i[ Lޡ�-����̊���S��<�u`�n���no���J�(�t��\T�Vg�z�I�u�n�>�ƺ����c�U(�S�X�r�D�����w�� sG~C���DM��3��!<�D�OT�.LX���~���l�URX~�y�Hcءŵ�0?S(X\�\��[�0.FLU��tQ�8�<dBQ�]3"(h�"���P�։RJ�p[~;mćI�h�V.	�+��t�`��l�h|���p�1�܋�*�S$!������;M#�:�AMnb�c������ѩ'��2Ji\��^��,E�ٍ��x���z�?E׹�?�%.���H`������(���I̧��i�3q���ns�|�'D_q��qw�<z�{��v�	�QZ�ˑ.dUDq��i$F���>�+����;��P��@c�yy�zJ�-8�3��CxJ���|�|���\fOf�����d����� �RGD�-Z��������L$)����N��dL�D;�<g�ê���~�$���KN,%����.�왹O����|���.P}� �FTB��/N:�s�f�J��� �f�n�<4#Y��L�=2;��=��5����Z |YpE�]����(��G�[��E��zG�_���m����0��ZɊ)mY��2É���Kg��'�q��y�}��r]`_.r$6�>��{k�P�`/嚵���[��}%��(���Q���Bpf����YL<a�l��6�g���t3����g�����،ㅦ�L���װi'�Mo���_Y?�n��8�
+M�O/(���\a�"q�������v�}�5VH=�Q8NX�����No����*���R��D�g��˵�W���p�	�ZI��&�;�^��Ov��4��������N�x���qi���0�.xm��&�zޕP��z�BĊ���j�T.R�!C���~U��Jz��#�'�7ϧAӚgD�:�q�լ�$�	�^ۋ��/5�iV�sv l"y�u���&�+�ף �W	߭r媽K�2�,�ͬ�	�k����\$T9�I�"�1<��Q��FƝ�����ސwƷ��<C�U�6�� /Rk��K�ӱjßϘo}�T�����jg���ӐlH[�2`�"1@�O����Q]+sb�pZ�:d����(*��.Y���kʾo�O���Tؤ4�O:��}ǧW��x��L��3�u�5��E\A��c;e���#���1��#%����tO��^i��P�/.��r�W@��i�e����))D
+(�+�4��/�F�&��`�I.[�#���ງ�L i�U0$����zS�3] Gs"I�tg��łsa"�����[���vP�D��x���Gȅ��u[uZ�wT6�g�	_��LT���g��zΜf*��?��~���K�?|>~�65j�Zޘ�{��Rf
+HJП�kz�r�JEȽd�R�7���?��T�vb���p�L�.��%�+=��W%E�l2�����wwM�����y����~Y�����~��������@r%���A˚���G �:)�`�= zg��ؠn�V^�>�X��^�1Xf�f駖b�-�����-֊53ૈ�&��D3�3��o� �LĴ�^-�=��R�$)�+?����?��T詤=l�[G��)d`D��m�ߺ���~�Ͱ�ʌ���m��5�]<d��5x��}�	am�Z� ��E�F��Ү
+`y�ߕ���c^���w��\�l���K��
+O���I	�n3*�8�BW�Ǯx��a�f�ZP�uG@���)�=��"�j�N;%�#ˆďx��f^'m��{���k��]�ax�s͛�x�����(_ǵ��Z�:9�v�5��N�L�\�*Z��V6\��$�Ff�'�x����ӹ�cV�uqP��̑�<j9Q�=�<M���Q�@uͷ�;
+�A�i�ۗ��m���yA���foS��d˚�lM��
+M/�N���2��VU�?����t���D$�L�Y|o�5��jj�H�o���	ح47��������CQʷ�u>+
+Ye���E>�مc��͙2��0S��S�8�]]=�@D�D���M��je����p�FG�-�`����0�E�5��y�e����*�-<УZ$��:������~RZ���\��yX��R��tj�MӔ7n�]�H�y��*��ʰ��΀��$[�������8-Y�OU���H�!�[��1����<�L�ߝ����.�k�1�b&$v;.#t��\�΍�aT�1���@Y5nt[�(/�H4�O�z�c�9�D�������-,�"g�s �lg^d��;a>E'�Y������P���%��#*hd�$����=�ԗ�h��ާ�w��9}`��h�K�"�S�k�D�G_^-���X�mDe����r8s�#ծ�I�4$5���bOrK���ɇ���򓓐�j�:�e����aD��2��N�1���;�ԇqd���Ȥ�xAe���-��X'�ÀL�U��eI���k��^�ę�TZ��L��T<O��a��'l����N��� ʂ*_���"R����b�k(Q4ѡ���O��T*>��_�\aq�o�pyu\�c��:�_� -�+��������׼�B�\/٦~�z#>�K$��=�eL<�\�#�56]0�M�P(�`�R`���/)h�sZ�OHO6e�Ƌ�F����q�i�U�Gm������_6�qU2�q�x�#MDf�(���&�b0����F�yfƤ��q�u@�,K�Nc<|L���Y_+dt��H���0�T���?�0sX���a�LNl��HU&�����qҷT����x���N�����J:���z7�$�Y�Z>�$i�ﱲw�0:'��
+���?u���`�%W�C�	��vh:,9�F�Թv���t��Ͼ�fC�(o�S*H�)�/�:f+`uhj(�	mHD; 9�~pY����9�X�AL@��h������&��-p$kK�	�����^��B|]�2t�SdG��φ�_ݰy�p�0�	��e]J+��8���&]��f�ݺ�%"��='X8��$�%C����B��<��ʒGB�(<E)��I�|_�k�Q+:��:����ۭ<qN��
+l&���	�d���t�߰��J�M-�!��Y���"��<	�K��"���G}%C�y��ȑ���)��` �M�YS	�"K'�Qك����AR1T2c3BF�ɣi;o��P��P,zR�l#�P��F����H۝x.B ��)�3	��9�(�]ǚ�%���;2Xa�}tΔs&�5Ҩ䔉ؐz������2�S�U�L��f��l��@U���ji�-���8V�ډ%��&�'���X�B&ٝ�D���S�V�쌑
+�L}8g��O'�"e ��j@���H�KN�fh�E����x��\Q� ?��VI÷|eF�&�Ho���"�o7?Y��DvN�w4ڽ����tYd� (��80��rr�$���HjZ�;R����\�h��C;����Fŷ}�/<Wm�#@�;��[���)GA� jD4*	��H`��Ѱ@����x��H�ʨA�Q�����o��:k�Jj�A�0�	Ď��{N��:>�]1�{������%Ԉ�\-'�����Ę�G����]���a�ǁ�E����q%�hZ4�&~�X�������v$�5Q�K{%�X"�hB��W��;!޷.�B%5�Ȯ ��p`�꼠|OeW�o�Y�{<'��|�p�	���S�]"��u���V3�RL�e����Z�c��3R��U�����1��c������q8�O�c<uF�i�8�a����v�b^��{��l��@{<�� ν�V\����u�N�>7�f@4���)1K�0ٖ���{�����0%*���T�7O#��~� Z>�v4F"=���\F=�܃�Z�yd�>/+�x�D�!m���U]�u���j�@mG�^���UP��q-�YQ�56�90���c8�5i�.0I�x�3�<T���,7$��z|��޿��P��I_��n����Ż[�z�ڠ��p������W�࡜�?^9&���N�r�1�ŋ�N�[ዦߐ� %.7PV7Uqr|�e�V�� qΩ�O�!��*����7�P�p-���Ny�_���r*�>� �°�?S����o���- ��޺�$�0�I`�f)�G�3��@�aF�'4�EU<��dD�Wr�sg���zy:���%���-�{�ՐQſDܙ�ɱ��K簁gP�0%���2-�8��sH���V�S5s�_Ftݜ:>3|lt�'�����8}��9vꍳgO�;}�e��j�b�/p��N��r;�G��-�nz��G������B�]�4D,nW��^x�A��'�ajĒ���)R[��UF��E��D����)�r���x|o�bΚ���"^�@����G RЧd�C�B�ݳc�����޹�����LM���ؼ	a+@��g)@~�M�/�H���a"2k�l�wC��� <M\R������IQ���:SJ�5sE&h-�$&ǧ���^Уj�����BN���Y2�Dݣ��I�zB,�&�'T��:��F2tZ��ɣS�Ǡ|Tk�h\�&G�m�4 mh(y�_���y�T� M
+�9(��:�F��S�c�/�H#�9!��	U�f3 k�e\�v���`By���E�e���<�v��P������L8:���dg�Q���F5BEݏH,D<�u�a�R�1�m���G��ݩi0�pJ[�|ן�P�=�zq��\�Qb[�R�O')p���tH9��KXy��:��S���!��Z���s-��*a�uJn�x$T�:����C�ژ��V��*c	�z
+,�K��n���o�Qc����)��p"��\>�i�R�7V�pa��	���؅4٩H�P�:{*�{ĝ	�*����V-��8
+�S�(��tY�D��ϒ��^Tό8-���i��:M�h�! �?�9^z�@$F�$����x���0�q��NիU��YZD|�<�1��[�岩�FY��K�/2�T�g��*��E�y���Cs�dP^%(�+�f
+9����(Bg�����:�W��P���TR:U��L����
+��y�7\>CȨ�11���zsx�]�hq�P4 �_��ي$���.���Kݣ�1W>�Wt6�bZ~�0gS Om4��b�ڶµ����l��5��h����OOL���G39���*�F!\gX���L�d��~/����x�d�C[��/�I_b�mD1��M��楎?��W�x�9\�ޟ{�2��}�uS@#$�R�� �V�/������Is=��n
+��!^1�R[�i0�"��jD���\�4#����m�<�!��@�#T:���T8�&�E����ګ�ï\9
+i���ip���	��-4M���T�K���u!�N�r� ����ݿ?�̧ҍ��_,�������᪞�y,��X�}��N+p{���rh��e�iSrq�%[t�iX�>V�E8�/��6�_Nә1Z��E��ޗd�(���Ys�2�����(-���T��E�o�}B� X�ԢG0S�V�;�XE��뮺����$޿����G�ڭ����r���(��Ul�k�@� dP��sDN~#�����7��u�)U�_��thӻd]�ք��h�!9$��;�\e�����Si�|�7�JHQ�2�;�I���l��;��:���t�p34����b�� (W��@�J�x#�X'>�ՂZ��'�d�ơ�PԮ�/0�YT�����h����Z#�7bwBY������`��O�f���C2�o�M��Ħ���i���60��������4.2��3B1}�o�y�Wğw��w�O({���-X>D��"$��K����/7���j�U����o\8}�ܡ���g���`�Q��m�𡴢CH�vtt��d`��m	q��hp<ⅆm�m5��&�A(FKjT�FttU�ii�e�A��`5��?��0�L����N��U�2��.l�v��%�X�l��.�G˻kr�bj��7�P[��C�#&7�d������k-q'D�h��3�P
+�[M�;$O��)ƫd�z�����+�0u�l�U��Ί,*
+Xb﹁p�z@�p��o�=�fZ��eq��u��)��b�|���n �ۖy�i��{��Uܘh������hU�Q��M��Wv�O���:�8���G<�L�G%F��;�&><���A�zD�N�g,|dj�T�lQ�-d�)dZ���Е�Jp��n�0$���Fa����a*��aBe�I���K���dE��ǳآ��;�p�>v�(}@�w�z�Mk'�-��uԽ`O��{"��f������Z���h�����#^�YAe:�0Đ�ʮ�T)�M��@���1m����j`��6W�����%^q��?F|	��
+����R��ݡ��N1�%�л�Hƻ��0=)��^��ɩ��e@-uL9C����*�u͉J�v�78Ψ�)n��,�����qvu4UW-�/`�
+�@�)z|�_�!R���f�Q�����C.?>��a��R��dw��s�z�e�S��-� F>�kۿ�C(�����3u�b�
+��t_H�=wѢ+�犿�ޫ��du���ul�]C�1s8��Z��Kq�C�z�{�cIxH��-c�b�qԔ�JZ�ZB-Ceb/�[�k�I���>"4��҆�T�=ʤ&�}� Da�Z/v"mȯ��X��F�=Ve�w(�Q��s���v���":z�4/0R�c���ft��eKJ#��ϡ:8�_�N^8��8,�},uTK]�hٌÍE��n�j��g��>�T�ILqCΉQ��c�DLq��,�^��Cpw,��yd�1�(��A7�p���;��(B���$�]vd����&#G�!S�$ !��/�į����"�Ю���?�m�!s�a���,
+*J� %���W�=����6*IG	Ъ/�+���и:���8X�ӘqD�:ͦ_k��nC�o��꫊�����E�9w�E��jׇ��r	�i�}7�,���b}�xK[�.���)�S�� �Ko���@��I��d�\�RNF(������y�CP�Z�u�&�^И���*8�ɩ���*W����0c��ر�~����t� 1� �e'xK��.�j��yߕ���a�2��\�ۨ�a�N��yj����ZvcL������
+G��ʊ�W���oJֽ��e?+AQ���"��Y�<^��U��(WF�q�7t:�Pql4Ϗ���)��̸mͨ��V����}&�[�����ΏA�6�
+v��l�诠��_�1}EBu9�&���+:=$P�};e;-F�q��xe?O{��[�7V6�"�q5��%BZ�7-�J9��z�1{p����I��۔έ��1vE��:���F*�ڃ��_��ˍ�\��� �h*:��3��$O�U_!�X��D�_>�XןT�@�]��m �Zp%���}��wn���mhr��Rv����GD�-�[�j7���oV�Җ��c`ԓ�KӞQ�W,���ܢRM�M��C� ���MR(#]>u;G��T(�h��(�*F�_��g|.�R�F �M�>���]��W2�֊|��e����
+h��A�����Ůr|P�c�e��ֱ�4P%F�6�X%T
+�b���*/缾*\��lX/���˒��NqTh��I��=���k2��<�g�ӠQ	��@��d�����*R�7c�IC�D��t��2r�4���x?!;(��wQ_�Q�#݅d�G$#�#VG�O�VEz����2"��bM_�� �rE5��S_Bo��IT��}S_JVDWiS�RXY>i�A�f�XA	(�˷g�#��4�E�߾�y�َC�h��7��x�C������.Y�����L��R�W��}�������{�0Q#�2����h��.���3�tRDKE�M"!�f���rT�e*=5�6�Px��B�+E�ΐ�=d	���8�=�聳��N1�4�O&{��ZWg�o^�LѽqFO{̧���1v� �Ir��˯�Q��^�ɹ��AѨ�L�] �@!~��V�Td> v������r R5Cr$ʪ����k�hW�	XB!�+y�XH�h��d�0	���O�5�l�����"�Y�)	��bZYѬ������Z]:-6;�M��+��tZ�ʬژ��V�O�]�o��D�Rhg3,�Ku�5�+Sk|�;�(��U�4}�� E`uW�k�h��Q�����4	�"�p9�$�(j�V=�o6��<дL�GǾޢT�j�~�~�Ĥ�l�/y�'���)��'������ ���3�ŋ>
+��Z�-��`�`.(qԮ��6�zftq̪R��-w(��zl>0,�����
+�!���F%�ؒ.}����DN[XT=y�;l��߾$�g�l���h��;��D}-9�2���nJJ����A���p�oM�ⷹwҊ�_|b-���W��K�:��\h}o腝`B��
+3�8��c�b2I�
+�1���n#$��Ckŕ�mE�Bk�0��$5�&����~)(�&?<��/d+�4H��jX���{�>9�(�Ұq?��Ѓ�%��S0SI�BP�����~|8����zC�t��.�����خ佳!��2tE]C�f����8[�%1V��X��Q�}���A#4�� 6���U#����Q� wE���t ����p��U*o���K��LԆ塘���AYP�g��i@ZT5!�fZq��<��7�(���?�����;6efʌ��,�ɳ��^���d����m.Jw���;Ʊ�8П=s�Ȕ����b;I�P LT�q���NJC�G}
+ol������d��܇�d�x�a? y�!�e���{[��i���4�}�M�$�w3L�����-{�_� 7]b2�����s/L<��f�W'�kv��7/�B2��Or�B�R��v��6�^���7a�Z-���mi�:>E��~a��h�NS��)�k��֬XA����\V��5�h��Xך��e�3˭Md��d@>MT�;3��|���b��%k5���.S~���fT|��
+h	4}Mz@W��Ө�|���8�&J<"VAm�����)�a�FA��5Y�x8�	'���> � x��l�
+�j�R)Hq$�ױ��W���f�(�.�ǑxJ����ypY�/�d?A�;��y��<}�_"
+鐙��rЭ���6��腿��������mЃ�X9�yK�z)j~`T��m�d��s�Qʌٺ�#��|m'�h�ޕ�����60�#��8S6��U�k���Ҵ�)0�}(@���-!�|	�6�C�#���-הԡ�-�eq�t���c�:K��A5�L�1į�5�d:7�6D�o��N���8�+�RJ�:h�B+�Ѥ1����LDa4>�LX�h,f��5M !Ȭ��E/c�<��+m��
+$�&���=i��c�\�,��A�̲�.�1�oH��"��0ȉa����~�;��5��j�
+�<�K	v�
+׽z��.ʌ�Ҽ�f��;���ڇ�k�X0��s@���E�H�T@Qo;o\Ky����N�]��yO1��,C���JH�$�[�X\D5�	"n���Z��9J?e$��:f�l%U�_Rs#��F��PLA�I��1�w(�Ȋi�o�k�ؤ�,>�!�������z���3��]�N#7њ�5R74>s�F�����1�G�-t��jҸ�aO�x�!�I`�*���>�`@ߐ�{},U@Cr?�-�(S	];E���VtD����
+g�w�}bEC����d�}
+�r��i0y�8���R��W�+Y�`��\0�.e�Aش�\Gc�O�si��!#���[l.��)m��5��z���c��|��62��P�,�n��zҴ���hr�d��0�u�Qܰ�E�M�a �'�jw�_�Ć����_��
+�{íqX������p��>Aq`?�Cq�-�E1��H��O�׵��c~֫�m����%,1��'I#����6K[�2��]G�(�k�N+@��I�X��#�ҋ��6���b��<Jj9��`�k�;�$:��6Ζ�"�)�_�"��1z���c�[�fdi씅VϓH�06*A��sfy�.$���\��=)Æ"DiDg�XU5�=W�JJ�%s��~����������6��hD-~��*��s)�<�v�kG$&a�'�(��z��7$����������`��~��ȃ{g2{��������)~�
+�5�I#�} ��wj�^���&I��K5���P�6�����}�߳�����x���|=���Q�ܻ�{��@+����:^+�����Y�N���'ڮpH#4G9T��93Om���5TQO'�6���d!���q���xZ���d����~�ٸHq��	L�%��2�[���ߛU�T}�1Q���*����ϓ���u�	aÏ(
+YV&0��<q��t	��"��4#��_��v�Dj-#�RWh������$�j�2+�=G_����|hq���sVa��,%����p�k�q)y4q�4v�zh���>����ģ���X�Uvw���nxL����H�ߒ-'9�{gn�7�_�7��C��ƀ/#��x>�sP�P(������E�F0�$�`�p�!.d�C3|��-Y<��b�8�s���]��[��%�P-hlp	kA����P��w�k��\S���=�����0����x$/�� �{������|�6���Ҧ�Ȕ�X��LJjT5���ΰ�O}/}�:��zm�J�5��v*���F��Nv�IZ�&3c��y.�Y�UŽF)�5����ls����n�^6F�����ru�%�"_��뭹>mH�:�о�*C����~Vim�=�\l��b�4�2M,#ܬфl�	�#/�@�d�S//9yZJ͈��o��َ��:<�C���P*�'z���QkJ�#T�9�%�i���*:�Ci�S������:9��=��7�8;�a��
+���CpOr��n\�d�y��c]�?   ���}�r׹�=E�r�AR�%ʔ��$[��.)��Ќ��$DlF�
+U�=�'�\o�+�N�mR�NMM�P��(�D��
+y��#̷��O��D���tY ��~��m�[vKt�:����O$�2y�5c���`��Rr(�o-�{�m�)����:�d�;=�œs~��%D����R�ʏ��ޚє3�d=$�	���f���? �����|�}��l��+m�{�@IvN��|0s��ř˳�D�Do.�9szF<t��?j66��j�G�CiOѢ�w�L=�
+��XC��'7fM�+E��d��k�q�g�Pa�_�}겨��W��_��ƺd�ߋ�+>)��*7)���.��o'�}�� ?�&�fMȡ�fF��&��\aJ��C��/G�;�8\cQ薃��	��[Q��$<�%���z��D�$��:
+���O�k2q��)ǆ���!�N.��0�H5�p����2J�Y-(X�_�d,Y�r���26����m�g��7h8o�Ut�k]�	_
+e�c����A �t.���je%
+F��X>�#nGa��(^����I>g�gw���F"��;c�]��
++
+[���y,QmS=+�EE���O�C��1{/�;����]�>�EU�������[�=I�-vЉc3`t�]d�a^�id�K�mM�$ӊ4�G�������z��Tj��E�}t� ��@���dN���?�֤/��椸|K�aP�e�*����J-�Pf�&<�k�"�Emc�97a�l�_��*�>�V���*��0r^>~/�6p����X�7�qV�a2�%�4�P�ʏ�(,��+ѿUR�)�>�)�)A.�}��>�O�:��>�����u�r�����1��)��E�hI�Q�H�ةWpo��	5Ft��b5�� a��pn�L�A!Yc��8[���T��޲���a��o�����,ȁg���C;�G	l�p.%7^�� �����сLH�J��+�`q��� �����.���"��yH0��C�F!����˯	�R�Xuѡ�L>ഐ���er�CX��;t������P�T��82���Ӂ��l!�y���^c�W��2!�jtQ�#	��v�;a��>���3q���at�n7ּ	.I��w!y�J5bIaNZb�O��'���Ȁ�,�Q����2�ڗ�k��1^���lB����Jh�)�0j���K	�:��I^mue�Y��2���\? ���`��o�tΣy��O �R�5�+�C���h]� q�SH�xۍ���3=%W�$*���f/]5���HI���X�v�Ti����҆F<�#�p��>���2��u�S>�ߐ�P����}�M��BWZ4]1l�^!���YhO,W�N�}��%�⟑Z�����'>s2Q��n�\p]d�4cw@9;'c����(�Ww���&��lT��RČB�	���R���2��!���HL��A��o�:�L�(n`@����}����{�~lG���Ė�m�k�LN�x{�wW�s	�&��;�1�~ir��G�Ƽ�ŚDN7+�b��1��CN�N��-|*m��#$��~+/NA����B�"��9՞HĢ�����DcV4nG�Lz��ߦ��	�ѱ#�`��i������T�4��6Uua0�f��21��l�y��G.��R�R��e��)'�	��b��NA�RxөF���ʙ�1v��F[���ߚ[G܍c�Y���i�OL��P�,q�'��s�ss�R�TE:�cviĜU��Y�yW��ڵH��g��0.N�u8O�G�fq���m�g�ۈpȹK�ȗD�;�9m����5Á�/�ٴÕh��p���2X�@��x��=uv.Y�-�$�9��Z#�"�e�"kЄ_��Z���C��������Yo5R��H(���\��k��W�"�Q�� ��<�X��p����])��u�Q"ù��J�`aB��k�ב�5�3!���������/Ҟ/���xbdD�UWj�����x4ap�J���Vd5
+�l����R�Zs�������=J�G�.dl�	��E�In�@��#�̾V>�=1�Z>s'rY�J���
+���8n���d� o�N'���z �[(q�&�_\l��@ռ)�A�F���O���f�f����M���&Eռ%> S��;����si�~��X[;�v.�T��A=D�1�l�IUe�!�����'�����rO���?�Ψ����ᢙW�<x}x>l/ZhQG�
+J}�����ĸ�Cn��nm���/���O:�>���ɱ����|"GU�WO4��!�H���x��r��a�7�>r�χI4RL�eax�2@�Q���@�[�������L���sŪ��ᇉ�黠�d)����Փd�U����T�~6n����ѿ�77	�ߟ�<�۰V[]'�l��焷G"F�T%�H��|K��60���X�e��� 9d��j2�	(6�u$ ܮi?uk���W�t��	��	I��]>2&X=���f����T��-�	���ٴ%���p��`/����yK8����i��M�����=��h͂wX�Ĩ����m�|�öه���0��E��V@NU���@�R��/A
+�?RhGq;�r��q��ڤ�Z3��El�r������z�D�Q�Mq����7{.5~��R�l���� 1 z�}E͍�m�ãE|����F���-b����\�cך�p�]N�t�Y�_����g�.v3/�1%ҟ`����r;�������֤Ȍiu�K�W�q��@�sFӎfigY"c=s��j �hGϐ��;E;���f�죒d|�ѧ ��^�=��(@%�#=�ؑ</���-4i {L��6>�~x��J3� �g�o��B'��l���E@9õx �9^�k0��jgY���^��.hҾ#<_��_���"D���o���A_�@A����SM����4��OP�kP��l牰�BJ)<�N�@I�AA���Ӟ�a��pc����J�~t��bI���M&����A�ً�#��+���כBQ/ꇬ�
+6�t�Yt#��D�ɶ��6�*6����� C^��'�b�wZ���w���!�cc��v��`�&�& �ւkG��	�$�m�����-a{����2��o���ep�C$|� %M`p���N�H_jފ�/�� �N[i���׉�t�Su/��1���F����'����l|r������g Hv���t=#�)��=���
+�-��H;�V�5}��O��9��<<��� ��D�ӱs���H�:!�J;�b{���SP�c/0,Cb����[��
+�� Gg�{��S*8U�"�m�~s��6���E��e`m>³�e�:�k��R	��}G��pS���o)5�Z����������������[�A���j
+��MBU�;)��$��!~c�`+M�����U��R)WW8��W�?�	������G�/{�`���Y�(�^ ��<��0V 7v�/w�j��T*_FUo�w0�E� �n`���8@Y�8 ��5
+*���ԹPǁ?+��X�3�at�u`5x��1'sS��(�4,\yG�JU�O|�҉B�#�`��V��0[2�O�~iyo����58���84c�"���[�Z�X	�&V	C ��,S�D��XXX�-R�|�؄aD���+��1&w���k-H���(`�z�`1
+$m��d�ʯ��� ��/�ۘ>� C5Fb{���s��̣s�����v;`ky�q{�Vs�r\5���`b�� jd��M�B�i�
+H9s#�9Y�dz IU6����AJ����%���O�� �~��'�?�>��?��o����}$�|������=d��� ���RB@>�@:תϲ���/��}`�>RT��P������1e��2�]����� �YB�E�,
+�i�>э�֬F/�(&�=w��GG�+8%�����#��#�����Ν�|�y�~�_�OM�6�n�0sj��ˇ*��z����+�u���z�Z��x���S����Ջ���b�̵h���Ϭ��F���g_�<���Թ����µ�҉ׁ����&�~&�'��n��<rc����c7��#7��Go-��o��ʏ�ϱ����g��C�|�x0?�n*�������G��<͏�"GF��"6Y|f��Ʌ�3�x����;M���ߩ���/�j�HFz}�ȢFF��S�'o�� 2�*i/���݉�_?�+'�W"����Q���"F�U���c✀V�Q��hu�����@����If1n���R[򿉽oT���$i �}8���Ykd$Hۓ�^��M��{� 8���Y����.�Q��,a�6
+���t�Q-7�יs�i�1��ۀ�1��J�R�VƋ�0X�6�l�Ͱ�g.q�	��ak�=�,�"9�$��a����V<����ﾰWrǃ"��C<�3gRݤ�5,.�_O���4�
+�z��;{�ÑN���!��Μ �!��	<���͛@�K��R0N����%���ޕ$�q8�y$Dވ�咐�8U1����d�h+��Z�S�~t� �G9h8ɚ�Q
+��a��f'G���r�.��	sa��s�s�'���l��?p�Kup��ш�)!�8��[2��JT��cv;D�%�����K.����i�����dyg��LZ�b��C!DI�M3�i2������c5&(�I�aMFX��F	R�G�u�M�Z�Z�?e]#��ji\ך�2n����עŐ����1L����-���R����?p��1o��i�i�+e�����';���-u�K�	Q*f�Ϣ�У�p8Ǿl������h������~Mu���Bi[n�9�〺i���"��<�t�o#���0mP�C�@V��r��8KF;=�Ȍ�Ai�0�4𒞙գ��%��+p�a���Mj� ��i��bΑ���� P�:�;����_s~0�҄yr�"�Kb���V��Ne�H$��E}���� Vv�Xfa�Y�B���g�y��� �y���{�Ne�5�x�+:a��YrK�`���B� �$ź�Xe�~�s]MQ�h��jy���q4QX?�9m�m��Q��MO>��Z*x�p�)���7�?i����zWB�|�z*|��e��0���N����zX}"�5�mM�6תF��3�^��î��yՔ���xh�%1�A0��'^l�>�R2À�Fw�9��)����(���N8�v�Z���j,V��N���\\ ��?�}����D2\��HdF������i�� ^�,-Gq�E��
+N1����_Ȍ�,[_1
+�W����T��+ъ��|�9:��ˈ�Xt�?�R�<'�J�$����%`z%��y�5Ĳ�-F$q���F��oP!NZ��" ��kU&<E�-u�v�����|�~��F)�K�V��0��?>�h����s���ؖ�GO��-f���������
+���<I[����f���ņ����l=�_�/�Yʏ����� v���X%[	z���lq-l�*�������r�Y�i�����Ȼ#�	�DB��f	|��$BAm�\̉m�f֍)���rtzc�v[��r���	��ӹ�PŜ�Q�ú |Y�v��I��hE�
+�F�QT�lKƙ&G7%-tC#N|c�1�'y��KZ�O9���ωL��	� ��L�ѵ?kF
+�un�H��\54�=wt��EN_��_gꁹ����%��c�3�F�<�[�fܢ��ǡi0�u+�<U����n;�m�����c�(��\f�"��n��_a�.���I8�iW�t2�V#���[3Қ2�TZ�'�����DLa�  q�X4��d5=k��E#�SB��ƕ�i��F��9�Yp ;�4P�k'?!���7��#u���L�FTΎy��%M���]@�W �!�
+�9�=�2��邐��j1��SJ�Κ�;��o0�Q�W.��9�bd)�u�o��.~�4M��e,�%Y�ۤR�/�,HΠK���8��p�bD/&*��/T�}GV�:+pP��/�}�rD���N6ڱ,��9IS~:r?�#� +���?�2��B���N�vǷ�����{�(�����1���*#=�[�Q��t� ٷ8}�a������R���^0u�{�=���2�y�z��}���A �\�Ԓ�O*逵b���_��{/;8�la �"7�0ű�5��p�@LaEe6s����V �#��1qp�c�b\�M����k�R6C�
+���0�K����v�8���>�\
+��ʧW�s9[F�F��l�~��
+��4����L������(|{Nf��Ϲy�R+*A˯D�R�M/����>Ni�ة�藘���T����i��uN�-��&��l�֜3<���0_&U@��ȹ�E���z�[@LZo5�Ӗb��~�, �EF��Rv��XFǎ�c�pz/�6aeaXP��rc1�H7}J��kk`7��bsy�2(����rt&���B��3[��Sޢf5\Cy++[<���AR��H���xh�&L�99�;M8�7Ϊ$Lx3�si��pI��*�P�љIF���2LޢBCZ�~�i~֔\!l��%�e�����ۯx���5^�7DV�R�Y�'�5�g_���U�p���_7��^����YJ{ݫ���c��ݤ8vת���9DA�'�[I��}�=[� �nSv(�z\��G%7���K�
+��˟�?~�=&�B'ƾͷ�$Bw��>$�-, |����z"�:K�E�芇��e{�4D�ۃ-�[�Q� Ҁ+}(6�%r�A�$Zm�������@l����bB`.�,+Lfz��X�յ,��Ib"�$.4��ˠ�\Ta�Ű�V��~|z9n��:8x�������p-�5@ A_N��%ȍC���ǻ�z�.��p,�U�R8�5�!L(]���6�G�����p���~kVu���^�+u��Ɇ�g����7����G�BA5zyeZ��^���u�V���g����orWN-f�~���(�!�w�4�d�ٴ�0���&f3ǏG>|��?��!E�`�2�` �f�Q���M 	���Μ�9?u���W�/�:-΃��FHK�C��䬿-�D�b�׀mx�A�V�����Zp���_��\D	 �pdI���`T�J�R!W�@��Z��2��Y���;�Lc%�� ~V�'k�E��J����+���̴�^^�R�����r����e��ŔY�`�v��D�	�
+J�Z�9]_���n�D9�Z"s��h�<���-7���N�J�h�C�SQ�F��Y�J�)��JTŻ�W��\9�I�`%��SUhM��T���Q	�3>nm�QZ�0��|r�E��!|�E�#Pq_�#@x�Ƒ���3�5�37jk����<zW����P�Kl\`�\Vt� ��n�P ��}Z����V�Ӥ�"\@�T�'/�x����/]�r��N���PvǜB�CV{d��ͧ�+���\[uF2zN���]E�!W�y���S+��X�D�B����E蝢+�H��t��-:�:��Y����E,�e�i�R����c���V��)���)Ou�tz�����$��JE�P��\����h�V�%O#P* ��5��s�*�c�S%���9���<��y�x��ه\L!��rm���q	��Ԍz�ps3f:Y�e4�FT8�	�h����QB�&���3/gZ��n�Ё4l��x�D����n�A0���B��v�\Ǿ�RU�f9�,�����|��ӄ1]=K��TgO)>��	�sC{˴c[�D i3�v�2���Ѓl�:��WL�q7̥`�yӤ�a�����/�0�oh�b�_�XТ�X�=��l���)�E���rpQvHlR �#���DO���{ܡ��N���5�>$���X���y��4&jN+�⻃^��q� v�%�*ŉ���BVu�\�*�N���f�$�`lx��iAi޷r�ь����u���g�<8\�	\%�ڞ#G�sv�X�Z���%�ݥn�a|-����mzU��0���J	��g������o��v<I��l{r����P��h�������nԁ�U�� ��䆍NqJL�^��n�@߲��|0z���$eE�9#�:9�l7M��F��^y�6v�sM�-�
+���T��P��YfY��	����`��j���g����>���QNKHs�Z6��Si4��{S@��,�'����x��؟�qپ%'/��VD�C�FBo����I�E��V�$k�3�U�6]�]R8��pb�ZY莒�5݇㾇�yxE�l�Q�(�j$ �	� P ]F��V"�����|8�I��� �MB Kw��)`R���۠c��ߞ|�Pٶ\d}���l٫Ѷ��F-2\�Ă�
+ը��^v��ƭ�8���nh�Y�'�N�/U$�l}Ai�Z��iz �լF�ݯ�۩�}xȧ�����=gIG�̜��x���ɋ3�O��K�!��<�^2��	�#�T	glQ�����zB���w��r���z�:��	�3�h��9t,h28����,��+�f��l� �����ʰT�� ��,�{ʑӣk�N]:r����Zey��le�Б���CG��W�,ן_\��h���p-���[#kkkׯWWV����kѵ�#+����VW��#�#�+qy1.��k����ֵ�~�\[\��+זo�je���n�V��qyyqe?G@�����\�~}�(�1�(�a��T�-o,ˠU`5��Z��n����r��2��h,U��5Z5���n�xǅkq������*P8Hs�3#U�zH�aa#DF*�}v{$������䔹�Y�ؽ����xޓQلס0s�6�;5��C��A��h�F������C�wo`�����Յs��hRh��f<G�˱�	V*�7� ��*�%����Z�$���E�>4�%��,��j4��R����1Ekc��p����o�)K�(�x�(�^�V��-t@ܘS�3H�:�7����Q�2p+�àT���� �Vc5� �iX�@���>#/z�>�(}h��6�e �+Hx3��sBvb����-�b j���OIZ�i܎B�|6���NY��M��]���.y��F��[)�!d�5L���K�!� 1ar�?,}*��y�x�vZ���t���\
+�Qu�M[3���)���4/d�N{����K���E�U��c�<i_�����W�
+q�Z�drs���z��)ռ�+!�OB��b�9��\Q�#��?�+M�\j��# �a�$ z�O�<r�-O��V4یJJ3A��z2�{�6�@[ �%'Y��S�>�,����Ґ�j3���L��w1��6�Ƥ�I֩"�F '���� F�!�|F&�����Qa��!D�֥+w�X1�%��D�;=���`�Z��L�27��Ef^/+7�D�_��UF��Ɖ�qu��%`�8!�W��0W9��b	���X>P'����!F��P�������I;Y���+ae��7C�w'P!���>~�`��(�K�m����gO/�"[.<�W�ˀ�@�(W�&"T���	� "F�$��GIk\p��B�|�����&�t��*���{�H{�u��!v@\�RG�vd����#Kt[k��r�AE;H��t��v�wN3b����3򮍇�#�ЩFJ�9(Y�y!ڐ����ҟ��xǓ��H��������uߌyL?��4#���+M�	�#�qC�ڸ�j��C�~���>���:�'���eB�LLL:\����T�B�a.��70b�	����*-Ӧ7��j��:ٻ�w�Â�Q� H�HNx�b�l�ݨĶ�H�+¼Q!�ˏZ@H�v�It���	��]*g�:�O�C���r{�i-iǶ��?G�7|H3AtNG��J�e$te�h�(��RAKE����x'���(~TS�t�ʕz�Z#�iq+�$�ק�(�@/�k]�1q�ef/��>;u�
+��
+��:��/�¦Р�q�=lt?`ŀ;���^�ޝk,UD�;�s�R 1��w�\�8O�;��2�3���!�M�Ƃ�e��|����;(Io����#�xC!	���Ο��O]�z�����^-�!?��Is)/`��z��Ph5g�M�5�)U3�ɢ����c I��<��\�4�(��]�$|J��NCū�b4�Qd\TJ��r3��K��F���/����_���X�`FL՛�!�k�aIP�-G�	��c���;��`XD2���"6E�:�"�`�٥��!�tD�~��g:�c�xq���@�f���EG����X	�O��>�(�ue���p���	
+���AX������p$I�J�&�65�'���$tQ t�!L?�v�`"�cF-�&��E���r�m��w���B�~���V�2(�9�l|l'!RG�Km��a����(�e�����
+ۄ��A�N9�������w����R{lQ|����}&�`5�E2ܵq�������\nHPk�+�$C1B�d^Hx�,�g#BZ��������U�h����C�T��#�9م*��`�V����.q�O:J��c�X�>(�""�"���} ����-.�I��lu��@�8����^'�m6-�2\���N��H+Zm�lM���)}��[P<[���9u̻��p�JƁ;y5�3��X�����D|4nC��[�D�l�h��ɜ6�0�/�&e�����9Es<\F�88�Pc������Xu��?�2�nS�=O�=�Vė<q�\f!$L����#~�ku��D�i�~�'�9���k�+p�㌈<l��8�'�s�@S4����+���v�V������U�ȹ�֚�B�[X�'U��Ra�7E���YwAZs=����	Ae��E&��,�)���3�9IG� =�d����sw�3r�vK8z��ԅ�?.��`<�I�Z��>)�o���Y!�þ��$��x	��ɺ	t�ڶt�B�z�w8��q/�2:2�#��h���W�Q-�Uҫ�P���-
+���N�����H���xoNPp=�V���w(L�]֭ c��o$�	��P�^X@M	#��ts&v�"���4r��2��x!��#c	�2�z�]+��|/�80�"1��R�"e�Lu2���M�?�QO�	�7��Lݕzqr͎S&>�_n��A����s�˫��� �ȕ�7a��xT�n%f�m�-��6M�ɟl5�r)$���ԸD�K���4C}��N� [�
+K�e��G�.B��!��:��}����Y�C8"��o��z�'������z_��G�����G�M�+����F�*�U��-˱�P�J�Sb�]+9j�o�J��FB��	�;4h����Q=z��)�K�YA��;֙zc�v�Q��A�k�D�"jDv�~�6"�z����ף�tG Sd�XZv��܈Y[�M� ��&�>��NBr�pۇv�U� ���~����V�ٽ2���`�K��2�����g���3x�<�3����}B��� h�!��?��=��z���r69���!��'0���M9�n&q!ƴ����;����@� ����}=���0��T�WD����B°t;d����S�?�&�I��j��0V;2iU���b�i��ª	�$�� ��y�|R���v$��O5���$�j[~.[�7�"=�3^0�=4�)�B�,d�5�g.�;=;�D�F��B��{�j��	2.�����%����$��(�(�<���q���w�������W��Uz�K���˿���[7v��5~�|E��%kb�t�b�=Cٺֳ$a��0H�#|G�?<������?0���0����f��!E��ut��/` ��&�z�!��cv�i��f��y0�)⹁d1���|]A�<���eD�� +��s7�%AK��[&�[g�R%"�������F;���ۘ��ϱ�y|��a$sʊ��N\�c���0�S�V\%P����w	&fO2�z�&���L�a���B"��S'"J��N	='QN?0J+�%q�������`���&�W�x4��P>�V�!5k�f�6�|è�,Ċ��V��(W�h�e'��˝��;a�O�iB�;������w�i}MK:7��E��'��a�B��q��C�{y��潗`��0yOo��d�)���xЛ���8U��ڴ�@�����j�)�k����ʦ�i%&S�B#�U2��o:!�V/��O�Ĵ�@�JT��!;*�[E�q��G%| �Ѯ8r���=�@�����m�}����/oԪ�*D=�$X9L7��.�'����u����0b�p�]ض���D0���L+]�5$ّap%$��<��6���@D:�#O��2i_`�f/Ϝ��|�U�H�)����}���RD��ܐ����� $��t`��a�5�_A!�j�B������a� �8\��ad�_C׺_y�$r��5kp M�Π�i��ȋBɣ�v�!��X�r&�y~娭" ��2İј�q�r�o�QI�2|d��H��f����S6n�E�g�=	�; ���5��!N��;�R<��e��d@PN3�a�80r`�aU^�A�7�{�;��(��cB��2��1�h���]E��%Ӳ�C�:�RnCJ���ie�R2�	�y�~P@��z�R���xP����IZo	�Y�w�U`����P�Q�X	y)n^a�W������I���Bۻ�� �]�I�$Q�xk�[]iG5�bs���j
+K���=��ʙϔ)�}c���25����l�!W�h�%�Fzj����[��R�э����/ձ��|`o�V��vݫ�=�t�����4"�qBZ����9�0�{�=�����z��2L
+5'i�SѢ$]�w)�#EE�J�@?�a]���qԈ�J3Ȟ�����z9\�vP,N��;?�"�\�9����>��T������^T!Н��t�=U/�<�&��'BGq����
+bNk��..b��F��T��ő�c�?��Q�"ڊ�/���n�����9&�
+�!�T�����D���=ux.Dn�����N��j����xt�Qo/���z�Ն%�s�JONʞt�<k1�=�(�D�x/����b8�WjQ;�י�=W���iV�`fGI�|�V\@���g,5�(8�L�P�>�'Jw��H��7� ��MP�Q���Sm�Y�kto/�*��홪	ߗC�De�~�t�$^��,�g�dҖ�L�F鹄%Ǝ9�P�L��!�7��=�3@=�h�������ΦB	��Y'������>����f;��G��l����}�����=i%.m��� .�
+���	x�焇�5��`5N�;����D��1N���r�ؠ��/��C�N����v
+ <��:�!����q�z��OI2���TP'�����U"�i���)&4D�N��J�xW�)�?*�'/̈́�_J�+��� fR�0T�7o�1�0n�K2�D�Pr'��=�>�����?۫�_�w�)��&�-&X���#$����g��c��7�GɃQ��pBcR��(`�o���w8���7��2��!��{�2]�=���.�D8ÿ�\������7�b�,���rk� �&*�T���Lf�M��h��v�sz Qrɘ�)�$(�Y\����`�:_U F(����[A����FK���G���J�Z�a�,��X�k�p��R/�8,aى���L$�+�u�{�f�_gu{�F��p����\�<��g���9��vOI?��7��L.BY�q{1'�G<��#.3P������ӢoY��:^�ew�@��}���H� D�!����K�Ä�b����	a��.h:�檎��'��ڟ����20��(T����V�Q�j�&��NBgy���A���LĔ��g<��/��V/���HքS���C�C6�&(7�'�N� s����c%]H]�#��*����mDT�tr�0��8����<�VvD�~�����m�>n��(�@����k�7�P!�E�G�rv�sH�D�Xʳ�
+���M{����h|)XX*Y�)k�z���C�H����{�l =�����yvt���`�s���p�E��ل�{�k�:jAYB-�gg/J�n7�i�M`�7aS�d��:)/�n���jN}�.�ƌ��G�{���^�7��ҕ�yhu�2��z��ř�� �/������P�:ju�u�R�a�:6'���0����Qiy&j6Zm�C��Y��B����#��~~G�����S�����r�z�΀\���G:��ɰ��D{"e��*�|������W.�:}���7ޔ;�D�P����6<��t/�#�a��"�Z�\�F��E�eE>��]�y�;��0��>�;a��cA7�#v��D.�t��g9���a�z�Z3X(�t C�#oP)ee;9����#�%n��%n�����eK�o�^�n�۵jF��W��>���   �� ��H

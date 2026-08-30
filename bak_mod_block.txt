@@ -1,0 +1,750 @@
+
+         const out = `Информация о блокировках [id${parsed.targetId}|пользователя]\n\n` +
+           `| Информация о глобальной блокировке во всех беседах:\n${gbanText}\n\n` +
+           `| Информация о глобальной блокировке в беседах игроков:\n${gbanplText}\n\n` +
+           `| Информация о нахождении в чёрном списке бота:\n${blackText}\n\n` +
+           `| Информация о блокировке игровых команд:\n${gameBanText}\n\n` +
+           `| Кол-во блокировок в беседах: ${chatBansCount}\n\n` +
+           `| Информация о блокировках в беседах:\n${chatBansText}`;
+
+         return await sendResponse(out);
+      }
+
+        if (["/mute", "/мут", "/заглушить", "/замутить", "/мутить", "/датьмут", "/m"].includes(rawCmd)) {
+         if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+         
+         const { timeMin, argIndex } = parseMuteDuration(args);
+         const durationSec = Math.max(60, timeMin * 60);
+         
+         const reasonArgs = args.slice(message.reply_message ? 1 : 2).filter((_, idx) => {
+           const actualIdx = (message.reply_message ? 1 : 2) + idx;
+           return actualIdx !== argIndex;
+         });
+         const reason = reasonArgs.join(" ") || "без причины";
+         
+         const vkRes = await executeVkMute(peerId, parsed.targetId, durationSec);
+         const systemMuteSuccess = vkRes.success;
+         const vkErrMsg = vkRes.errorMsg;
+
+         const muteUntil = Date.now() + durationSec * 1000;
+         await updateUser(parsed.targetId, { muteUntil, muteReason: reason, mutePeerId: peerId });
+         const targetU = await getOrCreateUser(parsed.targetId);
+         targetU.muteUntil = muteUntil;
+         targetU.muteReason = reason;
+         targetU.mutePeerId = peerId;
+         userCache.set(parsed.targetId, targetU);
+
+         await logBotAction({ type: "mute", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] выдал(-а) блокировку чата [id${parsed.targetId}|пользователю] на ${timeMin} мин (Причина: ${reason})` });
+         
+         const keyboard = {
+           inline: true,
+           buttons: [
+             [{ action: { type: "callback", label: "Снять блокировку чата", payload: JSON.stringify({ cmd: "mod_unmute", targetId: parsed.targetId }) }, color: "positive" }],
+             [{ action: { type: "callback", label: "Очистить сообщения", payload: JSON.stringify({ cmd: "mod_clearmute", targetId: parsed.targetId, authorId: userId }) }, color: "negative" }]
+           ]
+         };
+         return await sendResponse(`[id${userId}|Модератор] выдал(-а) блокировку чата [id${parsed.targetId}|пользователю] на ${timeMin} мин\n\n| Причина: ${reason}\n| Блокировка чата до: ${fmtD(muteUntil)}${systemMuteSuccess ? "" : (vkErrMsg ? "\n| Предупреждение VK API: " + vkErrMsg : "")}`, { noReply: true, keyboard: JSON.stringify(keyboard) });
+       }
+
+      if (["/unmute", "/анмут", "/унмут", "/размут", "/снятьмут", "/разглушить", "/размутить", "/измута", "/unm"].includes(rawCmd)) {
+        if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+        if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+        const parsed = await parseTargetUser(message, args.slice(1));
+        if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+        if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+        const targetU = await getOrCreateUser(parsed.targetId);
+        const tName = targetU.fullName || targetU.nick || (await fetchVkFullName(parsed.targetId)) || `User${parsed.targetId}`;
+        
+        await updateUser(parsed.targetId, { muteUntil: 0, muteReason: "", mutePeerId: 0 });
+        targetU.muteUntil = 0;
+        targetU.muteReason = "";
+        targetU.mutePeerId = 0;
+        userCache.set(parsed.targetId, targetU);
+
+        const vkRes = await executeVkUnmute(peerId, parsed.targetId);
+        const systemUnmuteSuccess = vkRes.success;
+        const vkErrMsg = vkRes.errorMsg;
+
+        await logBotAction({ type: "unmute", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] снял(-а) блокировку чата с [id${parsed.targetId}|${tName}]` });
+        return await sendResponse(`[id${userId}|Модератор] снял(-а) блокировку чата с [id${parsed.targetId}|${tName}]${systemUnmuteSuccess || !vkErrMsg ? "" : "\n| Предупреждение VK API: " + vkErrMsg}`, { noReply: true });
+      }
+
+       if (["/smute", "/смут"].includes(rawCmd)) {
+         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+         if (effRole < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+
+         const { timeMin, argIndex } = parseMuteDuration(args);
+         const durationSec = Math.max(60, timeMin * 60);
+         const reasonArgs = args.slice(message.reply_message ? 1 : 2).filter((_, idx) => {
+           const actualIdx = (message.reply_message ? 1 : 2) + idx;
+           return actualIdx !== argIndex;
+         });
+         const reason = reasonArgs.join(" ") || "без причины";
+
+         const muteUntil = Date.now() + durationSec * 1000;
+         await updateUser(parsed.targetId, { muteUntil, muteReason: reason, mutePeerId: peerId });
+         const targetU = await getOrCreateUser(parsed.targetId);
+         targetU.muteUntil = muteUntil;
+         targetU.muteReason = reason;
+         targetU.mutePeerId = peerId;
+         userCache.set(parsed.targetId, targetU);
+
+         await logBotAction({ type: "mute", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] тихо выдал(-а) блокировку чата [id${parsed.targetId}|пользователю] на ${timeMin} мин (Причина: ${reason})` });
+         await executeVkMute(peerId, parsed.targetId, durationSec);
+         return;
+       }
+
+       if (["/skick", "/скик"].includes(rawCmd)) {
+         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+         if (effRole < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         if (parsed.targetId === userId) return await sendResponse("Вы не можете исключить самого себя!");
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+
+         const targetU = await getOrCreateUser(parsed.targetId);
+         const targetChatRole = (targetU.chatRoles && targetU.chatRoles[peerId]) || 0;
+         const isTargetStar = await checkIsAdmin(parsed.targetId, peerId, targetU.role) || targetU.role >= 6 || targetChatRole >= 5;
+         if (isTargetStar) return await sendResponse("Вы не можете исключить администратора беседы!");
+
+         try {
+           await axios.get(`https://api.vk.com/method/messages.removeChatUser`, {
+             params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: parsed.targetId }
+           });
+         } catch (e) {}
+         return;
+       }
+
+       if (["/sclear", "/сочистить", "/smclear", "/смклиар"].includes(rawCmd)) {
+         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+         if (effRole < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const parsed = await parseTargetUser(message, args.slice(1));
+
+         let count = rawCmd.includes("mclear") || rawCmd.includes("смклиар") ? 10 : 1;
+         for (let i = 1; i < args.length; i++) {
+            const num = parseInt(args[i]);
+            if (num && !isNaN(num) && !args[i].includes("id") && !args[i].startsWith("[") && num > 0 && num <= 100) {
+               count = num;
+               break;
+            }
+         }
+
+         const targetId = parsed.targetId || null;
+         if (!targetId && !message.reply_message) return await sendResponse("Укажите пользователя или ответьте на сообщение!");
+         if (targetId && !(await checkHierarchy(peerId, userId, targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+
+         try {
+           await deleteMessagesForUser(peerId, targetId, count);
+         } catch(e) {}
+         return;
+       }
+
+      if (["/warn", "/варн", "/предупреждение", "/датьварн", "/пред", "/выдатьварн", "/w"].includes(rawCmd)) {
+        if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+        if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+        const parsed = await parseTargetUser(message, args.slice(1));
+        if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+        if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+        
+        const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+        const { reason, duration } = extractReasonAndDuration(remainingArgs);
+        const termStr = duration ? duration.text : "Навсегда";
+
+        const targetU = await getOrCreateUser(parsed.targetId);
+        const newWarns = (targetU.warnings || 0) + 1;
+        const expiresAt = duration ? duration.until : 0;
+        await updateUser(parsed.targetId, { 
+           warnings: newWarns, 
+           warnBy: userId, 
+           warnReason: reason, 
+           warnDate: Date.now(), 
+           warnExpiresAt: expiresAt 
+        });
+        await logBotAction({ type: "warn", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] выдал(-а) предупреждение [id${parsed.targetId}|пользователю] (${newWarns}/3, Причина: ${reason})` });
+        
+        const keyboard = {
+          inline: true,
+          buttons: [
+            [{ action: { type: "callback", label: "Снять предупреждение", payload: JSON.stringify({ cmd: "mod_unwarn", targetId: parsed.targetId }) }, color: "positive" }],
+            [{ action: { type: "callback", label: "Очистить сообщения", payload: JSON.stringify({ cmd: "mod_clearwarn", targetId: parsed.targetId, msgId: message.id }) }, color: "negative" }]
+          ]
+        };
+        
+        let msg = `[id${userId}|Модератор] выдал(-а) предупреждение [id${parsed.targetId}|пользователю]\n\n| Причина: ${reason}\n| Срок: ${termStr}\n| Предупреждений: ${newWarns}/3`;
+        
+        if (newWarns >= 3) {
+           msg += `\n\nДостигнуто 3/3 предупреждений. Пользователь будет исключён.`;
+           await updateUser(parsed.targetId, { warnings: 0 });
+           try {
+             await axios.get(`https://api.vk.com/method/messages.removeChatUser`, { params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: parsed.targetId } });
+           } catch (e) {}
+        }
+        
+        return await sendResponse(msg, { noReply: true, keyboard: JSON.stringify(keyboard) });
+      }
+
+      if (["/unwarn", "/анварн", "/снятьварн", "/снятьпредупреждение", "/снятьпред", "/анпред", "/удалитьварн", "/unw"].includes(rawCmd)) {
+        if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+        if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+        const parsed = await parseTargetUser(message, args.slice(1));
+        if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+        if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+        const targetU = await getOrCreateUser(parsed.targetId);
+        const newWarns = Math.max(0, (targetU.warnings || 0) - 1);
+        await updateUser(parsed.targetId, { warnings: newWarns });
+        return await sendResponse(`[id${userId}|Модератор] снял(-а) предупреждение с [id${parsed.targetId}|пользователя]`, { noReply: true });
+      }
+
+      if (rawCmd === "/snick" || rawCmd === "/сник") {
+        if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+        if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+        const parsed = await parseTargetUser(message, args.slice(1));
+        if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+        const nick = args.slice(2).join(" ");
+        if (!nick) return await sendResponse("Укажите ник!");
+        const targetU = await getOrCreateUser(parsed.targetId);
+        if (containsBadWord(nick)) return await sendResponse("Ник содержит запрещенные слова!");
+        const chatNicks = targetU.chatNicks || {};
+        chatNicks[peerId] = nick;
+        await updateUser(parsed.targetId, { chatNicks });
+        return await sendResponse(`[id${userId}|Модератор] установил(-а) ник [id${parsed.targetId}|пользователю]\n\n| Установленный ник: ${nick}`, { noReply: true });
+      }
+
+      if (rawCmd === "/rnick" || rawCmd === "/рник") {
+        if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+        if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+        const parsed = await parseTargetUser(message, args.slice(1));
+        if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+        const targetU = await getOrCreateUser(parsed.targetId);
+        const chatNicks = targetU.chatNicks || {};
+        delete chatNicks[peerId];
+        await updateUser(parsed.targetId, { chatNicks });
+        return await sendResponse(`[id${userId}|Модератор] удалил(-а) ник [id${parsed.targetId}|пользователю]`, { noReply: true });
+      }
+      
+
+
+      if (rawCmd === "/тишина") {
+         if (user.role < 3 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const chatData = await getOrCreateChat(peerId);
+         const newVal = !chatData.silence;
+         await updateChat(peerId, { silence: newVal });
+         return await sendResponse(`[id${userId}|${fullName}] ${newVal ? 'включил(-а)' : 'выключил(-а)'} режим тишины.\n\nТеперь все сообщения обычных пользователей будут удаляться!`);
+      }
+      if (rawCmd === "/rnickall") {
+         if (user.role < 3 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const { profiles } = await getChatMembers(peerId);
+         for (const p of profiles) {
+            if (p.id > 0) {
+               const u = await getOrCreateUser(p.id);
+               if (u.chatNicks && u.chatNicks[peerId]) {
+                  delete u.chatNicks[peerId];
+                  await updateUser(p.id, { chatNicks: u.chatNicks });
+               }
+            }
+         }
+         return await sendResponse(`[id${userId}|${fullName}] очистил(-а) все ники в текущей беседе!`);
+      }
+      
+      if (rawCmd === "/nlist") {
+         if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const { profiles } = await getChatMembers(peerId);
+         let list = "Список пользователей с никами:\n\n";
+         let i = 1;
+         for (const p of profiles) {
+            if (p.id > 0) {
+               const u = await getOrCreateUser(p.id);
+               if (u.chatNicks && u.chatNicks[peerId]) {
+                  list += `${i}. [id${p.id}|${p.first_name} ${p.last_name}] - ${u.chatNicks[peerId]}\n`;
+                  i++;
+               }
+            }
+         }
+         if (i === 1) list += "Ников не найдено.";
+         return await sendResponse(list);
+      }
+
+      if (rawCmd === "/gnick" || rawCmd === "/гник") {
+        if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+        if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+        const parsed = await parseTargetUser(message, args.slice(1));
+        if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+        const targetU = await getOrCreateUser(parsed.targetId);
+        const chatNicks = targetU.chatNicks || {};
+        const nick = chatNicks[peerId] || "отсутствует";
+        return await sendResponse(`Ник [id${parsed.targetId}|пользователя]: ${nick}`);
+      }
+      
+      // Promotion & Demotion commands
+      const handlePromotion = async (reqRole: number, giveRole: number, roleName: string) => {
+         const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const isOwner = await checkIsOwner(userId, peerId, user.role);
+         const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
+         const effectiveRole = user.role >= 8 ? user.role : (isOwner || isVkAdmin ? Math.max(7, user.role || 0, chatRole) : Math.max(user.role || 0, chatRole));
+         if (effectiveRole < reqRole && !isAdmin && !isVkAdmin && !isOwner) return await sendResponse("У вас недостаточно прав!");
+         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+         if (giveRole >= effectiveRole && !isAdmin && !isVkAdmin && !isOwner && user.role < 12) return await sendResponse("У вас недостаточно прав для выдачи этой роли!");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin || isVkAdmin || isOwner || user.role >= 12))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+         
+         if (giveRole >= 8) {
+            await updateUser(parsed.targetId, {
+               role: giveRole,
+               appointedBy: { id: userId, name: fullName },
+               appointedDate: Date.now()
+            });
+            try {
+              await sendVkMessage(VK_TOKEN, parsed.targetId, `Вы были назначены на пост ${roleName}`);
+            } catch (e) {}
+         } else {
+            const tUser = await getOrCreateUser(parsed.targetId);
+            const chatRoles = { ...(tUser.chatRoles || {}) };
+            chatRoles[peerId] = giveRole;
+            await updateUser(parsed.targetId, { chatRoles });
+         }
+
+         return await sendResponse(`[id${userId}|${fullName}] выдал(-а) уровень прав «${roleName}» [id${parsed.targetId}|пользователю]`, { noReply: true });
+      };
+
+      const handleDemotion = async (reqRole: number, fromRole: number, roleName: string) => {
+         const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const isOwner = await checkIsOwner(userId, peerId, user.role);
+         const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
+         const effectiveRole = user.role >= 8 ? user.role : (isOwner || isVkAdmin ? Math.max(7, user.role || 0, chatRole) : Math.max(user.role || 0, chatRole));
+         if (effectiveRole < reqRole && !isAdmin && !isVkAdmin && !isOwner) return await sendResponse("У вас недостаточно прав!");
+         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin || isVkAdmin || isOwner || user.role >= 12))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+
+         const tUser = await getOrCreateUser(parsed.targetId);
+         const chatRoles = { ...(tUser.chatRoles || {}) };
+         delete chatRoles[peerId];
+         await updateUser(parsed.targetId, { chatRoles });
+
+         return await sendResponse(`[id${userId}|${fullName}] снял(-а) уровень прав «${roleName}» с [id${parsed.targetId}|пользователя]`, { noReply: true });
+      };
+      
+      // Promotions
+      if (rawCmd === "/addmoder" || rawCmd === "/модер" || rawCmd === "/выдатьмодера" || rawCmd === "/setmoder" || rawCmd === "/аддмодер") return await handlePromotion(2, 1, "Модератор");
+      if (rawCmd === "/addsenmoder" || rawCmd === "/смодер" || rawCmd === "/setsenmoder" || rawCmd === "/setsmoder" || rawCmd === "/старшиймодератор" || rawCmd === "/аддсмодер") return await handlePromotion(3, 2, "Старший модератор");
+      if (rawCmd === "/addadmin" || rawCmd === "/админ" || rawCmd === "/setadmin" || rawCmd === "/аддадмин" || rawCmd === "/выдатьадмина") return await handlePromotion(4, 3, "Администратор");
+      if (rawCmd === "/addsenadmin" || rawCmd === "/садмин" || rawCmd === "/setsenadmin" || rawCmd === "/setsadmin" || rawCmd === "/старшийадминистратор" || rawCmd === "/аддсадмин") return await handlePromotion(5, 4, "Старший администратор");
+      if (rawCmd === "/addzsa" || rawCmd === "/замспец" || rawCmd === "/выдатьзса" || rawCmd === "/setzsa" || rawCmd === "/addzamspets" || rawCmd === "/аддзса") return await handlePromotion(6, 5, "Зам. спец. администратора");
+      if (rawCmd === "/addsa" || rawCmd === "/са" || rawCmd === "/sa" || rawCmd === "/setsa" || rawCmd === "/выдатьса" || rawCmd === "/addspets" || rawCmd === "/аддса" || rawCmd === "/спецадмин") return await handlePromotion(7, 6, "Специальный администратор");
+      if (rawCmd === "/addzsr" || rawCmd === "/заместитель" || rawCmd === "/заместительдиректора" || rawCmd === "/addzam" || rawCmd === "/аддзср") return await handlePromotion(10, 8, "Зам. Руководителя");
+      if (rawCmd === "/addozsr" || rawCmd === "/озаместитель" || rawCmd === "/озаместительдиректора" || rawCmd === "/addozam" || rawCmd === "/аддозср") return await handlePromotion(10, 9, "Осн. Зам. Руководителя");
+      if (rawCmd === "/addruk" || rawCmd === "/руководитель" || rawCmd === "/addsr" || rawCmd === "/adddirector" || rawCmd === "/директор") return await handlePromotion(10.5, 10, "Руководитель");
+      if (rawCmd === "/addgr" || rawCmd === "/главруководитель" || rawCmd === "/addgruk" || rawCmd === "/главдиректор" || rawCmd === "/addgdirector") return await handlePromotion(11, 10.5, "Главный Руководитель");
+      if (rawCmd === "/addzamowner" || rawCmd === "/замвладельцабота" || rawCmd === "/замвладельца" || rawCmd === "/addzown" || rawCmd === "/аддзамвладельца") return await handlePromotion(12, 11, "Зам. Владельца");
+
+      // Demotions (unified /removerole command)
+      if (rawCmd === "/removerole" || rawCmd === "/снятьроль" || rawCmd === "/снятьправа" || rawCmd === "/delrole" || rawCmd === "/унроль" || rawCmd === "/unrole" || rawCmd === "/delmoder" || rawCmd === "/delsenmoder" || rawCmd === "/deladmin" || rawCmd === "/delsenadmin" || rawCmd === "/delzsa" || rawCmd === "/delsa" || rawCmd === "/unmoder") {
+         const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const isOwner = await checkIsOwner(userId, peerId, user.role);
+         const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
+         const authorEffRole = user.role >= 8 ? user.role : (isOwner || isVkAdmin ? Math.max(7, user.role || 0, chatRole) : Math.max(user.role || 0, chatRole));
+         if (authorEffRole < 1 && !isAdmin && !isVkAdmin && !isOwner) return await sendResponse("У вас недостаточно прав!");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+
+         const tUser = await getOrCreateUser(parsed.targetId);
+         const targetChatRole = (tUser.chatRoles && tUser.chatRoles[peerId]) || 0;
+         const targetGlobalRole = tUser.role || 0;
+         const targetEffRole = targetGlobalRole >= 8 ? targetGlobalRole : Math.max(targetGlobalRole, targetChatRole);
+
+         if (targetEffRole === 0 && targetChatRole === 0) {
+            return await sendResponse("У пользователя нет назначенных ролей!");
+         }
+
+         if (!isAdmin && !isOwner && !isVkAdmin && authorEffRole < 12 && targetEffRole >= authorEffRole) {
+            return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+         }
+
+         if (targetGlobalRole > 0 && targetGlobalRole < 8) {
+            await updateUser(parsed.targetId, { role: 0 });
+         }
+         if (targetChatRole > 0) {
+            const chatRoles = { ...(tUser.chatRoles || {}) };
+            delete chatRoles[peerId];
+            await updateUser(parsed.targetId, { chatRoles });
+         }
+
+         return await sendResponse(`[id${userId}|${fullName}] снял(-а) права у [id${parsed.targetId}|пользователя]`, { noReply: true });
+      }
+
+      // Special administrator & owner commands
+      if (["/pin", "/пин", "/закрепить", "/закр"].includes(rawCmd)) {
+         const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
+         if (effectiveRole < 5 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Зам. Спец. Администратора.");
+         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+         const replyMsg = message.reply_message;
+         const fwdMsg = message.fwd_messages && message.fwd_messages[0];
+         const targetCmId = replyMsg ? replyMsg.conversation_message_id : (fwdMsg ? fwdMsg.conversation_message_id : null);
+         if (!targetCmId) return await sendResponse("Ответьте на сообщение, которое нужно закрепить!");
+         try {
+           await axios.get(`https://api.vk.com/method/messages.pin`, {
+             params: { access_token: VK_TOKEN, v: "5.199", peer_id: peerId, conversation_message_id: targetCmId }
+           });
+         } catch (e: any) {}
+         return await sendResponse("Вы закрепили новое сообщение");
+      }
+
+      if (["/unpin", "/открепить", "/анпин", "/унпин", "/откр"].includes(rawCmd)) {
+         const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
+         if (effectiveRole < 5 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна с должности Зам. Спец. Администратора.");
+         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+         try {
+           await axios.get(`https://api.vk.com/method/messages.unpin`, {
+             params: { access_token: VK_TOKEN, v: "5.199", peer_id: peerId }
+                });
+           });
+         } catch (e: any) {}
+         return await sendResponse("Вы открепили сообщение");
+      }
+
+      if (rawCmd === "/noprefix" || rawCmd === "/безпрефикса") {
+         const isOwner = await checkIsOwner(userId, peerId, user.role);
+         if (!isOwner) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу беседы.");
+         
+         const chatData = await getOrCreateChat(peerId);
+         const currentNoPrefix = chatData.noprefix || false;
+         const newNoPrefix = !currentNoPrefix;
+         
+         await updateChat(peerId, { noprefix: newNoPrefix });
+         
+         const actionText = newNoPrefix ? "разрешил(-а)" : "запретил(-а)";
+         return await sendResponse(`[id${userId}|${fullName}] ${actionText} ввод команд без префикса`, { noReply: true });
+      }
+
+      if (["/settings", "/настройки", "/настройка", "/сеттингс", "/параметры"].includes(rawCmd)) {
+         const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
+         if (effectiveRole < 6 && !isAdmin) return await sendResponse("У вас недостаточно прав! Данная команда доступна только с должности Специальный администратор.");
+         
+         const chatData = await getOrCreateChat(peerId);
+         const boolIcon = (val?: boolean) => val ? "✅ Включено" : "❌ Выключено";
+         const reactionMap: Record<number, string> = {
+            1: "👍", 2: "👎", 3: "❤️", 4: "🔥", 5: "💩", 6: "👏", 7: "😢", 8: "😡",
+            9: "🥱", 10: "🌭", 11: "🤡", 12: "😱", 13: "⚡", 14: "💔", 15: "🎉", 16: "🍓"
+         };
+         const reactionDisplay = chatData.autoReactionId && chatData.autoReactionId > 0
+            ? `✅ ${reactionMap[chatData.autoReactionId] || "ID"} (№${chatData.autoReactionId})`
+            : "❌ Выключено";
+         
+         const settingsText = `...::Настройки чат-менеджера в беседе::...\n\n` +
+           `| Кик при выходе (/leave): ${boolIcon(chatData.leaveKick)}\n` +
+           `| Инвайт только модераторами (/invite): ${boolIcon(chatData.inviteOnlyMods)}\n` +
+           `| Анти-флуд (/af): ${boolIcon(chatData.antiFlood)}\n` +
+           `| Анти-слив беседы (/antisliv): ${boolIcon(chatData.antiSliv)}\n` +
+           `| Анти-рейд (/raid): ${boolIcon(chatData.antiRaid)}\n` +
+           `| Анти-сообщества (/group): ${boolIcon(chatData.antiGroup)}\n` +
+           `| Анти-тег всех участников (/tegall): ${boolIcon(chatData.antiTegAll)}\n` +
+           `| Анти-реклама (/antiad): ${boolIcon(chatData.antiAd)}\n` +
+           `| Авто-реакции (/реакции): ${reactionDisplay}\n` +
+           `| Игровой модуль (/games): ${chatData.gamesDisabled ? "❌ Выключен" : "✅ Включен"}\n` +
+           `| Режим тишины (/тишина): ${chatData.silentMode ? "✅ Активен" : "❌ Выключен"}\n` +
+           `| Без префиксов (/noprefix): ${boolIcon(chatData.noprefix)}\n` +
+           `| Приветствие новых участников: ${chatData.welcomeText ? "✅ Установлено" : "❌ По умолчанию"}\n\n` +
+           `Для изменения настроек используйте соответствующие команды владельца беседы.`;
+           
+         return await sendResponse(settingsText);
+      }
+
+      if (rawCmd === "/botstats") {
+         if (user.role < 10 && userId !== 778382713) return await sendResponse("У вас недостаточно прав!");
+         const allChats = await getAllChats();
+         const chatCount = allChats.length;
+
+         const allUsers = await getAllUsers();
+         let gbanCount = 0;
+         let gbanplCount = 0;
+         let muteCount = 0;
+         let warnCount = 0;
+         let activeBanCount = 0;
+         let nicksCount = 0;
+         let rolesCount = 0;
+
+         const now = Date.now();
+         allUsers.forEach((u) => {
+           if (u.gban) gbanCount++;
+           if (u.gbanpl) gbanplCount++;
+           if (u.muteUntil && u.muteUntil > now) muteCount++;
+           if (u.warnings && u.warnings > 0) warnCount++;
+           if (u.blacklisted) activeBanCount++;
+           if (u.chatNicks && Object.keys(u.chatNicks).length > 0) nicksCount++;
+           if (u.role && u.role > 0) rolesCount++;
+         });
+
+         const statsText = `...::Статистика бота::..
+
+| Кол-во бесед, в которых есть бот: ${chatCount} бесед
+
+| Всего глобальных блокировок во всех беседах игроков: ${gbanplCount}
+| Всего глобальных блокировок во всех беседах: ${gbanCount}
+
+| Активных мьютов: ${muteCount}
+| Активных варнов: ${warnCount}
+| Активных блокировок: ${activeBanCount}
+
+| Кол-во пользователей с никами: ${nicksCount}
+| Кол-во пользователей с правами: ${rolesCount}
+
+| Всего сообщений в боте: 1250`;
+
+         return await sendResponse(statsText);
+      }
+
+      if (["/kick", "/кик", "/исключить", "/выгнать", "/к", "/k"].includes(rawCmd)) {
+         if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         if (parsed.targetId === userId) return await sendResponse("Вы не можете применить это действие к самому себе!");
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+
+         const targetU = await getOrCreateUser(parsed.targetId);
+         const targetChatRole = (targetU.chatRoles && targetU.chatRoles[peerId]) || 0;
+         const isTargetStar = await checkIsAdmin(parsed.targetId, peerId, targetU.role) || targetU.role >= 6 || targetChatRole >= 5;
+         if (isTargetStar) {
+            return await sendResponse("Не удалось кикнуть пользователя из беседы. Возможно у него имеются права системного администратора/владельца.");
+         }
+
+         try {
+           await axios.get(`https://api.vk.com/method/messages.removeChatUser`, {
+             params: { access_token: VK_TOKEN, v: "5.199", chat_id: peerId - 2000000000, member_id: parsed.targetId }
+           });
+         } catch (e) {
+           return await sendResponse("Не удалось кикнуть пользователя из беседы. Возможно у него имеются права системного администратора/владельца.");
+         }
+         return await sendResponse(`[id${userId}|Модератор] исключил(-а) [id${parsed.targetId}|пользователя] из беседы.`, { noReply: true });
+      }
+
+      if (rawCmd === "/id" || rawCmd === "/айди" || rawCmd === "/ид") {
+         const parsed = await parseTargetUser(message, args.slice(1));
+         const targetId = parsed.targetId || userId;
+         if (targetId < 0) {
+           const absId = Math.abs(targetId);
+           return await sendResponse(`VK ID Сообщества - ${absId}\nСсылка на пользователя: https://vk.ru/club${absId}`);
+         } else {
+           return await sendResponse(`VK ID пользователя - ${targetId}\nСсылка на пользователя: https://vk.ru/id${targetId}`);
+         }
+      }
+
+      if (["/reg", "/рег", "/датарег", "/regdate"].includes(rawCmd)) {
+         const parsed = await parseTargetUser(message, args.slice(1));
+         const targetId = parsed.targetId || userId;
+         const targetName = parsed.targetName || `User${targetId}`;
+         const regDate = await getVkRegDate(targetId);
+         if (regDate) {
+            return await sendResponse(`📅 Дата регистрации аккаунта [id${targetId}|${targetName}]:\n\n| ${regDate}`);
+         } else {
+            return await sendResponse(`Не удалось получить дату регистрации для [id${targetId}|${targetName}].`);
+         }
+      }
+
+      if (rawCmd === "/setinfo" || rawCmd === "/установитьинфо") {
+         if (user.role < 6 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const infoText = getRawArgText(text);
+         if (!infoText) return await sendResponse("Укажите текст инфо!");
+         if (containsBadWord(infoText)) return await sendResponse("Текст содержит запрещенные слова!");
+         await updateChat(peerId, { infoText });
+         return await sendResponse("Вы установили новый текст для команды /info");
+      }
+
+      if (rawCmd === "/info" || rawCmd === "/инфо") {
+         const chatData = await getOrCreateChat(peerId);
+         const infoText = chatData.infoText || "Текст информации беседы не установлен. Владелец может установить его командой /setinfo";
+         return await sendResponse(infoText);
+      }
+
+      if (rawCmd === "/setinfobot" || rawCmd === "/установитьинфобот") {
+         if (user.role < 12 && userId !== 778382713) return await sendResponse("У вас недостаточно прав! Данная команда доступна только Владельцу чат-менеджера.");
+         const infoBotText = getRawArgText(text);
+         if (!infoBotText) return await sendResponse("Укажите текст инфо бота!");
+         if (containsBadWord(infoBotText)) return await sendResponse("Текст содержит запрещенные слова!");
+         globalInfoBotText = infoBotText;
+         await firestoreDb.collection("bot_settings").doc("global").set({ infoBotText }, { merge: true });
+         return await sendResponse("Вы установили новый текст для команды /infobot");
+      }
+
+      if (["/infobot", "/инфобот", "/botinfo"].includes(rawCmd)) {
+         if (!globalInfoBotText) {
+           const doc = await firestoreDb.collection("bot_settings").doc("global").get();
+           if (doc.exists && doc.data()?.infoBotText) {
+             globalInfoBotText = doc.data()?.infoBotText;
+           }
+         }
+         const infoBotText = globalInfoBotText || "GAMES MANAGER — ваш надежный помощник и игровой бот для беседы!";
+         return await sendResponse(infoBotText);
+      }
+
+      if (["/mutelist", "/мутлист", "/списокмутов", "/муты"].includes(rawCmd)) {
+         if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const { profiles } = await getChatMembers(peerId);
+         const muted = [];
+         const now = Date.now();
+         for (const p of profiles) {
+           if (p.id > 0) {
+             const u = await getOrCreateUser(p.id);
+             if (u.muteUntil && u.muteUntil > now) {
+               muted.push(p);
+             }
+           }
+         }
+         if (muted.length === 0) return await sendResponse("В этой беседе нет заблокированных пользователей.");
+         let out = "Список заблокированных пользователей в беседе:\n\n";
+         muted.forEach((m, idx) => {
+           out += `${idx + 1}. [id${m.id}|${m.first_name} ${m.last_name}]\n`;
+         });
+         return await sendResponse(out);
+      }
+
+      if (["/warnlist", "/варнлист", "/списокварнов", "/варны", "/преды"].includes(rawCmd)) {
+         if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const { profiles } = await getChatMembers(peerId);
+         const warned = [];
+         for (const p of profiles) {
+           if (p.id > 0) {
+             const u = await getOrCreateUser(p.id);
+             if (u.warnings && u.warnings > 0) {
+               warned.push({ p, warns: u.warnings });
+             }
+           }
+         }
+         if (warned.length === 0) return await sendResponse("В этой беседе нет пользователей с предупреждениями.");
+         let out = "Список пользователей с предупреждениями:\n\n";
+         warned.forEach((w, idx) => {
+           out += `${idx + 1}. [id${w.p.id}|${w.p.first_name} ${w.p.last_name}] — ${w.warns}/3\n`;
+         });
+         return await sendResponse(out);
+      }
+
+      if (["/banlist", "/банлист", "/списокбанов", "/баны"].includes(rawCmd)) {
+         if (user.role < 1 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const allUsers = await getAllUsers();
+         const banned: any[] = [];
+         allUsers.forEach(u => {
+           if (u.gban || u.gbanpl || u.blacklisted) {
+             banned.push(u);
+           }
+         });
+         if (banned.length === 0) return await sendResponse("Список заблокированных пользователей пуст.");
+         let out = "Список глобально заблокированных пользователей:\n\n";
+         banned.slice(0, 20).forEach((b, idx) => {
+           out += `${idx + 1}. [id${b.userId}|${b.nick || `User${b.userId}`}]\n`;
+         });
+         return await sendResponse(out);
+      }
+
+
+      if (rawCmd === "/gbanpl" || rawCmd === "/гбанпл") {
+         if (user.role < 7 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         
+         const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+         const { reason, duration } = extractReasonAndDuration(remainingArgs);
+         const expiresAt = duration ? duration.until : 0;
+         const termStr = duration ? duration.text : "Навсегда";
+
+         await updateUser(parsed.targetId, { role: 0, chatRoles: {}, gbanpl: true, gbanplBy: userId, gbanplReason: reason, gbanplDate: Date.now(), gbanplExpiresAt: expiresAt });
+         
+         const targetU = await getOrCreateUser(parsed.targetId);
+         const targetName = targetU.fullName || targetU.nick || `id${parsed.targetId}`;
+
+         const allChats = await getAllChats();
+         for (const c of allChats) {
+            if (c.id && c.id > 2000000000 && c.type === "PL") {
+               try {
+                 const remRes = await axios.get(`https://api.vk.com/method/messages.removeChatUser`, { params: { access_token: VK_TOKEN, v: "5.199", chat_id: c.id - 2000000000, member_id: parsed.targetId } });
+                 if (remRes.data && remRes.data.response === 1) {
+                   await sendVkMessage(VK_TOKEN, c.id, `[id${userId}|${fullName}] заблокировал(-а) [id${parsed.targetId}|пользователя] во всех беседах игроков!\n\n| Причина: ${reason}\n| Срок: ${termStr}`);
+                 }
+               } catch(e) {}
+            }
+         }
+         return await sendResponse(`[id${userId}|${fullName}] заблокировал(-а) [id${parsed.targetId}|пользователя] во всех беседах игроков\n\n| Причина: ${reason}\n| Срок: ${termStr}`, { noReply: true, keyboard: JSON.stringify({inline: true, buttons: [[{action: {type: "callback", label: "Снять блокировку", payload: JSON.stringify({cmd: "mod_ungbanpl", targetId: parsed.targetId})}, color: "positive"}]]}) });
+      }
+
+      if (rawCmd === "/gban" || rawCmd === "/гбан") {
+         if (user.role < 7 && !isAdmin) return await sendResponse("У вас недостаточно прав!");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         
+         const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+         const { reason, duration } = extractReasonAndDuration(remainingArgs);
+         const expiresAt = duration ? duration.until : 0;
+         const termStr = duration ? duration.text : "Навсегда";
+
+         await updateUser(parsed.targetId, { role: 0, chatRoles: {}, gban: true, gbanBy: userId, gbanReason: reason, gbanDate: Date.now(), gbanExpiresAt: expiresAt });
+         
+         const targetU = await getOrCreateUser(parsed.targetId);
+         const targetName = targetU.fullName || targetU.nick || `id${parsed.targetId}`;
+
+         const allChats = await getAllChats();
+         for (const c of allChats) {
+            if (c.id && c.id > 2000000000 && c.type !== "PL") {
+               try {
+                 const remRes = await axios.get(`https://api.vk.com/method/messages.removeChatUser`, { params: { access_token: VK_TOKEN, v: "5.199", chat_id: c.id - 2000000000, member_id: parsed.targetId } });
+                 if (remRes.data && remRes.data.response === 1) {
+                   await sendVkMessage(VK_TOKEN, c.id, `[id${userId}|${fullName}] заблокировал(-а) [id${parsed.targetId}|пользователя] во всех беседах!\n\n| Причина: ${reason}\n| Срок: ${termStr}`);
+                 }
+               } catch(e) {}
+            }
+         }
+         return await sendResponse(`[id${userId}|${fullName}] заблокировал(-а) [id${parsed.targetId}|пользователя] во всех беседах\n\n| Причина: ${reason}\n| Срок: ${termStr}`, { noReply: true, keyboard: JSON.stringify({inline: true, buttons: [[{action: {type: "callback", label: "Снять блокировку", payload: JSON.stringify({cmd: "mod_ungban", targetId: parsed.targetId})}, color: "positive"}]]}) });
+      }
+
+      if (rawCmd === "/aban" || rawCmd === "/абан") {
+         if (user.role < 10 && !isAdmin) return await sendResponse("У вас недостаточно прав! Команда доступна Руководителю.");
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Укажите пользователя!");
+         
+         const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+         const { reason } = extractReasonAndDuration(remainingArgs);
+         const actReason = reason || "Нарушение правил";
+
+         await updateUser(parsed.targetId, {
+            role: 0,
+            chatRoles: {},
+            gban: true,
+            gbanBy: userId,
+            gbanReason: actReason,
+            gbanDate: Date.now(),
+            gbanpl: true,
+            gbanplBy: userId,
+            gbanplReason: actReason,
+            gbanplDate: Date.now(),
+            blacklisted: true,
+            blacklistedBy: userId,
+            blacklistedReason: actReason,
+            blacklistedDate: Date.now()
+         });
+         
+         const targetU = await getOrCreateUser(parsed.targetId);
+         const targetName = targetU.fullName || targetU.nick || `пользователя`;
+
+         const allChats = await getAllChats();
+         for (const c of allChats) {
+            if (c.id && c.id > 2000000000) {
+               try {
+                 await axios.get(`https://api.vk.com/method/messages.removeChatUser`, {
+                   params: { access_token: VK_TOKEN, v: "5.199", chat_id: c.id - 2000000000, member_id: parsed.targetId }
+ 
+               } catch(e) {}
