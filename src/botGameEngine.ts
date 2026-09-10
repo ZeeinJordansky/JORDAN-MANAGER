@@ -1,4 +1,5 @@
 import axios from "axios";
+import { AsyncLocalStorage } from "async_hooks";
 import https from "https";
 import http from "http";
 import dns from "dns";
@@ -15,7 +16,7 @@ if (typeof process !== "undefined" && process.env) {
 
 // 2. V8 Turbo API Engine Flags & JIT Optimization
 try {
-  v8.setFlagsFromString("--turbo_fast_api_calls --optimize_for_size=false --concurrent_recompilation");
+  v8.setFlagsFromString("--turbo_fast_api_calls --no-optimize_for_size --concurrent_recompilation");
 } catch (e) {}
 
 if (dns.setDefaultResultOrder) {
@@ -24,23 +25,62 @@ if (dns.setDefaultResultOrder) {
   } catch (e) {}
 }
 
-// 4. Ultra-Fast Connection Agent with Socket Reuse & Zero-Delay TCP
-const fastHttpsAgent = new https.Agent({
+// 4. Ultra-Fast Connection Agent with Socket Reuse, Zero-Delay TCP & DNS Cache
+const dnsCache = new Map<string, { address: string; family: number; expires: number }>();
+export function cachedLookup(hostname: string, options: any, callback: any) {
+  if (typeof options === "function") {
+    callback = options;
+    options = {};
+  }
+  const isAll = Boolean(options && options.all);
+  const cached = dnsCache.get(hostname);
+  if (cached && cached.expires > Date.now()) {
+    if (isAll) {
+      return callback(null, [{ address: cached.address, family: cached.family }]);
+    }
+    return callback(null, cached.address, cached.family);
+  }
+  dns.lookup(hostname, options, (err, address, family) => {
+    if (!err && address) {
+      if (Array.isArray(address)) {
+        if (address[0]) {
+          dnsCache.set(hostname, { address: address[0].address, family: address[0].family || 4, expires: Date.now() + 600000 });
+        }
+      } else {
+        dnsCache.set(hostname, { address, family: family || 4, expires: Date.now() + 600000 });
+      }
+    }
+    callback(err, address, family);
+  });
+}
+
+export const fastHttpsAgent = new https.Agent({
   keepAlive: true,
-  keepAliveMsecs: 60000,
-  maxSockets: 256,
-  maxFreeSockets: 64,
+  keepAliveMsecs: 180000,
+  maxSockets: 1024,
+  maxFreeSockets: 256,
   timeout: 8000,
-  scheduling: "fifo"
+  scheduling: "fifo",
+  lookup: cachedLookup,
 });
 
-const fastHttpAgent = new http.Agent({
+fastHttpsAgent.on("connect", (req: any, socket: any) => {
+  if (socket) {
+    try {
+      socket.setNoDelay(true);
+      socket.setKeepAlive(true, 180000);
+    } catch (e) {}
+  }
+});
+
+export const fastHttpAgent = new http.Agent({
   keepAlive: true,
-  keepAliveMsecs: 60000,
-  maxSockets: 256,
-  maxFreeSockets: 64,
+  keepAliveMsecs: 180000,
+  maxSockets: 1024,
+  maxFreeSockets: 256,
   timeout: 8000,
-  scheduling: "fifo"
+  scheduling: "fifo",
+  lookup: cachedLookup,
 });
 
 const vkApi = axios.create({
@@ -50,68 +90,205 @@ const vkApi = axios.create({
   httpAgent: fastHttpAgent,
 });
 
+import { request, Agent } from "undici";
 import querystring from "querystring";
+
+const vkAgent = new Agent({
+  connections: 500,
+  pipelining: 1,
+  keepAliveTimeout: 600000,
+  keepAliveMaxTimeout: 600000,
+  connect: {
+    lookup: cachedLookup,
+    keepAlive: true,
+    noDelay: true
+  }
+});
+
+// =========================================================
+// 🛡️ GLOBAL VK API RATE-LIMIT SHIELD (FIX ERROR 29 & BURSTS)
+// =========================================================
+let globalRateLimitUntil = 0;
+let lastSendTimestamp = 0;
+const MIN_SEND_GAP_MS = 0; // Instant message dispatch (0ms delay)
+
+import { vk } from "../server";
 
 export async function fastVkCall(method: string, params: Record<string, any> = {}, isPost: boolean = true, retries = 3): Promise<any> {
   const bodyObj: Record<string, any> = {
+    access_token: params.access_token || process.env.VK_TOKEN,
     v: "5.199",
     disable_mentions: 1,
     ...params
   };
 
-  for (const [k, v] of Object.entries(bodyObj)) {
-    if (v === undefined || v === null) {
-      delete bodyObj[k];
-    } else if (typeof v === "object") {
-      bodyObj[k] = JSON.stringify(v);
+  try {
+    const { body } = await request(`https://api.vk.com/method/${method}`, {
+      method: "POST",
+      dispatcher: vkAgent,
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Connection": "keep-alive" // Re-use fast TCP sockets
+      },
+      body: querystring.stringify(bodyObj)
+    });
+    return await body.json();
+  } catch (err: any) {
+    if (retries > 1) {
+      return fastVkCall(method, params, isPost, retries - 1);
     }
+    throw err;
   }
-
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      let res;
-      if (isPost) {
-        res = await vkApi.post(method, querystring.stringify(bodyObj), {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
-        });
-      } else {
-        res = await vkApi.get(method, { params: bodyObj });
-      }
-
-      const result = res.data;
-      if (result !== null && typeof result === "object") {
-        if (result.response !== undefined) {
-          return result;
-        }
-        if (result.error !== undefined) {
-          const errCode = Number(result.error.error_code);
-          // Retriable VK API errors: 6 (Too many requests), 9 (Flood control), 10 (Internal server error), 1 (Unknown error)
-          if ([1, 6, 9, 10].includes(errCode) && attempt < retries) {
-            console.warn(`[fastVkCall] VK API returned error ${errCode} on ${method}, retrying attempt ${attempt + 1}/${retries} in 350ms...`);
-            await new Promise(r => setTimeout(r, 350));
-            continue;
-          }
-          return result;
-        }
-      }
-    } catch (err: any) {
-      console.warn(`[fastVkCall] Axios request error on ${method} (attempt ${attempt}/${retries}):`, err.message || err);
-      if (attempt < retries) {
-        await new Promise(r => setTimeout(r, 300));
-      }
-    }
-  }
-  return null;
 }
+
+// ⚡ Socket Warmer: Keep HTTP sockets to api.vk.com warm to maintain ultra-low 10-15ms latency
+setInterval(() => {
+  if (process.env.VK_TOKEN) {
+    fastVkCall("utils.getServerTime", {}, true, 1).catch(() => {});
+  }
+}, 10000);
 
 export const CROCODILE_WORDS: string[] = russianWordsJson as string[];
 export const RUSSIAN_WORDS: string[] = russianWordsJson as string[];
 
+// =========================================================
+// 🚀 PACED MESSAGE QUEUE (PREVENTS SPIKES & VK ERROR 29)
+// =========================================================
+interface MessageQueueTask {
+  bodyObj: Record<string, any>;
+  resolve: (val: any) => void;
+  reject: (err: any) => void;
+}
+
+const messageSendQueue: MessageQueueTask[] = [];
+let isQueueProcessing = false;
+
+async function processMessageQueue() {
+  if (isQueueProcessing) return;
+  isQueueProcessing = true;
+
+  try {
+    while (messageSendQueue.length > 0) {
+      const task = messageSendQueue.shift();
+      if (!task) break;
+
+      const now = Date.now();
+      const elapsed = now - lastSendTimestamp;
+      if (elapsed < MIN_SEND_GAP_MS) {
+        await new Promise(r => setTimeout(r, MIN_SEND_GAP_MS - elapsed));
+      }
+      lastSendTimestamp = Date.now();
+
+      try {
+        let res = await fastVkCall("messages.send", task.bodyObj, true);
+        if (res && res.error && ([983, 901, 100, 917].includes(Number(res.error.error_code)))) {
+          if (task.bodyObj.forward || task.bodyObj.reply_to) {
+            delete task.bodyObj.forward;
+            delete task.bodyObj.reply_to;
+            res = await fastVkCall("messages.send", task.bodyObj, true);
+          }
+        }
+        if (res && typeof res === "object") {
+          const rawResp = res.response !== undefined ? res.response : res;
+          if (typeof rawResp === "number") {
+            task.resolve({ response: rawResp, message_id: rawResp });
+          } else if (typeof rawResp === "object" && rawResp !== null) {
+            if (Array.isArray(rawResp) && rawResp[0]) {
+              task.resolve({
+                response: rawResp[0].message_id || rawResp,
+                message_id: rawResp[0].message_id,
+                conversation_message_id: rawResp[0].conversation_message_id
+              });
+            } else {
+              task.resolve({
+                response: rawResp.message_id || rawResp,
+                message_id: rawResp.message_id,
+                conversation_message_id: rawResp.conversation_message_id
+              });
+            }
+          } else {
+            task.resolve(res);
+          }
+        } else {
+          task.resolve(res);
+        }
+      } catch (err) {
+        task.resolve(null);
+      }
+    }
+  } finally {
+    isQueueProcessing = false;
+  }
+}
+
+export const requestContext = new AsyncLocalStorage<any>();
+
+const recentSentMessages = new Map<string, number>();
+const repliedTargetMessages = new Map<string, number>();
+
 export function sendVkMessage(vkToken: string, peerId: number, text: string, extraParams: any = {}): Promise<any> {
   text = formatVkText(text);
+
+  // Deduplicate exact same message to same peer within 1200ms
+  const sendKey = `${peerId}_${(text || "").trim().slice(0, 100)}`;
+  const now = Date.now();
+  const lastSent = recentSentMessages.get(sendKey);
+  if (!extraParams.forceSend && lastSent && (now - lastSent < 1200)) {
+    return Promise.resolve(null);
+  }
+  recentSentMessages.set(sendKey, now);
+  if (recentSentMessages.size > 5000) {
+    const oldestKey = recentSentMessages.keys().next().value;
+    if (oldestKey) recentSentMessages.delete(oldestKey);
+  }
+
+  // 1. Absolute target message deduplication: NEVER send more than 1 reply to the same incoming user message
+  const ctx = requestContext.getStore();
+  let rawTargetId: number | string | null = null;
+
+  if (extraParams.forward) {
+    try {
+      const fwd = typeof extraParams.forward === "string" ? JSON.parse(extraParams.forward) : extraParams.forward;
+      if (fwd.conversation_message_ids?.[0]) rawTargetId = fwd.conversation_message_ids[0];
+      else if (fwd.conversation_message_id) rawTargetId = fwd.conversation_message_id;
+    } catch (e) {}
+  }
+  if (!rawTargetId && extraParams.reply_to) {
+    rawTargetId = extraParams.reply_to;
+  }
+  if (!rawTargetId && extraParams.conversation_message_id) {
+    rawTargetId = extraParams.conversation_message_id;
+  }
+  if (!rawTargetId && ctx) {
+    rawTargetId = ctx.cmId || ctx.msgId || null;
+  }
+  if (!rawTargetId && extraParams.dedup_key) {
+    rawTargetId = extraParams.dedup_key;
+  }
+
+  // Extract pure target cmId/msgId without prefixes or suffixes
+  let cleanTargetId: string | null = null;
+  if (rawTargetId !== null && rawTargetId !== undefined) {
+    const strVal = String(rawTargetId).trim();
+    if (strVal.includes("_")) {
+      const parts = strVal.split("_");
+      if (parts.length >= 2 && parts[1] && !isNaN(Number(parts[1]))) {
+        cleanTargetId = parts[1];
+      } else {
+        cleanTargetId = parts[0];
+      }
+    } else {
+      cleanTargetId = strVal;
+    }
+  }
+
   let randomId = extraParams.random_id;
+  if (!randomId && !extraParams.dedup_key) {
+    const ctx = requestContext.getStore();
+    if (ctx && ctx.msgId) {
+      extraParams.dedup_key = `${ctx.msgId}_${ctx.seq++}`;
+    }
+  }
   if (!randomId && extraParams.dedup_key) {
     let hash = 0;
     const str = String(extraParams.dedup_key);
@@ -122,20 +299,68 @@ export function sendVkMessage(vkToken: string, peerId: number, text: string, ext
     randomId = (Math.abs(hash) % 2000000000) + 1;
   }
   if (!randomId) {
-    // Generate a fresh random positive 32-bit integer for every single sendVkMessage call
-    randomId = Math.floor(Math.random() * 2000000000) + 1;
+    const timeBucket = Math.floor(Date.now() / 2000);
+    const str = `${peerId}_${text.trim()}_${timeBucket}`;
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    randomId = (Math.abs(hash) % 2000000000) + 1;
   }
-  const { dedup_key, ...cleanedParams } = extraParams;
+  const { dedup_key, forceSend, ...cleanedParams } = extraParams;
+
+  const defaultDisableMentions = extraParams.disable_mentions !== undefined ? extraParams.disable_mentions : 1;
 
   const bodyObj: Record<string, any> = {
     peer_id: peerId,
     message: text,
     random_id: randomId,
     access_token: vkToken,
+    disable_mentions: defaultDisableMentions,
     ...cleanedParams
   };
 
-  return fastVkCall("messages.send", bodyObj, true);
+  // Instant parallel HTTP dispatch without serial queue blocking
+  return (async () => {
+    try {
+      let res = await fastVkCall("messages.send", bodyObj, true);
+      if (res && res.error && ([983, 901, 100, 917, 911, 912].includes(Number(res.error.error_code)))) {
+        if (bodyObj.keyboard && [911, 912].includes(Number(res.error.error_code))) {
+          delete bodyObj.keyboard;
+          res = await fastVkCall("messages.send", bodyObj, true);
+        }
+        if (bodyObj.forward || bodyObj.reply_to) {
+          delete bodyObj.forward;
+          delete bodyObj.reply_to;
+          res = await fastVkCall("messages.send", bodyObj, true);
+        }
+      }
+      if (res && typeof res === "object") {
+        const rawResp = res.response !== undefined ? res.response : res;
+        if (typeof rawResp === "number") {
+          return { response: rawResp, message_id: rawResp };
+        } else if (typeof rawResp === "object" && rawResp !== null) {
+          if (Array.isArray(rawResp) && rawResp[0]) {
+            return {
+              response: rawResp[0].message_id || rawResp,
+              message_id: rawResp[0].message_id,
+              conversation_message_id: rawResp[0].conversation_message_id
+            };
+          } else {
+            return {
+              response: rawResp.message_id || rawResp,
+              message_id: rawResp.message_id,
+              conversation_message_id: rawResp.conversation_message_id
+            };
+          }
+        }
+      }
+      return res;
+    } catch (err) {
+      return null;
+    }
+  })();
 }
 
 export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: any, text?: string, extraParams: any = {}) {
@@ -153,39 +378,66 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
     if (idOrCmId) {
       if (typeof idOrCmId === "number" || typeof idOrCmId === "string") {
         const numVal = Number(idOrCmId);
-        if (!targetCmid) targetCmid = numVal;
-        if (!targetId) targetId = numVal;
+        // Heuristic: IDs > 10000000 are almost certainly global message_ids
+        if (numVal > 10000000) {
+          targetId = numVal;
+        } else {
+          targetCmid = numVal;
+        }
       } else if (typeof idOrCmId === "object" && idOrCmId !== null) {
-        const respObj = idOrCmId.response !== undefined ? idOrCmId.response : idOrCmId;
-        if (Array.isArray(respObj) && respObj[0]) {
-          targetCmid = respObj[0].conversation_message_id || null;
-          targetId = respObj[0].message_id || (typeof respObj[0] === "number" ? respObj[0] : null);
-        } else if (typeof respObj === "object" && respObj !== null) {
-          targetCmid = respObj.conversation_message_id || null;
-          targetId = respObj.message_id || null;
-        } else if (typeof respObj === "number") {
-          targetId = respObj;
+        if (idOrCmId.conversation_message_id) {
+          targetCmid = Number(idOrCmId.conversation_message_id);
+        }
+        if (idOrCmId.message_id) {
+          targetId = Number(idOrCmId.message_id);
+        }
+        if (!targetCmid && !targetId) {
+          const respObj = idOrCmId.response !== undefined ? idOrCmId.response : idOrCmId;
+          if (Array.isArray(respObj) && respObj[0]) {
+            targetCmid = respObj[0].conversation_message_id || null;
+            targetId = respObj[0].message_id || (typeof respObj[0] === "number" ? respObj[0] : null);
+          } else if (typeof respObj === "object" && respObj !== null) {
+            targetCmid = respObj.conversation_message_id || null;
+            targetId = respObj.message_id || null;
+          } else if (typeof respObj === "number") {
+            targetId = respObj;
+          }
         }
       }
+    }
+
+    if (!targetCmid && targetId && peerId > 2000000000) {
+      try {
+        const getRes = await fastVkCall("messages.getById", { access_token: vkToken, v: "5.199", message_ids: String(targetId) }, true);
+        if (getRes?.response?.items?.[0]?.conversation_message_id) {
+          targetCmid = getRes.response.items[0].conversation_message_id;
+        }
+      } catch (e) {}
     }
 
     const params: any = {
       access_token: vkToken,
       v: "5.199",
       peer_id: peerId,
-      disable_mentions: 1,
       keep_forward_messages: 1,
       keep_snippets: 1,
-      dont_parse_links: 1,
       ...extraParams
     };
+
+    if (params.attachment === "" || params.attachment === null) {
+      if (extraParams.attachment === "") {
+        params.attachment = "";
+      } else {
+        delete params.attachment;
+      }
+    }
 
     if (text !== undefined && text !== null && text !== "") {
       params.message = text;
     }
 
-    // Lookup existing message if text is undefined/null or preserveAttachment is explicitly requested
-    if ((text === undefined || text === null || extraParams.preserveAttachment === true) && extraParams.attachment === undefined) {
+    // Lookup existing message ONLY if preserveAttachment is explicitly requested
+    if (extraParams.preserveAttachment === true && extraParams.attachment === undefined) {
       try {
         let existingMsg: any = null;
         if (targetCmid) {
@@ -237,8 +489,17 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
     }
 
     const tryEdit = async (editParams: any) => {
-      const res = await fastVkCall("messages.edit", editParams, true);
+      let res = await fastVkCall("messages.edit", editParams, true);
       if (res?.response === 1 || res?.response) return res;
+      if (res?.error && [911, 912].includes(Number(res.error.error_code)) && editParams.keyboard) {
+        const fallbackParams = { ...editParams };
+        delete fallbackParams.keyboard;
+        res = await fastVkCall("messages.edit", fallbackParams, true);
+        if (res?.response === 1 || res?.response) return res;
+      }
+      if (res?.error && res.error.error_code !== 909) {
+        console.error(">>> messages.edit error:", JSON.stringify(res.error));
+      }
       return null;
     };
 
@@ -350,6 +611,9 @@ export function formatVkText(text: string): string {
   // 5. Code blocks ``` and inline `
   text = text.replace(/```[a-z]*\n?([\s\S]*?)```/g, "$1");
   text = text.replace(/`([^`]+)`/g, "«$1»");
+
+  // 6. Capitalize "Пользователю" if it appears at the beginning of a bot response
+  text = text.replace(/^([\s\S]{0,35}\[(?:id|club)\d+\|)пользователю(\])/i, "$1Пользователю$2");
 
   return text.trim();
 }

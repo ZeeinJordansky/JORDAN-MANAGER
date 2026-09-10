@@ -48,7 +48,7 @@ export default function QuickActionsTab({ secret }: QuickActionsTabProps) {
     return () => clearTimeout(timer);
   }, [targetId, secret]);
 
-  const handleGlobalAction = async (actionType: 'gban' | 'gbanpl') => {
+  const handleGlobalAction = async (actionType: 'gban') => {
     if (!targetId.trim()) {
       showToast('Укажите VK ID цели!', 'error');
       return;
@@ -155,7 +155,7 @@ export default function QuickActionsTab({ secret }: QuickActionsTabProps) {
         <div className="lg:col-span-2 bg-bg-card rounded-xl border border-border-dim p-5 space-y-4">
           <h3 className="font-bold text-sm text-white flex items-center gap-2">
             <Zap className="w-4 h-4 text-amber-400" />
-            Управление глобальными санкциями (GBAN / GBANPL)
+            Управление глобальными санкциями (GBAN)
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -228,25 +228,18 @@ export default function QuickActionsTab({ secret }: QuickActionsTabProps) {
             >
               Глобальный бан (GBAN)
             </button>
-            <button
-              onClick={() => handleGlobalAction('gbanpl')}
-              disabled={loading || (immunityData && immunityData.hasImmunity)}
-              className="flex-1 px-4 py-3 bg-amber-500/10 hover:bg-amber-600 border border-amber-500/20 text-amber-400 hover:text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-900/10 uppercase tracking-wider"
-            >
-              Глобальный мут (GBANPL)
-            </button>
           </div>
         </div>
 
         <div className="bg-bg-card rounded-xl border border-border-dim p-5 space-y-4 flex flex-col justify-between">
           <div className="space-y-3">
-            <h4 className="font-bold text-xs uppercase text-text-muted tracking-wider">Принцип работы GBAN / GBANPL</h4>
+            <h4 className="font-bold text-xs uppercase text-text-muted tracking-wider">Принцип работы GBAN</h4>
             <div className="space-y-2 text-xs text-text-muted leading-relaxed font-medium">
               <p>
                 <strong className="text-white">1. Авто-применение:</strong> Блокировка мгновенно синхронизируется с профилем Firestore и ЧС сообщества VK.
               </p>
               <p>
-                <strong className="text-white">2. Мульти-рассылка:</strong> При активации бан/мут транслируется во все беседы из базы данных, кроме бесед с типом <code className="text-rose-400 font-mono font-bold">CH</code>.
+                <strong className="text-white">2. Мульти-рассылка:</strong> При активации бан транслируется во все беседы из базы данных, кроме бесед с типом <code className="text-rose-400 font-mono font-bold">CH</code>.
               </p>
               <p>
                 <strong className="text-white">3. Автоматический unban:</strong> Временные ограничения разбаниваются автоматически при первой же активности игрока.

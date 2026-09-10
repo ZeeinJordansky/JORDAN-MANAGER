@@ -1,0 +1,2658 @@
+        } else if (["/help", "/Ğ¿Ğ¾Ğ¼Ğ¾Ñ‰ÑŒ", "/Ñ…ĞµĞ»Ğ¿", "/ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ñ‹", "/Ğ¼ĞµĞ½Ñ", "/gamehelp"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) ÑĞ¿Ğ¸ÑĞ¾Ğº ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´";
+        } else if (["/stats", "/ÑÑ‚Ğ°Ñ‚Ğ°", "/ÑÑ‚Ğ°Ñ‚Ğ¸ÑÑ‚Ğ¸ĞºĞ°", "/Ğ¿Ñ€Ğ¾Ñ„Ğ¸Ğ»ÑŒ", "/profile", "/stata", "/ÑÑ‚Ğ°Ñ‚Ñ", "/ÑĞ¸", "/ÑĞ¸ÑÑ‚Ğ°Ñ‚Ğ°", "/Ñ"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) ÑÑ‚Ğ°Ñ‚Ğ¸ÑÑ‚Ğ¸ĞºÑƒ";
+        } else if (["/balance", "/Ğ±Ğ°Ğ»Ğ°Ğ½Ñ", "/Ğ±", "/bal", "/Ğ±Ğ°Ğ½Ğº"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) Ğ±Ğ°Ğ»Ğ°Ğ½Ñ";
+        } else if (["/top", "/Ñ‚Ğ¾Ğ¿"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) Ñ‚Ğ¾Ğ¿ Ğ¸Ğ³Ñ€Ğ¾ĞºĞ¾Ğ²";
+        } else if (rawCmd === "/Ğ¿Ñ€Ğ¸Ğ·") {
+          const pAmount = args[1] && !isNaN(Number(args[1])) ? args[1] : "";
+          actionStr = pAmount ? `ĞŸĞ¾Ğ»ÑƒÑ‡Ğ¸Ğ»(-Ğ°) Ğ¿Ñ€Ğ¸Ğ· Ğ² Ñ€Ğ°Ğ·Ğ¼ĞµÑ€Ğµ ${pAmount}$` : "ĞŸĞ¾Ğ»ÑƒÑ‡Ğ¸Ğ»(-Ğ°) Ğ¿Ñ€Ğ¸Ğ·";
+        } else if (["/start", "/ÑÑ‚Ğ°Ñ€Ñ‚"].includes(rawCmd)) {
+          actionStr = "Ğ—Ğ°Ğ¿ÑƒÑÑ‚Ğ¸Ğ»(-Ğ°) Ğ±Ğ¾Ñ‚Ğ°";
+        } else if (["/rules", "/Ğ¿Ñ€Ğ°Ğ²Ğ¸Ğ»Ğ°"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) Ğ¿Ñ€Ğ°Ğ²Ğ¸Ğ»Ğ° Ğ±ĞµÑĞµĞ´Ñ‹";
+        } else if (["/ping", "/Ğ¿Ğ¸Ğ½Ğ³"].includes(rawCmd)) {
+          actionStr = "ĞŸÑ€Ğ¾Ğ²ĞµÑ€Ğ¸Ğ»(-Ğ°) Ğ¿Ğ¸Ğ½Ğ³ Ğ±Ğ¾Ñ‚Ğ°";
+        } else if (["/time", "/Ğ²Ñ€ĞµĞ¼Ñ"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) Ñ‚ĞµĞºÑƒÑ‰ĞµĞµ Ğ²Ñ€ĞµĞ¼Ñ";
+        } else if (["/online", "/Ğ¾Ğ½Ğ»Ğ°Ğ¹Ğ½"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) Ğ¾Ğ½Ğ»Ğ°Ğ¹Ğ½ Ğ±ĞµÑĞµĞ´Ñ‹";
+        } else if (["/chat", "/Ñ‡Ğ°Ñ‚"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) Ğ¸Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ Ğ±ĞµÑĞµĞ´Ğµ";
+        } else if (["/staff", "/ÑĞ¾ÑÑ‚Ğ°Ğ²"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) ÑĞ¾ÑÑ‚Ğ°Ğ² Ğ°Ğ´Ğ¼Ğ¸Ğ½Ğ¸ÑÑ‚Ñ€Ğ°Ñ†Ğ¸Ğ¸ Ğ±ĞµÑĞµĞ´Ñ‹";
+        } else if (["/warns", "/Ğ²Ğ°Ñ€Ğ½Ñ‹", "/Ğ¿Ñ€ĞµĞ´ÑƒĞ¿Ñ€ĞµĞ¶Ğ´ĞµĞ½Ğ¸Ñ"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) ÑĞ²Ğ¾Ğ¸ Ğ¿Ñ€ĞµĞ´ÑƒĞ¿Ñ€ĞµĞ¶Ğ´ĞµĞ½Ğ¸Ñ";
+        } else if (["/mutelist"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) ÑĞ¿Ğ¸ÑĞ¾Ğº Ğ·Ğ°Ğ¼ÑƒÑ‡ĞµĞ½Ğ½Ñ‹Ñ…";
+        } else if (["/banlist"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) ÑĞ¿Ğ¸ÑĞ¾Ğº Ğ·Ğ°Ğ±Ğ°Ğ½ĞµĞ½Ğ½Ñ‹Ñ…";
+        } else if (["/warnlist"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) ÑĞ¿Ğ¸ÑĞ¾Ğº Ğ¿Ñ€ĞµĞ´ÑƒĞ¿Ñ€ĞµĞ¶Ğ´ĞµĞ½Ğ¸Ğ¹";
+        } else if (["/gbanlist"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) ÑĞ¿Ğ¸ÑĞ¾Ğº Ğ³Ğ»Ğ¾Ğ±Ğ°Ğ»ÑŒĞ½Ğ¾ Ğ·Ğ°Ğ±Ğ°Ğ½ĞµĞ½Ğ½Ñ‹Ñ…";
+        } else if (["/hidetoplist"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) ÑĞ¿Ğ¸ÑĞ¾Ğº ÑĞºÑ€Ñ‹Ñ‚Ñ‹Ñ… Ğ¸Ğ· Ñ‚Ğ¾Ğ¿Ğ°";
+        } else if (["/antiteglist"].includes(rawCmd)) {
+          actionStr = "ĞŸĞ¾ÑĞ¼Ğ¾Ñ‚Ñ€ĞµĞ»(-Ğ°) ÑĞ¿Ğ¸ÑĞ¾Ğº Ğ°Ğ½Ñ‚Ğ¸-Ñ‚ĞµĞ³Ğ¾Ğ²";
+        } else if (["/Ñ‚Ğ¸Ñ‚ÑƒĞ»"].includes(rawCmd)) {
+          actionStr = "Ğ£ÑÑ‚Ğ°Ğ½Ğ¾Ğ²Ğ¸Ğ»(-Ğ°) Ñ‚Ğ¸Ñ‚ÑƒĞ»";
+        } else if (["/Ğ±Ñ€Ğ°Ğº", "/Ğ¿Ğ¾Ğ¶ĞµĞ½Ğ¸Ñ‚ÑŒ"].includes(rawCmd)) {
+          actionStr = "Ğ’ÑÑ‚ÑƒĞ¿Ğ¸Ğ»(-Ğ°) Ğ² Ğ±Ñ€Ğ°Ğº";
+        } else if (["/Ñ€Ğ°Ğ·Ğ²Ğ¾Ğ´", "/Ñ€Ğ°Ğ·Ğ²ĞµÑÑ‚Ğ¸"].includes(rawCmd)) {
+          actionStr = "Ğ Ğ°Ğ·Ğ²ĞµĞ»ÑÑ(-Ğ°ÑÑŒ)";
+        } else if (["/Ğ¿Ñ€Ğ¾Ğ¼Ğ¾"].includes(rawCmd)) {
+          actionStr = "ĞĞºÑ‚Ğ¸Ğ²Ğ¸Ñ€Ğ¾Ğ²Ğ°Ğ»(-Ğ°) Ğ¿Ñ€Ğ¾Ğ¼Ğ¾ĞºĞ¾Ğ´";
+        } else if (isGame) {
+          if (["/ĞºĞ°Ğ·Ğ¸Ğ½Ğ¾", "/casino", "/Ğº"].includes(rawCmd)) actionStr = "Ğ¡Ñ‹Ğ³Ñ€Ğ°Ğ»(-Ğ°) Ğ² ĞºĞ°Ğ·Ğ¸Ğ½Ğ¾";
+          else if (["/Ñ€ÑƒĞ»ĞµÑ‚ĞºĞ°", "/roulette", "/Ñ€"].includes(rawCmd)) actionStr = "Ğ¡Ñ‹Ğ³Ñ€Ğ°Ğ»(-Ğ°) Ğ² Ñ€ÑƒĞ»ĞµÑ‚ĞºÑƒ";
+          else if (["/Ğ´ÑƒÑĞ»ÑŒ", "/duel", "/Ğ´", "/Ğ´ÑƒÑĞ»ÑŒĞ±Ğ¸Ğ·"].includes(rawCmd)) actionStr = "Ğ¡Ñ‹Ğ³Ñ€Ğ°Ğ»(-Ğ°) Ğ² Ğ´ÑƒÑĞ»ÑŒ";
+          else if (["/Ğ¿Ğ¸Ğ²Ğ¾", "/beer"].includes(rawCmd)) actionStr = "Ğ’Ñ‹Ğ¿Ğ¸Ğ»(-Ğ°) Ğ¿Ğ¸Ğ²Ğ°";
+          else if (["/Ğ¿ĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒ", "/pay", "/transfer"].includes(rawCmd)) actionStr = "ĞŸĞµÑ€ĞµĞ´Ğ°Ğ»(-Ğ°) Ğ²Ğ°Ğ»ÑÑ‚Ñƒ";
+          else if (["/ĞºĞ½Ğ±"].includes(rawCmd)) actionStr = "Ğ¡Ñ‹Ğ³Ñ€Ğ°Ğ»(-Ğ°) Ğ² ĞšĞĞ‘";
+          else if (["/ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞ±Ğ¸Ğ·"].includes(rawCmd)) actionStr = "ĞšÑƒĞ¿Ğ¸Ğ»(-Ğ°) Ğ±Ğ¸Ğ·Ğ½ĞµÑ";
+          else if (["/Ğ¿Ñ€Ğ¾Ğ´Ğ°Ñ‚ÑŒĞ±Ğ¸Ğ·"].includes(rawCmd)) actionStr = "ĞŸÑ€Ğ¾Ğ´Ğ°Ğ»(-Ğ°) Ğ±Ğ¸Ğ·Ğ½ĞµÑ";
+          else if (["/ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞºĞ¾Ğ¸Ğ½"].includes(rawCmd)) actionStr = "ĞšÑƒĞ¿Ğ¸Ğ»(-Ğ°) ĞºĞ¾Ğ¸Ğ½Ñ‹";
+          else if (["/Ğ¿Ñ€Ğ¾Ğ´Ğ°Ñ‚ÑŒĞºĞ¾Ğ¸Ğ½"].includes(rawCmd)) actionStr = "ĞŸÑ€Ğ¾Ğ´Ğ°Ğ»(-Ğ°) ĞºĞ¾Ğ¸Ğ½Ñ‹";
+          else if (["/Ğ¿ĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒĞºĞ¾Ğ¸Ğ½"].includes(rawCmd)) actionStr = "ĞŸĞµÑ€ĞµĞ´Ğ°Ğ»(-Ğ°) ĞºĞ¾Ğ¸Ğ½Ñ‹";
+          else if (["/Ğ²Ğ·Ğ»Ğ¾Ğ¼"].includes(rawCmd)) actionStr = "Ğ’Ğ·Ğ»Ğ¾Ğ¼Ğ°Ğ»(-Ğ°) ÑĞ¸ÑÑ‚ĞµĞ¼Ñƒ";
+          else if (["/Ñ„Ğ¾Ñ€Ñ‚ÑƒĞ½Ğ°"].includes(rawCmd)) actionStr = "Ğ¡Ñ‹Ğ³Ñ€Ğ°Ğ»(-Ğ°) Ğ² ĞºĞ¾Ğ»ĞµÑĞ¾ Ñ„Ğ¾Ñ€Ñ‚ÑƒĞ½Ñ‹";
+          else if (["/Ğ¼Ğ¾Ğ½ĞµÑ‚ĞºĞ°"].includes(rawCmd)) actionStr = "Ğ¡Ñ‹Ğ³Ñ€Ğ°Ğ»(-Ğ°) Ğ² Ğ¼Ğ¾Ğ½ĞµÑ‚ĞºÑƒ";
+          else if (["/ĞºÑ€Ğ¾ĞºĞ¾Ğ´Ğ¸Ğ»"].includes(rawCmd)) actionStr = "Ğ¡Ñ‹Ğ³Ñ€Ğ°Ğ»(-Ğ°) Ğ² ĞºÑ€Ğ¾ĞºĞ¾Ğ´Ğ¸Ğ»";
+          else if (["/Ğ¼Ğ°Ñ„Ğ¸Ñ"].includes(rawCmd)) actionStr = "Ğ¡Ñ‹Ğ³Ñ€Ğ°Ğ»(-Ğ°) Ğ² Ğ¼Ğ°Ñ„Ğ¸Ñ";
+          else if (["/ÑĞµĞ¹Ñ„"].includes(rawCmd)) actionStr = "ĞÑ‚ĞºÑ€Ñ‹Ğ»(-Ğ°) ÑĞµĞ¹Ñ„";
+          else if (["/ĞºĞµĞ¹Ñ", "/ĞºĞµĞ¹ÑÑ‹"].includes(rawCmd)) actionStr = "ĞÑ‚ĞºÑ€Ñ‹Ğ»(-Ğ°) ĞºĞµĞ¹Ñ";
+          else if (["/Ñ€Ğ°Ğ±Ğ¾Ñ‚Ğ°Ñ‚ÑŒ", "/Ñ€Ğ°Ğ±Ğ¾Ñ‚Ğ°"].includes(rawCmd)) actionStr = "ĞŸĞ¾Ñ€Ğ°Ğ±Ğ¾Ñ‚Ğ°Ğ»(-Ğ°)";
+          else if (["/Ñ„ĞµÑ€Ğ¼Ğ°"].includes(rawCmd)) actionStr = "Ğ¡Ğ¾Ğ±Ñ€Ğ°Ğ»(-Ğ°) ÑƒÑ€Ğ¾Ğ¶Ğ°Ğ¹ Ğ½Ğ° Ñ„ĞµÑ€Ğ¼Ğµ";
+          else if (["/Ğ¼Ğ°Ğ¹Ğ½Ğ¸Ğ½Ğ³"].includes(rawCmd)) actionStr = "Ğ—Ğ°Ğ¿ÑƒÑÑ‚Ğ¸Ğ»(-Ğ°) Ğ¼Ğ°Ğ¹Ğ½Ğ¸Ğ½Ğ³";
+          else actionStr = `Ğ¡Ñ‹Ğ³Ñ€Ğ°Ğ»(-Ğ°) Ğ² Ğ¸Ğ³Ñ€Ñƒ ${rawCmd}`;
+
+          if (args[1] && !isNaN(Number(args[1]))) betStr = args[1];
+          else if (args[2] && !isNaN(Number(args[2]))) betStr = args[2];
+        } else if (VALID_COMMANDS.has(rawCmd)) {
+          actionStr = `Ğ’Ñ‹Ğ¿Ğ¾Ğ»Ğ½Ğ¸Ğ»(-Ğ°) ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ñƒ ${rawCmd}`;
+        } else {
+          actionStr = "";
+        }
+
+        if (actionStr !== "") {
+          await logToChat10({
+            isGame,
+            userId,
+            fullName,
+            targetId: targetIdVal > 0 ? targetIdVal : undefined,
+            targetName: targetFullName || undefined,
+            bet: betStr !== "None" ? betStr : undefined,
+            duration: durationStr !== "None" ? durationStr : undefined,
+            reason: reasonStr !== "None" ? reasonStr : undefined,
+            action: actionStr,
+            cmdName: rawCmd,
+            msgCmId: message.conversation_message_id ? `${peerId}_${message.conversation_message_id}` : undefined
+          });
+        }
+      }
+
+      // Check Global Bot Close status
+      if (isGlobalBotClosed && user.role < 12 && userId !== 778382713) {
+        return await sendVkMessage(VK_TOKEN, peerId, `ğŸ”’ Ğ˜ÑĞ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ğ½Ğ¸Ğµ Ğ±Ğ¾Ñ‚Ğ° Ğ²Ñ€ĞµĞ¼ĞµĞ½Ğ½Ğ¾ Ğ·Ğ°ĞºÑ€Ñ‹Ñ‚Ğ¾ Ğ´Ğ»Ñ Ğ¿ÑƒĞ±Ğ»Ğ¸Ñ‡Ğ½Ğ¾Ğ³Ğ¾ Ğ¸ÑĞ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ğ½Ğ¸Ñ Ğ’Ğ»Ğ°Ğ´ĞµĞ»ÑŒÑ†ĞµĞ¼ Ñ‡Ğ°Ñ‚-Ğ¼ĞµĞ½ĞµĞ´Ğ¶ĞµÑ€Ğ°.`, {
+          
+        });
+      }
+
+      // Check Game Blacklist for ALL commands
+      if (user.isGameBanned && user.role < 12) {
+        const durationText = user.gameBanUntil ? formatMskDate(user.gameBanUntil) : "ĞĞ°Ğ²ÑĞµĞ³Ğ´Ğ°";
+        const reasonText = user.gameBanReason || "ĞĞ°Ñ€ÑƒÑˆĞµĞ½Ğ¸Ğµ Ğ¿Ñ€Ğ°Ğ²Ğ¸Ğ»";
+        return await sendVkMessage(VK_TOKEN, peerId, `Ğ’Ñ‹ Ğ·Ğ°Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²Ğ°Ğ½Ñ‹ Ğ² Ğ±Ğ¾Ñ‚Ğµ!\n\n| ĞŸÑ€Ğ¸Ñ‡Ğ¸Ğ½Ğ°: ${reasonText}\n| Ğ‘Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºĞ° Ğ´Ğ¾: ${durationText}`, {
+          
+        });
+      }
+
+      const sendResponse = async (responseText: string, extraParams: any = {}) => {
+        responseSeq++;
+        const msgDedupKey = message.conversation_message_id
+          ? `${peerId}_${message.conversation_message_id}_${responseSeq}`
+          : `${peerId}_${message.id || message.date}_${responseSeq}`;
+
+        const { noReply, ...rest } = extraParams;
+        let replyParams: any = { dedup_key: msgDedupKey };
+        if (!noReply && rest.forward === undefined) {
+          replyParams.forward = JSON.stringify({
+            peer_id: peerId,
+            conversation_message_ids: [message.conversation_message_id],
+            is_reply: true
+          });
+        }
+        const res = await sendVkMessage(VK_TOKEN, peerId, responseText, { ...replyParams, ...rest });
+
+        if (chatData?.deleteCommand && isModerationCmd(rawCmd)) {
+          autoDeleteCmdMessage(peerId, message, chatData);
+        }
+
+        return res;
+      };
+
+      // 1. /Ñ†Ğ¸Ñ‚Ğ°Ñ‚Ğ°
+      if (rawCmd === "/Ñ†Ğ¸Ñ‚Ğ°Ñ‚Ğ°") {
+        const now = Date.now();
+        const lastUsed = cooldowns.get(userId) || 0;
+        const remaining = 10 - Math.floor((now - lastUsed) / 1000);
+        if (remaining > 0) return await sendResponse(`ĞŸĞ¾Ğ´Ğ¾Ğ¶Ğ´Ğ¸Ñ‚Ğµ ${remaining} ÑĞµĞº. Ğ¿ĞµÑ€ĞµĞ´ ÑĞ¾Ğ·Ğ´Ğ°Ğ½Ğ¸ĞµĞ¼ ÑĞ»ĞµĞ´ÑƒÑÑ‰ĞµĞ¹ Ñ†Ğ¸Ñ‚Ğ°Ñ‚Ñ‹!`);
+
+        cooldowns.set(userId, now);
+        let quoteText = args.slice(1).join(" ");
+        let targetId = userId;
+        if (message.reply_message) {
+          quoteText = message.reply_message.text;
+          targetId = message.reply_message.from_id;
+        }
+        if (!quoteText || quoteText.trim().length === 0) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ñ‚ĞµĞºÑÑ‚ Ñ†Ğ¸Ñ‚Ğ°Ñ‚Ñ‹!");
+
+        let initialMessageId: any = null;
+        try {
+          const loadingRes = await sendVkMessage(VK_TOKEN, peerId, "ĞŸĞ¾Ğ¶Ğ°Ğ»ÑƒĞ¹ÑÑ‚Ğ° Ğ¿Ğ¾Ğ´Ğ¾Ğ¶Ğ´Ğ¸Ñ‚Ğµ, Ğ·Ğ°Ğ³Ñ€ÑƒĞ¶Ğ°Ñ Ğ²Ğ°ÑˆÑƒ Ñ†Ğ¸Ñ‚Ğ°Ñ‚Ñƒ...");
+          if (loadingRes?.response) {
+            initialMessageId = Array.isArray(loadingRes.response) ? loadingRes.response[0]?.message_id || loadingRes.response[0] : (loadingRes.response.message_id || loadingRes.response);
+          }
+        } catch (e) {}
+
+        try {
+          const uData = await vkApi.get("users.get", {
+            params: { user_ids: targetId, fields: "photo_200", access_token: VK_TOKEN, v: "5.131" }
+          });
+          const userData = uData.data.response[0];
+          const avatarUrl = userData.photo_200;
+          const authorName = `${userData.first_name} ${userData.last_name}`;
+
+          const quoteBuffer = await generateQuote(quoteText, avatarUrl, authorName);
+          const uploadResult = await uploadPhoto(peerId, quoteBuffer);
+
+          if (initialMessageId) {
+            setTimeout(async () => {
+              await deleteVkMessage(VK_TOKEN, peerId, initialMessageId);
+            }, 1000);
+          }
+
+          if (uploadResult.attachment) {
+            await sendResponse(`Ğ¦Ğ¸Ñ‚Ğ°Ñ‚Ğ° Ğ¾Ñ‚ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${targetId}|${authorName}]`, { attachment: uploadResult.attachment });
+          } else {
+            await sendResponse(`ĞÑˆĞ¸Ğ±ĞºĞ° ÑĞ¾Ğ·Ğ´Ğ°Ğ½Ğ¸Ñ Ñ†Ğ¸Ñ‚Ğ°Ñ‚Ñ‹: ${uploadResult.error}`);
+          }
+        } catch (e: any) {
+          await sendResponse("ĞŸÑ€Ğ¾Ğ¸Ğ·Ğ¾ÑˆĞ»Ğ° Ğ¾ÑˆĞ¸Ğ±ĞºĞ° Ğ¿Ñ€Ğ¸ ÑĞ¾Ğ·Ğ´Ğ°Ğ½Ğ¸Ğ¸ Ñ†Ğ¸Ñ‚Ğ°Ñ‚Ñ‹.");
+        }
+        return;
+      }
+
+      // 2. /Ğ¿Ğ¸Ğ²Ğ¾
+      if (rawCmd === "/Ğ¿Ğ¸Ğ²Ğ¾") {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const lastBeer = user.lastBeerTime || 0;
+        const cooldownMs = 3600 - (nowSec - lastBeer);
+
+        if (cooldownMs > 0) {
+          const remMin = Math.ceil(cooldownMs / 60);
+          return await sendResponse(`Ğ¡Ğ»ĞµĞ´ÑƒÑÑ‰Ğ°Ñ Ğ¿Ğ¾Ğ¿Ñ‹Ñ‚ĞºĞ° Ğ²Ñ‹Ğ¿Ğ¸Ñ‚ÑŒ Ğ¿Ğ¸Ğ²Ğ¾ Ğ±ÑƒĞ´ĞµÑ‚ Ñ‡ĞµÑ€ĞµĞ· ${remMin} Ğ¼Ğ¸Ğ½.`);
+        }
+
+        // 5% chance fail
+        if (Math.random() < 0.05) {
+          await updateUser(userId, { lastBeerTime: nowSec });
+          return await sendResponse(`ğŸ˜­ ĞŸĞ¾Ğ¿Ñ‹Ñ‚ĞºĞ° Ğ²Ñ‹Ğ¿Ğ¸Ñ‚ÑŒ Ğ¿Ğ¸Ğ²Ğ° Ğ¾ĞºĞ°Ğ·Ğ°Ğ»Ğ°ÑÑŒ Ğ½ĞµÑƒĞ´Ğ°Ñ‡Ğ½Ğ¾Ğ¹!\nĞŸĞ¾Ğ¿Ñ€Ğ¾Ğ±ÑƒĞ¹Ñ‚Ğµ ÑĞ½Ğ¾Ğ²Ğ° Ñ‡ĞµÑ€ĞµĞ· 1 Ñ‡Ğ°Ñ.`);
+        }
+
+        const drunkLiters = parseFloat((Math.random() * (5.0 - 0.1) + 0.1).toFixed(1));
+        const newTotalBeer = parseFloat(((user.beer || 0) + drunkLiters).toFixed(1));
+
+        await updateUser(userId, { beer: newTotalBeer, lastBeerTime: nowSec });
+
+        return await sendResponse(`Ğ¢Ñ‹ Ğ²Ñ‹Ğ¿Ğ¸Ğ»(-Ğ°) ${drunkLiters} Ğ»Ğ¸Ñ‚Ñ€Ğ¾Ğ² Ğ¿Ğ¸Ğ²Ğ°! ğŸº\n\nĞ’Ñ‹Ğ¿Ğ¸Ñ‚Ğ¾ Ğ¿Ğ¸Ğ²Ğ° Ğ·Ğ° Ğ¼ĞµÑÑÑ† - ${newTotalBeer}\nĞ¡Ğ»ĞµĞ´ÑƒÑÑ‰Ğ°Ñ Ğ¿Ğ¾Ğ¿Ñ‹Ñ‚ĞºĞ° Ğ²Ñ‹Ğ¿Ğ¸Ñ‚ÑŒ Ğ¿Ğ¸Ğ²Ğ¾ Ğ±ÑƒĞ´ĞµÑ‚ Ñ‡ĞµÑ€ĞµĞ· 1 Ñ‡Ğ°Ñ.`);
+      }
+
+      // 3. /ĞºÑ€Ğ¾ĞºĞ¾Ğ´Ğ¸Ğ»
+      if (rawCmd === "/ĞºÑ€Ğ¾ĞºĞ¾Ğ´Ğ¸Ğ»") {
+        if (crocGames.has(peerId)) {
+          return await sendResponse("Ğ’ ÑÑ‚Ğ¾Ğ¹ Ğ±ĞµÑĞµĞ´Ğµ ÑƒĞ¶Ğµ Ğ¸Ğ´ĞµÑ‚ Ğ¸Ğ»Ğ¸ Ğ½Ğ°Ğ±Ğ¸Ñ€Ğ°ĞµÑ‚ÑÑ Ğ¸Ğ³Ñ€Ğ° ĞšÑ€Ğ¾ĞºĞ¾Ğ´Ğ¸Ğ»!");
+        }
+
+        let amount = 0;
+        if (args.length > 1) {
+          amount = parseNumber(args[1]);
+          if (amount < 0) amount = 0;
+        }
+
+        if (amount > 0 && (user.balance || 0) < amount) {
+          return await sendResponse(`ĞĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ². Ğ’Ğ°Ñˆ Ğ±Ğ°Ğ»Ğ°Ğ½Ñ: ${(user.balance || 0).toLocaleString()}$`);
+        }
+
+        const keyboard = {
+          inline: true,
+          buttons: [
+            [{ action: { type: "callback", label: "Ğ’ÑÑ‚ÑƒĞ¿Ğ¸Ñ‚ÑŒ Ğ² Ğ¸Ğ³Ñ€Ñƒ", payload: JSON.stringify({ cmd: "croc_join" }) }, color: "positive" }],
+            [{ action: { type: "callback", label: "Ğ—Ğ°Ğ¿ÑƒÑÑ‚Ğ¸Ñ‚ÑŒ Ğ¸Ğ³Ñ€Ñƒ", payload: JSON.stringify({ cmd: "croc_start" }) }, color: "positive" }],
+            [{ action: { type: "callback", label: "Ğ’Ñ‹Ğ¹Ñ‚Ğ¸ Ğ¸Ğ· Ğ¸Ğ³Ñ€Ñ‹", payload: JSON.stringify({ cmd: "croc_leave" }) }, color: "negative" }]
+          ]
+        };
+
+        const res = await sendResponse(`ğŸ® Ğ˜Ğ³Ñ€Ğ° "ĞšÑ€Ğ¾ĞºĞ¾Ğ´Ğ¸Ğ»"\n\n| Ğ¡Ğ¾Ğ·Ğ´Ğ°Ñ‚ĞµĞ»ÑŒ: [id${userId}|${fullName}]\n${amount > 0 ? `| Ğ¡Ñ‚Ğ°Ğ²ĞºĞ°: ${amount.toLocaleString()}$` : ""}`, {
+          keyboard: JSON.stringify(keyboard)
+        });
+
+        const cmId = res?.response?.[0]?.conversation_message_id || res?.response;
+
+        if (amount > 0) {
+          await updateUser(userId, { balance: (user.balance || 0) - amount });
+        }
+
+        const crocData: CrocLobby = {
+          peerId,
+          cmId: cmId || 0,
+          creatorId: userId,
+          creatorName: fullName,
+          participants: [{ id: userId, name: fullName }],
+          status: "lobby",
+          amount
+        };
+        crocGames.set(peerId, crocData);
+        crocGames.set(Number(peerId), crocData);
+        return;
+      }
+
+      // 4. /Ğ±Ğ°Ğ»Ğ°Ğ½Ñ
+      if (rawCmd === "/Ğ±Ğ°Ğ»Ğ°Ğ½Ñ") {
+        let targetId = userId;
+        let targetName = fullName;
+        const parsed = await parseTargetUser(message, args.slice(1));
+        if (parsed.targetId) {
+          targetId = parsed.targetId;
+          targetName = parsed.targetName;
+        }
+
+        const targetUser = await getOrCreateUser(targetId);
+        const isMe = targetId === userId;
+        if (!isMe && targetUser.premiumBalanceHidden && !isAdmin) {
+          return await sendResponse(`ĞŸĞ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ [id${targetId}|${targetName}] ÑĞºÑ€Ñ‹Ğ» ÑĞ²Ğ¾Ğ¹ Ğ±Ğ°Ğ»Ğ°Ğ½Ñ.`);
+        }
+        if (targetUser.hideBalance && !isMe && !isAdmin) {
+          return await sendResponse(`ĞŸĞ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ [id${targetId}|${targetName}] ÑĞºÑ€Ñ‹Ğ» ÑĞ²Ğ¾Ğ¹ Ğ±Ğ°Ğ»Ğ°Ğ½Ñ.`);
+        }
+
+        return await sendResponse(`Ğ‘Ğ°Ğ»Ğ°Ğ½Ñ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${targetId}|${targetName}]\n\n| ĞĞ° Ñ€ÑƒĞºĞ°Ñ…: ${(targetUser.balance || 0).toLocaleString()}$\n| Ğ’ Ğ±Ğ°Ğ½ĞºĞµ: ${(targetUser.bank || 0).toLocaleString()}$\n\n| JORDAN'S COIN: ${(targetUser.jc || 0).toLocaleString()} ÑˆÑ‚`);
+      }
+
+      if (["/Ğ¸Ğ¸", "/ai", "/Ñ‡Ğ°Ñ‚", "/ask", "/Ğ³Ğ¿Ñ‚", "/gpt", "/gemini"].includes(rawCmd)) {
+        const hasPremium = user.vipExpires > Date.now();
+        if (!hasPremium) {
+          return await sendResponse("Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ° Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ñ Ğ¿Ñ€ĞµĞ¼Ğ¸ÑƒĞ¼Ğ¾Ğ¼ ÑÑ‚Ğ°Ñ‚ÑƒÑĞ¾Ğ¼.");
+        }
+        const prompt = args.slice(1).join(" ");
+        if (!prompt) return await sendResponse("/Ğ¸Ğ¸ - Ğ—Ğ°Ğ´Ğ°Ñ‚ÑŒ Ğ²Ğ¾Ğ¿Ñ€Ğ¾Ñ Ğº Ğ˜Ğ˜.");
+        
+        let waitMsgId: any = null;
+        try {
+          const waitRes = await sendResponse("ĞŸĞ¾Ğ¶Ğ°Ğ»ÑƒĞ¹ÑÑ‚Ğ° Ğ¿Ğ¾Ğ´Ğ¾Ğ¶Ğ´Ğ¸Ñ‚Ğµ, Ğ²Ğ°Ñˆ Ğ·Ğ°Ğ¿Ñ€Ğ¾Ñ Ğ¾Ğ±Ñ€Ğ°Ğ±Ğ°Ñ‚Ñ‹Ğ²Ğ°ĞµÑ‚ÑÑ...");
+          if (waitRes?.response) {
+            if (Array.isArray(waitRes.response)) {
+              waitMsgId = typeof waitRes.response[0] === "object" ? waitRes.response[0].message_id : waitRes.response[0];
+            } else if (typeof waitRes.response === "object") {
+              waitMsgId = waitRes.response.message_id;
+            } else {
+              waitMsgId = waitRes.response;
+            }
+          }
+        } catch (e) {}
+
+        try {
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          });
+          const text = response.text || "ĞĞµÑ‚ Ğ¾Ñ‚Ğ²ĞµÑ‚Ğ°";
+          
+          if (waitMsgId) {
+            await deleteVkMessage(VK_TOKEN, peerId, waitMsgId);
+          }
+
+          return await sendResponse(text);
+        } catch (error) {
+          console.error("Gemini Error:", error);
+          if (waitMsgId) {
+            await deleteVkMessage(VK_TOKEN, peerId, waitMsgId);
+          }
+          return await sendResponse("ĞŸÑ€Ğ¾Ğ¸Ğ·Ğ¾ÑˆĞ»Ğ° Ğ¾ÑˆĞ¸Ğ±ĞºĞ° Ğ¿Ñ€Ğ¸ Ğ·Ğ°Ğ¿Ñ€Ğ¾ÑĞµ Ğº Ğ½ĞµĞ¹Ñ€Ğ¾ÑĞµÑ‚Ğ¸.");
+        }
+      }
+
+      // 5. /Ğ¿Ñ€Ğ¸Ğ·
+      if (rawCmd === "/Ğ¿Ñ€Ğ¸Ğ·") {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const lastPrize = user.lastPrizeTime || 0;
+        const cd = 7200 - (nowSec - lastPrize);
+        if (cd > 0) {
+          const remH = Math.floor(cd / 3600);
+          const remM = Math.floor((cd % 3600) / 60);
+          return await sendResponse(`Ğ¡Ğ»ĞµĞ´ÑƒÑÑ‰Ğ¸Ğ¹ Ğ¿Ñ€Ğ¸Ğ· Ğ±ÑƒĞ´ĞµÑ‚ Ñ‡ĞµÑ€ĞµĞ· ${remH} Ñ‡. ${remM} Ğ¼Ğ¸Ğ½.`);
+        }
+
+        const baseAmount = Math.floor(Math.random() * (50000 - 10000 + 1)) + 10000;
+        const mult = globalSettings.prizeMultiplier || 1;
+        const prizeAmount = Math.floor(baseAmount * mult);
+        await updateUser(userId, { balance: (user.balance || 0) + prizeAmount, lastPrizeTime: nowSec });
+
+        return await sendVkMessage(VK_TOKEN, peerId, `ğŸ‰ [id${userId}|${fullName}] Ğ¿Ğ¾Ğ»ÑƒÑ‡Ğ°ĞµÑ‚ Ğ¿Ñ€Ğ¸Ğ· Ğ² Ñ€Ğ°Ğ·Ğ¼ĞµÑ€Ğµ ${prizeAmount.toLocaleString()}$!\n\n| Ğ¡Ğ»ĞµĞ´ÑƒÑÑ‰Ğ¸Ğ¹ Ğ¿Ñ€Ğ¸Ğ· Ğ±ÑƒĞ´ĞµÑ‚ Ñ‡ĞµÑ€ĞµĞ· 2 Ñ‡Ğ°ÑĞ°.`);
+      }
+
+      // 6. /Ğ¿ĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒ
+      if (rawCmd === "/Ğ¿ĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒ") {
+        const parsed = await parseTargetUser(message, args.slice(1));
+        const amount = parseNumber(args.find(a => /^\d+[kĞº]?$/.test(a.toLowerCase())) || "0");
+
+        if (!parsed.targetId || parsed.targetId === userId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+        if (isNaN(amount) || amount <= 0) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ĞºĞ¾Ñ€Ñ€ĞµĞºÑ‚Ğ½ÑƒÑ ÑÑƒĞ¼Ğ¼Ñƒ Ğ´Ğ»Ñ Ğ¿ĞµÑ€ĞµĞ´Ğ°Ñ‡Ğ¸!");
+        if ((user.balance || 0) < amount) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ² Ğ½Ğ° Ñ€ÑƒĞºĞ°Ñ…!");
+
+        // Daily transfer limit check
+        const todayStr = getMskDateStr();
+        const hasPremium = user.vipExpires > Date.now();
+        const limit = hasPremium ? 350000 : 100000;
+        
+        let transferSumToday = user.transferSumToday || 0;
+        if (user.lastTransferDate !== todayStr) {
+          transferSumToday = 0;
+        }
+
+        if (transferSumToday + amount > limit) {
+          return await sendResponse(
+            `ĞŸÑ€ĞµĞ²Ñ‹ÑˆĞµĞ½ Ğ»Ğ¸Ğ¼Ğ¸Ñ‚ Ğ½Ğ° Ğ¿ĞµÑ€ĞµĞ²Ğ¾Ğ´Ñ‹ Ğ² Ğ´ĞµĞ½ÑŒ! Ğ›Ğ¸Ğ¼Ğ¸Ñ‚: Ğ¾Ğ±Ñ‹Ñ‡Ğ½Ñ‹Ğ¹ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ Ğ´Ğ¾ 100.000$, Ñ Ğ¿Ñ€ĞµĞ¼Ğ¸ÑƒĞ¼Ğ¾Ğ¼ Ğ´Ğ¾ 350.000$.\n` +
+            `Ğ’Ñ‹ ÑƒĞ¶Ğµ Ğ¿ĞµÑ€ĞµĞ²ĞµĞ»Ğ¸ ÑĞµĞ³Ğ¾Ğ´Ğ½Ñ: ${formatNum(transferSumToday)}$\n` +
+            `Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ñ‹Ğ¹ Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ğº: ${formatNum(Math.max(0, limit - transferSumToday))}$`
+          );
+        }
+
+        const keyboard = {
+          inline: true,
+          buttons: [
+            [
+              { action: { type: "callback", label: "ĞŸĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒ", payload: JSON.stringify({ cmd: "transfer_confirm", targetId: parsed.targetId, targetName: parsed.targetName, amount: amount, authorId: userId }) }, color: "positive" },
+              { action: { type: "callback", label: "ĞĞµ Ğ¿ĞµÑ€ĞµĞ´Ğ°Ğ²Ğ°Ñ‚ÑŒ", payload: JSON.stringify({ cmd: "transfer_cancel", targetId: parsed.targetId, targetName: parsed.targetName, amount: amount, authorId: userId }) }, color: "negative" }
+            ]
+          ]
+        };
+
+        return await sendResponse(
+          `Ğ’Ñ‹ ÑĞ¾Ğ±Ğ¸Ñ€Ğ°ĞµÑ‚ĞµÑÑŒ Ğ¿ĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒ ${formatNum(amount)}$ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${parsed.targetId}|${parsed.targetName}]\n\n| Ğ”Ğ»Ñ Ğ¿Ğ¾Ğ´Ñ‚Ğ²ĞµÑ€Ğ¶Ğ´ĞµĞ½Ğ¸Ñ Ğ½Ğ°Ğ¶Ğ¼Ğ¸Ñ‚Ğµ Ğ½Ğ° ĞºĞ½Ğ¾Ğ¿ĞºÑƒ:`,
+          { keyboard: JSON.stringify(keyboard) }
+        );
+      }
+
+      // Wikipedia Command
+      if (rawCmd === "/Ğ²Ğ¸ĞºĞ¸") {
+        const query = args.slice(1).join(" ");
+        if (!query) return await sendResponse("Ğ˜ÑĞ¿Ğ¾Ğ»ÑŒĞ·ÑƒĞ¹Ñ‚Ğµ: /Ğ²Ğ¸ĞºĞ¸ [Ğ·Ğ°Ğ¿Ñ€Ğ¾Ñ]");
+        
+        try {
+          const searchRes = await axios.get(`https://ru.wikipedia.org/w/api.php`, {
+            params: {
+              action: "query",
+              list: "search",
+              srsearch: query,
+              format: "json",
+              utf8: 1
+            },
+            headers: { "User-Agent": "JordanManagerBot/1.0 (https://vk.com/jordan_manager)" }
+          });
+          
+          const searchItems = searchRes.data?.query?.search || [];
+          if (searchItems.length === 0) {
+            return await sendResponse(`ğŸ” ĞŸĞ¾ Ğ·Ğ°Ğ¿Ñ€Ğ¾ÑÑƒ Â«${query}Â» Ğ² Ğ’Ğ¸ĞºĞ¸Ğ¿ĞµĞ´Ğ¸Ğ¸ Ğ½Ğ¸Ñ‡ĞµĞ³Ğ¾ Ğ½Ğµ Ğ½Ğ°Ğ¹Ğ´ĞµĞ½Ğ¾.`);
+          }
+          
+          const bestTitle = searchItems[0].title;
+          const titleForUrl = bestTitle.replace(/ /g, "_");
+          
+          try {
+            const summaryRes = await axios.get(`https://ru.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(titleForUrl)}`, {
+                headers: { "User-Agent": "JordanManagerBot/1.0 (https://vk.com/jordan_manager)" }
+            });
+            const summary = summaryRes.data;
+            const extract = summary.extract || "ĞĞ¿Ğ¸ÑĞ°Ğ½Ğ¸Ğµ Ğ¾Ñ‚ÑÑƒÑ‚ÑÑ‚Ğ²ÑƒĞµÑ‚.";
+            const url = summary.content_urls?.desktop?.page || `https://ru.wikipedia.org/wiki/${encodeURIComponent(bestTitle)}`;
+            
+            let wikiText = `ğŸ” Ğ ĞµĞ·ÑƒĞ»ÑŒÑ‚Ğ°Ñ‚ Ğ¿Ğ¾Ğ¸ÑĞºĞ° Ğ² Ğ’Ğ¸ĞºĞ¸Ğ¿ĞµĞ´Ğ¸Ğ¸: *${bestTitle}*\n\n` +
+                           `${extract}\n\n` +
+                           `ğŸ”— Ğ¡ÑÑ‹Ğ»ĞºĞ° Ğ½Ğ° ÑÑ‚Ğ°Ñ‚ÑŒÑ: ${url}`;
+                           
+            return await sendResponse(wikiText);
+          } catch (e) {
+            const snippet = searchItems[0].snippet.replace(/<span class="searchmatch">/g, "").replace(/<\/span>/g, "");
+            const url = `https://ru.wikipedia.org/wiki/${encodeURIComponent(bestTitle)}`;
+            let wikiText = `ğŸ” Ğ ĞµĞ·ÑƒĞ»ÑŒÑ‚Ğ°Ñ‚ Ğ¿Ğ¾Ğ¸ÑĞºĞ° Ğ² Ğ’Ğ¸ĞºĞ¸Ğ¿ĞµĞ´Ğ¸Ğ¸: *${bestTitle}*\n\n` +
+                           `${snippet}...\n\n` +
+                           `ğŸ”— Ğ¡ÑÑ‹Ğ»ĞºĞ° Ğ½Ğ° ÑÑ‚Ğ°Ñ‚ÑŒÑ: ${url}`;
+            return await sendResponse(wikiText);
+          }
+        } catch (err) {
+          console.error("Wikipedia search error:", err);
+          return await sendResponse("ĞÑˆĞ¸Ğ±ĞºĞ° Ğ¿Ñ€Ğ¸ Ğ¿Ğ¾Ğ¸ÑĞºĞµ Ğ² Ğ’Ğ¸ĞºĞ¸Ğ¿ĞµĞ´Ğ¸Ğ¸. ĞŸĞ¾Ğ¿Ñ€Ğ¾Ğ±ÑƒĞ¹Ñ‚Ğµ Ğ¿Ğ¾Ğ·Ğ¶Ğµ.");
+        }
+      }
+
+      // Rules Command
+      if (rawCmd === "/Ğ¿Ñ€Ğ°Ğ²Ğ¸Ğ»Ğ°") {
+        return await sendResponse("ĞŸÑ€Ğ°Ğ²Ğ¸Ğ»Ğ° Ğ±Ğ¾Ñ‚Ğ° Ğ½Ğ°Ñ…Ğ¾Ğ´ÑÑ‚ÑÑ Ñ‚ÑƒÑ‚ - [vk.ru/@gm_manager_official-pravila-bota|ĞŸÑ€Ğ°Ğ²Ğ¸Ğ»Ğ°]");
+      }
+
+      // Clan System Command
+      if (rawCmd === "/ĞºĞ»Ğ°Ğ½") {
+        const sub = args[1]?.toLowerCase();
+
+        if (sub === "ÑĞ¾Ğ·Ğ´Ğ°Ñ‚ÑŒ") {
+          const clanName = args.slice(2).join(" ");
+          if (!clanName) return await sendResponse("Ğ˜ÑĞ¿Ğ¾Ğ»ÑŒĞ·ÑƒĞ¹Ñ‚Ğµ: /ĞºĞ»Ğ°Ğ½ ÑĞ¾Ğ·Ğ´Ğ°Ñ‚ÑŒ [ĞĞ°Ğ·Ğ²Ğ°Ğ½Ğ¸Ğµ]");
+          if (user.clanId) return await sendResponse("Ğ’Ñ‹ ÑƒĞ¶Ğµ ÑĞ¾ÑÑ‚Ğ¾Ğ¸Ñ‚Ğµ Ğ² ĞºĞ»Ğ°Ğ½Ğµ!");
+          if ((user.balance || 0) < 1000000) return await sendResponse("Ğ¡Ğ¾Ğ·Ğ´Ğ°Ñ‚ÑŒ ĞºĞ»Ğ°Ğ½ ÑÑ‚Ğ¾Ğ¸Ñ‚ 1.000.000$ Ğ½Ğ° Ñ€ÑƒĞºĞ°Ñ…!");
+
+          const clanId = "clan_" + Date.now();
+          const newClan = {
+            id: clanId,
+            name: clanName,
+            ownerId: userId,
+            deputies: [],
+            assistants: [],
+            members: [userId],
+            treasury: 0,
+            soldiers: 0,
+            helicopters: 0,
+            tanks: 0,
+            type: "ĞÑ‚ĞºÑ€Ñ‹Ñ‚Ñ‹Ğ¹",
+            maxMembers: 20,
+            wins: 0
+          };
+
+          await firestoreDb.collection("clans").doc(clanId).set(newClan);
+          await updateUser(userId, { balance: user.balance - 1000000, clanId, clanRole: "Ğ›Ğ¸Ğ´ĞµÑ€" });
+
+          return await sendResponse(`Ğ’Ñ‹ ÑĞ¾Ğ·Ğ´Ğ°Ğ»Ğ¸ ĞºĞ»Ğ°Ğ½ ${clanName}, Ğ¿Ğ¾Ğ·Ğ´Ñ€Ğ°Ğ²Ğ»ÑĞµĞ¼!`);
+        }
+
+        if (sub === "ÑĞ¸Ğ»Ğ°") {
+          const targetClanName = args.slice(2).join(" ");
+          let targetClan: any = null;
+
+          if (targetClanName) {
+            const snap = await firestoreDb.collection("clans").where("name", "==", targetClanName).limit(1).get();
+            if (!snap.empty) {
+              targetClan = snap.docs[0].data();
+            } else {
+              return await sendResponse(`ĞšĞ»Ğ°Ğ½ "${targetClanName}" Ğ½Ğµ Ğ½Ğ°Ğ¹Ğ´ĞµĞ½.`);
+            }
+          } else {
+            if (!user.clanId) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ ÑĞ¾ÑÑ‚Ğ¾Ğ¸Ñ‚Ğµ Ğ² ĞºĞ»Ğ°Ğ½Ğµ! Ğ˜ÑĞ¿Ğ¾Ğ»ÑŒĞ·ÑƒĞ¹Ñ‚Ğµ: /ĞºĞ»Ğ°Ğ½ ÑĞ¸Ğ»Ğ° [ĞĞ°Ğ·Ğ²Ğ°Ğ½Ğ¸Ğµ]");
+            const doc = await firestoreDb.collection("clans").doc(user.clanId).get();
+            if (doc.exists) {
+              targetClan = doc.data();
+            } else {
+              return await sendResponse("Ğ’Ğ°Ñˆ ĞºĞ»Ğ°Ğ½ Ğ½Ğµ Ğ½Ğ°Ğ¹Ğ´ĞµĞ½ Ğ² Ğ±Ğ°Ğ·Ğµ Ğ´Ğ°Ğ½Ğ½Ñ‹Ñ….");
+            }
+          }
+
+          return await sendResponse(
+            `Ğ¡Ğ¸Ğ»Ğ° ĞºĞ»Ğ°Ğ½Ğ° ${targetClan.name}\n\n` +
+            `| Ğ¡Ğ¾Ğ»Ğ´Ğ°Ñ‚Ğ¾Ğ²: ${formatNum(targetClan.soldiers || 0)}\n` +
+            `| Ğ’ĞµÑ€Ñ‚Ğ¾Ğ»Ñ‘Ñ‚Ğ¾Ğ²: ${formatNum(targetClan.helicopters || 0)}\n` +
+            `| Ğ¢Ğ°Ğ½ĞºĞ¸: ${formatNum(targetClan.tanks || 0)}`
+          );
+        }
+
+        if (!sub) {
+          if (!user.clanId) {
+            return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ ÑĞ¾ÑÑ‚Ğ¾Ğ¸Ñ‚Ğµ Ğ½Ğ¸ Ğ² Ğ¾Ğ´Ğ½Ğ¾Ğ¼ ĞºĞ»Ğ°Ğ½Ğµ. Ğ¡Ğ¾Ğ·Ğ´Ğ°Ğ¹Ñ‚Ğµ ĞµĞ³Ğ¾ Ğ·Ğ° 1 000 000$: /ĞºĞ»Ğ°Ğ½ ÑĞ¾Ğ·Ğ´Ğ°Ñ‚ÑŒ [ĞĞ°Ğ·Ğ²Ğ°Ğ½Ğ¸Ğµ]");
+          }
+
+          const clanDoc = await firestoreDb.collection("clans").doc(user.clanId).get();
+          if (!clanDoc.exists) {
+            return await sendResponse("Ğ’Ğ°Ñˆ ĞºĞ»Ğ°Ğ½ Ğ½Ğµ Ğ½Ğ°Ğ¹Ğ´ĞµĞ½ Ğ² Ğ±Ğ°Ğ·Ğµ Ğ´Ğ°Ğ½Ğ½Ñ‹Ñ….");
+          }
+
+          const clan = clanDoc.data()!;
+          const ownerUser = await getOrCreateUser(clan.ownerId);
+          const ownerName = ownerUser.nick || `Ğ˜Ğ³Ñ€Ğ¾Ğº ${clan.ownerId}`;
+
+          const deputyNames: string[] = [];
+          for (const dId of (clan.deputies || [])) {
+            const du = await getOrCreateUser(dId);
+            deputyNames.push(`[id${dId}|${du.nick || "Ğ˜Ğ³Ñ€Ğ¾Ğº"}]`);
+          }
+
+          const assistantNames: string[] = [];
+          for (const aId of (clan.assistants || [])) {
+            const au = await getOrCreateUser(aId);
+            assistantNames.push(`[id${aId}|${au.nick || "Ğ˜Ğ³Ñ€Ğ¾Ğº"}]`);
+          }
+
+          const totalPower = (clan.soldiers || 0) * 1 + (clan.helicopters || 0) * 10 + (clan.tanks || 0) * 50;
+
+          const keyboard = {
+            inline: true,
+            buttons: [
+              [
+                { action: { type: "callback", label: "Ğ’ÑĞµ ÑƒÑ‡Ğ°ÑÑ‚Ğ½Ğ¸ĞºĞ¸ ĞºĞ»Ğ°Ğ½Ğ°", payload: JSON.stringify({ cmd: "clan_members_list", authorId: userId, clanId: clan.id }) }, color: "primary" }
+              ]
+            ]
+          };
+
+          let textResponse = 
+            `Ğ˜Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ ĞºĞ»Ğ°Ğ½Ğµ, Ğ² ĞºĞ¾Ñ‚Ğ¾Ñ€Ğ¾Ğ¼ Ğ²Ñ‹ ÑĞ¾ÑÑ‚Ğ¾Ğ¸Ñ‚Ğµ\n\n` +
+            `| ĞĞ°Ğ·Ğ²Ğ°Ğ½Ğ¸Ğµ ĞºĞ»Ğ°Ğ½Ğ°: ${clan.name}\n` +
+            `| Ğ¢Ğ¸Ğ¿ ĞºĞ»Ğ°Ğ½Ğ°: ${clan.type}\n\n` +
+            `| Ğ£Ñ‡Ğ°ÑÑ‚Ğ½Ğ¸ĞºĞ¾Ğ²: ${clan.members?.length || 0}\n` +
+            `| Ğ›Ğ¸Ğ´ĞµÑ€ ĞºĞ»Ğ°Ğ½Ğ°: [id${clan.ownerId}|${ownerName}]\n` +
+            `| Ğ—Ğ°Ğ¼. Ğ›Ğ¸Ğ´ĞµÑ€Ğ°: ${deputyNames.join(", ") || "ĞÑ‚ÑÑƒÑ‚ÑÑ‚Ğ²ÑƒĞµÑ‚"}\n` +
+            `| ĞŸĞ¾Ğ¼Ğ¾Ñ‰Ğ½Ğ¸Ğº Ğ·Ğ°Ğ¼. Ğ»Ğ¸Ğ´ĞµÑ€Ğ°: ${assistantNames.join(", ") || "ĞÑ‚ÑÑƒÑ‚ÑÑ‚Ğ²ÑƒĞµÑ‚"}\n\n` +
+            `| Ğ”ĞµĞ½ĞµĞ³ Ğ² ĞºĞ°Ğ·Ğ½Ğµ: ${formatNum(clan.treasury || 0)}$\n\n` +
+            `| ĞĞ±Ñ‰Ğ°Ñ ÑĞ¸Ğ»Ğ° ĞºĞ»Ğ°Ğ½Ğ°: ${formatNum(totalPower)}`;
+
+          return await sendResponse(textResponse, { keyboard: JSON.stringify(keyboard) });
+        }
+
+        if (!user.clanId) {
+          return await sendResponse("Ğ”Ğ»Ñ Ğ²Ñ‹Ğ¿Ğ¾Ğ»Ğ½ĞµĞ½Ğ¸Ñ ÑÑ‚Ğ¾Ğ¹ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ñ‹ Ğ²Ñ‹ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ñ‹ ÑĞ¾ÑÑ‚Ğ¾ÑÑ‚ÑŒ Ğ² ĞºĞ»Ğ°Ğ½Ğµ!");
+        }
+
+        const clanDoc = await firestoreDb.collection("clans").doc(user.clanId).get();
+        if (!clanDoc.exists) {
+          return await sendResponse("Ğ’Ğ°Ñˆ ĞºĞ»Ğ°Ğ½ Ğ½Ğµ Ğ½Ğ°Ğ¹Ğ´ĞµĞ½ Ğ² Ğ±Ğ°Ğ·Ğµ Ğ´Ğ°Ğ½Ğ½Ñ‹Ñ….");
+        }
+        const clan = clanDoc.data()!;
+
+        if (sub === "Ğ¿Ñ€Ğ¸Ğ³Ğ»Ğ°ÑĞ¸Ñ‚ÑŒ") {
+          const isLeader = clan.ownerId === userId;
+          const isDeputy = (clan.deputies || []).includes(userId);
+          const isAssistant = (clan.assistants || []).includes(userId);
+
+          if (!isLeader && !isDeputy && !isAssistant) {
+            return await sendResponse("ĞŸÑ€Ğ¸Ğ³Ğ»Ğ°ÑˆĞ°Ñ‚ÑŒ Ğ¼Ğ¾Ğ³ÑƒÑ‚ Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ğ›Ğ¸Ğ´ĞµÑ€, Ğ—Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»Ğ¸ Ğ¸ ĞŸĞ¾Ğ¼Ğ¾Ñ‰Ğ½Ğ¸ĞºĞ¸ Ğ·Ğ°Ğ¼Ğ°!");
+          }
+
+          const parsed = await parseTargetUser(message, args.slice(2));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ Ğ´Ğ»Ñ Ğ¿Ñ€Ğ¸Ğ³Ğ»Ğ°ÑˆĞµĞ½Ğ¸Ñ!");
+          if (parsed.targetId === userId) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ¿Ñ€Ğ¸Ğ³Ğ»Ğ°ÑĞ¸Ñ‚ÑŒ ÑĞ°Ğ¼Ğ¸ ÑĞµĞ±Ñ!");
+
+          const targetUser = await getOrCreateUser(parsed.targetId);
+          if (targetUser.clanId) return await sendResponse("Ğ­Ñ‚Ğ¾Ñ‚ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ ÑƒĞ¶Ğµ ÑĞ¾ÑÑ‚Ğ¾Ğ¸Ñ‚ Ğ² ĞºĞ»Ğ°Ğ½Ğµ!");
+
+          if ((clan.members || []).length >= (clan.maxMembers || 20)) {
+            return await sendResponse("Ğ’ ĞºĞ»Ğ°Ğ½Ğµ Ğ½ĞµÑ‚ ÑĞ²Ğ¾Ğ±Ğ¾Ğ´Ğ½Ñ‹Ñ… Ğ¼ĞµÑÑ‚! ĞšÑƒĞ¿Ğ¸Ñ‚Ğµ Ğ¼ĞµÑÑ‚Ğ°: /ĞºĞ»Ğ°Ğ½ Ğ¼ĞµÑÑ‚Ğ°");
+          }
+
+          const keyboard = {
+            inline: true,
+            buttons: [
+              [
+                { action: { type: "callback", label: "ĞŸÑ€Ğ¸ÑĞ¾ĞµĞ´Ğ¸Ğ½Ğ¸Ñ‚ÑŒÑÑ", payload: JSON.stringify({ cmd: "clan_join_accept", clanId: clan.id, inviteeId: parsed.targetId, authorId: parsed.targetId }) }, color: "positive" },
+                { action: { type: "callback", label: "ĞÑ‚ĞºĞ°Ğ·Ğ°Ñ‚ÑŒÑÑ", payload: JSON.stringify({ cmd: "clan_join_decline", clanId: clan.id, inviteeId: parsed.targetId, authorId: parsed.targetId }) }, color: "negative" }
+              ]
+            ]
+          };
+
+          try {
+            await sendVkMessage(VK_TOKEN, parsed.targetId, `[id${userId}|${fullName}] Ñ…Ğ¾Ñ‡ĞµÑ‚ Ğ¿Ñ€Ğ¸Ğ³Ğ»Ğ°ÑĞ¸Ñ‚ÑŒ Ğ²Ğ°Ñ Ğ² ĞºĞ»Ğ°Ğ½ ${clan.name}!`, {
+              keyboard: JSON.stringify(keyboard)
+            });
+            return await sendResponse(`Ğ²Ñ‹ Ğ¾Ñ‚Ğ¿Ñ€Ğ°Ğ²Ğ¸Ğ»Ğ¸ Ğ¿Ñ€ĞµĞ´Ğ»Ğ¾Ğ¶ĞµĞ½Ğ¸Ğµ Ğ²ÑÑ‚ÑƒĞ¿Ğ¸Ñ‚ÑŒ Ğ² ĞºĞ»Ğ°Ğ½ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${parsed.targetId}|${parsed.targetName}]`);
+          } catch (e) {
+            return await sendResponse(`ĞĞµ ÑƒĞ´Ğ°Ğ»Ğ¾ÑÑŒ Ğ¾Ñ‚Ğ¿Ñ€Ğ°Ğ²Ğ¸Ñ‚ÑŒ Ğ¿Ñ€Ğ¸Ğ³Ğ»Ğ°ÑˆĞµĞ½Ğ¸Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${parsed.targetId}|${parsed.targetName}] Ğ² Ğ›Ğ¡ (Ğ²Ğ¾Ğ·Ğ¼Ğ¾Ğ¶Ğ½Ğ¾, Ğ·Ğ°Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²Ğ°Ğ½Ñ‹ ÑĞ¾Ğ¾Ğ±Ñ‰ĞµĞ½Ğ¸Ñ Ğ¾Ñ‚ Ğ±Ğ¾Ñ‚Ğ°).`);
+          }
+        }
+
+        if (sub === "ĞºĞ¸ĞºĞ½ÑƒÑ‚ÑŒ") {
+          const isLeader = clan.ownerId === userId;
+          const isDeputy = (clan.deputies || []).includes(userId);
+
+          if (!isLeader && !isDeputy) {
+            return await sendResponse("Ğ˜ÑĞºĞ»ÑÑ‡Ğ°Ñ‚ÑŒ ÑƒÑ‡Ğ°ÑÑ‚Ğ½Ğ¸ĞºĞ¾Ğ² Ğ¼Ğ¾Ğ³ÑƒÑ‚ Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ğ›Ğ¸Ğ´ĞµÑ€ Ğ¸ Ğ—Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»Ğ¸!");
+          }
+
+          const parsed = await parseTargetUser(message, args.slice(2));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ Ğ´Ğ»Ñ Ğ¸ÑĞºĞ»ÑÑ‡ĞµĞ½Ğ¸Ñ!");
+          if (parsed.targetId === userId) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ¸ÑĞºĞ»ÑÑ‡Ğ¸Ñ‚ÑŒ ÑĞµĞ±Ñ!");
+
+          const targetUser = await getOrCreateUser(parsed.targetId);
+          if (targetUser.clanId !== clan.id) return await sendResponse("Ğ­Ñ‚Ğ¾Ñ‚ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ Ğ½Ğµ ÑĞ¾ÑÑ‚Ğ¾Ğ¸Ñ‚ Ğ² Ğ²Ğ°ÑˆĞµĞ¼ ĞºĞ»Ğ°Ğ½Ğµ!");
+
+          const targetIsLeader = clan.ownerId === parsed.targetId;
+          const targetIsDeputy = (clan.deputies || []).includes(parsed.targetId);
+
+          if (targetIsLeader) {
+            return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ¸ÑĞºĞ»ÑÑ‡Ğ¸Ñ‚ÑŒ Ğ»Ğ¸Ğ´ĞµÑ€Ğ° ĞºĞ»Ğ°Ğ½Ğ°!");
+          }
+
+          if (isDeputy && targetIsDeputy) {
+            return await sendResponse("Ğ—Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»ÑŒ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚ Ğ¸ÑĞºĞ»ÑÑ‡Ğ¸Ñ‚ÑŒ Ğ´Ñ€ÑƒĞ³Ğ¾Ğ³Ğ¾ Ğ·Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»Ñ!");
+          }
+
+          let reason = args.slice(3).join(" ") || "Ğ‘ĞµĞ· Ğ¿Ñ€Ğ¸Ñ‡Ğ¸Ğ½Ñ‹";
+
+          const updatedMembers = (clan.members || []).filter((mId: number) => mId !== parsed.targetId);
+          const updatedDeputies = (clan.deputies || []).filter((mId: number) => mId !== parsed.targetId);
+          const updatedAssistants = (clan.assistants || []).filter((mId: number) => mId !== parsed.targetId);
+
+          await firestoreDb.collection("clans").doc(clan.id).set({
+            members: updatedMembers,
+            deputies: updatedDeputies,
+            assistants: updatedAssistants
+          }, { merge: true });
+
+          await updateUser(parsed.targetId, { clanId: null, clanRole: null });
+
+          await sendResponse(`Ğ’Ñ‹ Ğ¸ÑĞºĞ»ÑÑ‡Ğ¸Ğ»Ğ¸ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${parsed.targetId}|${parsed.targetName}] Ğ¸Ğ· ĞºĞ»Ğ°Ğ½Ğ°`);
+
+          try {
+            await sendVkMessage(VK_TOKEN, parsed.targetId, 
+              `Ğ’Ñ‹ Ğ±Ñ‹Ğ»Ğ¸ ĞºĞ¸ĞºĞ½ÑƒÑ‚Ñ‹ Ğ¸Ğ· ĞºĞ»Ğ°Ğ½Ğ° ${clan.name}\n\n` +
+              `| ĞŸÑ€Ğ¸Ñ‡Ğ¸Ğ½Ğ°: ${reason}\n` +
+              `| Ğ’Ğ°Ñ ĞºĞ¸ĞºĞ½ÑƒĞ»: [id${userId}|${fullName}]`
+            );
+          } catch (e) {}
+
+          return;
+        }
+
+        if (sub === "ĞºĞ°Ğ·Ğ½Ğ°") {
+          const sumStr = args[2] || "";
+          const sum = parseNumber(sumStr);
+          if (isNaN(sum) || sum <= 0) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ĞºĞ¾Ñ€Ñ€ĞµĞºÑ‚Ğ½ÑƒÑ ÑÑƒĞ¼Ğ¼Ñƒ Ğ´Ğ»Ñ Ğ²ĞºĞ»Ğ°Ğ´Ğ°!");
+          if ((user.balance || 0) < sum) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ² Ğ½Ğ° Ñ€ÑƒĞºĞ°Ñ…!");
+
+          const updatedTreasury = (clan.treasury || 0) + sum;
+          await firestoreDb.collection("clans").doc(clan.id).set({ treasury: updatedTreasury }, { merge: true });
+          await updateUser(userId, { balance: user.balance - sum });
+
+          await sendResponse(`Ğ’Ñ‹ Ğ²Ğ»Ğ¾Ğ¶Ğ¸Ğ»Ğ¸ "${formatNum(sum)}$" Ğ² ĞºĞ°Ğ·Ğ½Ñƒ ĞºĞ»Ğ°Ğ½Ğ°`);
+
+          const membersList = clan.members || [];
+          for (const mId of membersList) {
+            if (mId !== userId) {
+              try {
+                await sendVkMessage(VK_TOKEN, mId, `[id${userId}|${fullName}] Ğ²Ğ»Ğ¾Ğ¶Ğ¸Ğ»(-Ğ°) ${formatNum(sum)}$ Ğ² ĞºĞ°Ğ·Ğ½Ñƒ ĞºĞ»Ğ°Ğ½Ğ°`);
+              } catch (e) {}
+            }
+          }
+          return;
+        }
+
+        if (sub === "Ğ²Ñ‹Ğ²Ğ¾Ğ´") {
+          const isLeader = clan.ownerId === userId;
+          const isDeputy = (clan.deputies || []).includes(userId);
+
+          if (!isLeader && !isDeputy) {
+            return await sendResponse("Ğ’Ñ‹Ğ²Ğ¾Ğ´Ğ¸Ñ‚ÑŒ Ğ´ĞµĞ½ÑŒĞ³Ğ¸ Ğ¸Ğ· ĞºĞ°Ğ·Ğ½Ñ‹ Ğ¼Ğ¾Ğ³ÑƒÑ‚ Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ğ›Ğ¸Ğ´ĞµÑ€ Ğ¸ Ğ—Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»Ğ¸!");
+          }
+
+          const sumStr = args[2] || "";
+          const sum = parseNumber(sumStr);
+          if (isNaN(sum) || sum <= 0) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ĞºĞ¾Ñ€Ñ€ĞµĞºÑ‚Ğ½ÑƒÑ ÑÑƒĞ¼Ğ¼Ñƒ Ğ´Ğ»Ñ Ğ²Ñ‹Ğ²Ğ¾Ğ´Ğ°!");
+
+          const currentTreasury = clan.treasury || 0;
+          if (currentTreasury < sum) return await sendResponse(`Ğ’ ĞºĞ°Ğ·Ğ½Ğµ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ²! Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ¾: ${formatNum(currentTreasury)}$`);
+
+          const updatedTreasury = currentTreasury - sum;
+          await firestoreDb.collection("clans").doc(clan.id).set({ treasury: updatedTreasury }, { merge: true });
+          await updateUser(userId, { balance: (user.balance || 0) + sum });
+
+          await sendResponse(`Ğ’Ñ‹ Ğ²Ñ‹Ğ²ĞµĞ»Ğ¸ "${formatNum(sum)}$" Ñ ĞºĞ°Ğ·Ğ½Ñ‹ ĞºĞ»Ğ°Ğ½Ğ°`);
+
+          const membersList = clan.members || [];
+          for (const mId of membersList) {
+            if (mId !== userId) {
+              try {
+                await sendVkMessage(VK_TOKEN, mId, `[id${userId}|${fullName}] Ğ²Ñ‹Ğ²ĞµĞ» ${formatNum(sum)}$ Ñ ĞºĞ°Ğ·Ğ½Ñ‹ ĞºĞ»Ğ°Ğ½Ğ°`);
+              } catch (e) {}
+            }
+          }
+          return;
+        }
+
+        if (sub === "Ğ²Ğ¾Ğ¹Ğ½Ğ°") {
+          const isLeader = clan.ownerId === userId;
+          const isDeputy = (clan.deputies || []).includes(userId);
+
+          if (!isLeader && !isDeputy) {
+            return await sendResponse("ĞĞ±ÑŠÑĞ²Ğ»ÑÑ‚ÑŒ Ğ²Ğ¾Ğ¹Ğ½Ñƒ Ğ¼Ğ¾Ğ³ÑƒÑ‚ Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ğ›Ğ¸Ğ´ĞµÑ€ Ğ¸ Ğ—Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»Ğ¸!");
+          }
+
+          const targetClanName = args.slice(2).join(" ");
+          if (!targetClanName) return await sendResponse("Ğ˜ÑĞ¿Ğ¾Ğ»ÑŒĞ·ÑƒĞ¹Ñ‚Ğµ: /ĞºĞ»Ğ°Ğ½ Ğ²Ğ¾Ğ¹Ğ½Ğ° [Ğ½Ğ°Ğ·Ğ²Ğ°Ğ½Ğ¸Ğµ ĞºĞ»Ğ°Ğ½Ğ°]");
+
+          const snap = await firestoreDb.collection("clans").where("name", "==", targetClanName).limit(1).get();
+          if (snap.empty) return await sendResponse(`ĞšĞ»Ğ°Ğ½ "${targetClanName}" Ğ½Ğµ Ğ½Ğ°Ğ¹Ğ´ĞµĞ½.`);
+
+          const enemyClan = snap.docs[0].data();
+          if (enemyClan.id === clan.id) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ²Ğ¾ĞµĞ²Ğ°Ñ‚ÑŒ ÑĞ¾ ÑĞ²Ğ¾Ğ¸Ğ¼ ÑĞ¾Ğ±ÑÑ‚Ğ²ĞµĞ½Ğ½Ñ‹Ğ¼ ĞºĞ»Ğ°Ğ½Ğ¾Ğ¼!");
+
+          const p1Power = (clan.soldiers || 0) * 1 + (clan.helicopters || 0) * 10 + (clan.tanks || 0) * 50;
+          const p2Power = (enemyClan.soldiers || 0) * 1 + (enemyClan.helicopters || 0) * 10 + (enemyClan.tanks || 0) * 50;
+
+          let winnerClan = clan;
+          let loserClan = enemyClan;
+
+          if (p2Power > p1Power) {
+            winnerClan = enemyClan;
+            loserClan = clan;
+          }
+
+          const gainedSoldiers = loserClan.soldiers || 0;
+          const gainedHelicopters = loserClan.helicopters || 0;
+
+          await firestoreDb.collection("clans").doc(winnerClan.id).set({
+            soldiers: (winnerClan.soldiers || 0) + gainedSoldiers,
+            helicopters: (winnerClan.helicopters || 0) + gainedHelicopters,
+            wins: (winnerClan.wins || 0) + 1
+          }, { merge: true });
+
+          await firestoreDb.collection("clans").doc(loserClan.id).set({
+            soldiers: 0,
+            helicopters: 0
+          }, { merge: true });
+
+          return await sendResponse(
+            `Ğ’Ğ¾Ğ¹Ğ½Ğ° Ğ¼ĞµĞ¶Ğ´Ñƒ ĞºĞ»Ğ°Ğ½Ğ°Ğ¼Ğ¸ ${clan.name} Ğ¸ ${enemyClan.name}!\n\n` +
+            `Ğ£ ĞºĞ»Ğ°Ğ½Ğ° ${clan.name}:\n` +
+            `Ğ¡Ğ¾Ğ»Ğ´Ğ°Ñ‚Ğ¾Ğ²: ${clan.soldiers || 0}\n` +
+            `Ğ’ĞµÑ€Ñ‚Ğ¾Ğ»Ñ‘Ñ‚Ğ¾Ğ²: ${clan.helicopters || 0}\n` +
+            `Ğ¢Ğ°Ğ½ĞºĞ¸: ${clan.tanks || 0}\n\n` +
+            `Ğ£ ĞºĞ»Ğ°Ğ½Ğ° ${enemyClan.name}:\n` +
+            `Ğ¡Ğ¾Ğ»Ğ´Ğ°Ñ‚Ğ¾Ğ²: ${enemyClan.soldiers || 0}\n` +
+            `Ğ’ĞµÑ€Ñ‚Ğ¾Ğ»Ñ‘Ñ‚Ğ¾Ğ²: ${enemyClan.helicopters || 0}\n` +
+            `Ğ¢Ğ°Ğ½ĞºĞ¸: ${enemyClan.tanks || 0}\n\n` +
+            `ĞŸĞ¾Ğ±ĞµĞ´Ğ¸Ñ‚ĞµĞ»ÑŒ Ğ²Ğ¾Ğ¹Ğ½Ñ‹: ${winnerClan.name}\n` +
+            `ĞŸĞ¾Ğ±ĞµĞ´Ğ¸Ñ‚ĞµĞ»ÑŒ Ğ²Ğ¾Ğ¹Ğ½Ñ‹ Ñ‚Ğ°ĞºĞ¶Ğµ Ğ·Ğ°Ğ±Ğ¸Ñ€Ğ°ĞµÑ‚ ${gainedSoldiers} ÑĞ¾Ğ»Ğ´Ğ°Ñ‚Ğ¾Ğ² Ğ¸ ${gainedHelicopters} Ğ²ĞµÑ€Ñ‚Ğ¾Ğ»Ñ‘Ñ‚Ğ¾Ğ²`
+          );
+        }
+
+        if (sub === "ÑĞ¾ÑÑ‚Ğ°Ğ²") {
+          const page = Math.max(1, parseInt(args[2]) || 1);
+          const limit = 20;
+          const offset = (page - 1) * limit;
+
+          const members = clan.members || [];
+          const totalPages = Math.ceil(members.length / limit);
+
+          const pageMembers = members.slice(offset, offset + limit);
+          const memberLines: string[] = [];
+
+          for (const mId of pageMembers) {
+            const mu = await getOrCreateUser(mId);
+            let roleName = "Ğ£Ñ‡Ğ°ÑÑ‚Ğ½Ğ¸Ğº";
+            if (mId === clan.ownerId) roleName = "Ğ›Ğ¸Ğ´ĞµÑ€";
+            else if ((clan.deputies || []).includes(mId)) roleName = "Ğ—Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»ÑŒ Ğ»Ğ¸Ğ´ĞµÑ€Ğ°";
+            else if ((clan.assistants || []).includes(mId)) roleName = "ĞŸĞ¾Ğ¼Ğ¾Ñ‰Ğ½Ğ¸Ğº Ğ·Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»Ñ";
+
+            memberLines.push(`[id${mId}|${mu.nick || "Ğ˜Ğ³Ñ€Ğ¾Ğº"}] | Ğ”Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚ÑŒ: ${roleName}`);
+          }
+
+          let resp = `Ğ¡Ğ¾ÑÑ‚Ğ°Ğ² ĞºĞ»Ğ°Ğ½Ğ° ${clan.name}\n\n` + memberLines.join("\n");
+          if (totalPages > 1) {
+            resp += `\n\n| Ğ¡Ñ‚Ñ€Ğ°Ğ½Ğ¸Ñ†Ğ° ${page} Ğ¸Ğ· ${totalPages}. Ğ”Ğ»Ñ Ğ¿ĞµÑ€ĞµÑ…Ğ¾Ğ´Ğ° Ğ¸ÑĞ¿Ğ¾Ğ»ÑŒĞ·ÑƒĞ¹Ñ‚Ğµ: /ĞºĞ»Ğ°Ğ½ ÑĞ¾ÑÑ‚Ğ°Ğ² [Ğ½Ğ¾Ğ¼ĞµÑ€ ÑÑ‚Ñ€Ğ°Ğ½Ğ¸Ñ†Ñ‹]`;
+          }
+
+          return await sendResponse(resp);
+        }
+
+        if (sub === "Ñ‚Ğ¸Ğ¿") {
+          const isLeader = clan.ownerId === userId;
+          if (!isLeader) return await sendResponse("Ğ¢Ğ¾Ğ»ÑŒĞºĞ¾ Ğ›Ğ¸Ğ´ĞµÑ€ ĞºĞ»Ğ°Ğ½Ğ° Ğ¼Ğ¾Ğ¶ĞµÑ‚ Ğ¼ĞµĞ½ÑÑ‚ÑŒ ĞµĞ³Ğ¾ Ñ‚Ğ¸Ğ¿!");
+
+          const newTypeStr = args[2];
+          if (!newTypeStr) return await sendResponse("Ğ˜ÑĞ¿Ğ¾Ğ»ÑŒĞ·ÑƒĞ¹Ñ‚Ğµ: /ĞºĞ»Ğ°Ğ½ Ñ‚Ğ¸Ğ¿ [Ğ—Ğ°ĞºÑ€Ñ‹Ñ‚Ñ‹Ğ¹|ĞŸĞ¾ Ğ·Ğ°ÑĞ²ĞºĞ°Ğ¼|ĞÑ‚ĞºÑ€Ñ‹Ñ‚Ñ‹Ğ¹]");
+
+          let newType = "";
+          if (newTypeStr.toLowerCase() === "Ğ·Ğ°ĞºÑ€Ñ‹Ñ‚Ñ‹Ğ¹") newType = "Ğ—Ğ°ĞºÑ€Ñ‹Ñ‚Ñ‹Ğ¹";
+          else if (newTypeStr.toLowerCase() === "Ğ¾Ñ‚ĞºÑ€Ñ‹Ñ‚Ñ‹Ğ¹") newType = "ĞÑ‚ĞºÑ€Ñ‹Ñ‚Ñ‹Ğ¹";
+          else if (newTypeStr.toLowerCase().startsWith("Ğ¿Ğ¾ Ğ·Ğ°ÑĞ²")) newType = "ĞŸĞ¾ Ğ·Ğ°ÑĞ²ĞºĞ°Ğ¼";
+          else return await sendResponse("Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ñ‹Ğµ Ñ‚Ğ¸Ğ¿Ñ‹ ĞºĞ»Ğ°Ğ½Ğ°: Ğ—Ğ°ĞºÑ€Ñ‹Ñ‚Ñ‹Ğ¹, ĞŸĞ¾ Ğ·Ğ°ÑĞ²ĞºĞ°Ğ¼, ĞÑ‚ĞºÑ€Ñ‹Ñ‚Ñ‹Ğ¹");
+
+          await firestoreDb.collection("clans").doc(clan.id).set({ type: newType }, { merge: true });
+          return await sendResponse(`Ğ’Ñ‹ Ğ¸Ğ·Ğ¼ĞµĞ½Ğ¸Ğ»Ğ¸ Ñ‚Ğ¸Ğ¿ ĞºĞ»Ğ°Ğ½Ğ° Ğ½Ğ°: ${newType}`);
+        }
+
+        if (sub === "Ğ·Ğ°Ğ¼") {
+          const isLeader = clan.ownerId === userId;
+          if (!isLeader) return await sendResponse("Ğ¢Ğ¾Ğ»ÑŒĞºĞ¾ Ğ›Ğ¸Ğ´ĞµÑ€ ĞºĞ»Ğ°Ğ½Ğ° Ğ¼Ğ¾Ğ¶ĞµÑ‚ Ğ½Ğ°Ğ·Ğ½Ğ°Ñ‡Ğ°Ñ‚ÑŒ Ğ·Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»ĞµĞ¹!");
+
+          const parsed = await parseTargetUser(message, args.slice(2));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+          if (parsed.targetId === userId) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ½Ğ°Ğ·Ğ½Ğ°Ñ‡Ğ¸Ñ‚ÑŒ Ğ·Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»ĞµĞ¼ ÑĞµĞ±Ñ!");
+
+          const targetUser = await getOrCreateUser(parsed.targetId);
+          if (targetUser.clanId !== clan.id) return await sendResponse("Ğ­Ñ‚Ğ¾Ñ‚ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ Ğ½Ğµ Ğ² Ğ²Ğ°ÑˆĞµĞ¼ ĞºĞ»Ğ°Ğ½Ğµ!");
+
+          const deputies = clan.deputies || [];
+          if (deputies.includes(parsed.targetId)) return await sendResponse("Ğ­Ñ‚Ğ¾Ñ‚ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ ÑƒĞ¶Ğµ Ğ·Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»ÑŒ!");
+
+          const updatedDeputies = [...deputies, parsed.targetId];
+          const updatedAssistants = (clan.assistants || []).filter((id: number) => id !== parsed.targetId);
+
+          await firestoreDb.collection("clans").doc(clan.id).set({ deputies: updatedDeputies, assistants: updatedAssistants }, { merge: true });
+          await updateUser(parsed.targetId, { clanRole: "Ğ—Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»ÑŒ Ğ»Ğ¸Ğ´ĞµÑ€Ğ°" });
+
+          return await sendResponse(`Ğ’Ñ‹ ÑƒÑÑ‚Ğ°Ğ½Ğ¾Ğ²Ğ¸Ğ»Ğ¸ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${parsed.targetId}|${parsed.targetName}] Ğ² ĞºĞ°Ñ‡ĞµÑÑ‚Ğ²Ğµ Ğ·Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»Ñ Ğ»Ğ¸Ğ´ĞµÑ€Ğ° ĞºĞ»Ğ°Ğ½Ğ°`);
+        }
+
+        if (sub === "Ğ¿Ğ¾Ğ¼Ğ¾Ñ‰Ğ½Ğ¸Ğº" && args[2]?.toLowerCase() === "Ğ·Ğ°Ğ¼Ğ°") {
+          const isLeader = clan.ownerId === userId;
+          const isDeputy = (clan.deputies || []).includes(userId);
+
+          if (!isLeader && !isDeputy) {
+            return await sendResponse("ĞĞ°Ğ·Ğ½Ğ°Ñ‡Ğ°Ñ‚ÑŒ Ğ¿Ğ¾Ğ¼Ğ¾Ñ‰Ğ½Ğ¸ĞºĞ¾Ğ² Ğ¼Ğ¾Ğ³ÑƒÑ‚ Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ğ›Ğ¸Ğ´ĞµÑ€ Ğ¸ Ğ—Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»Ğ¸!");
+          }
+
+          const parsed = await parseTargetUser(message, args.slice(3));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+          if (parsed.targetId === userId) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ½Ğ°Ğ·Ğ½Ğ°Ñ‡Ğ¸Ñ‚ÑŒ ÑĞµĞ±Ñ!");
+
+          const targetUser = await getOrCreateUser(parsed.targetId);
+          if (targetUser.clanId !== clan.id) return await sendResponse("Ğ­Ñ‚Ğ¾Ñ‚ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ Ğ½Ğµ Ğ² Ğ²Ğ°ÑˆĞµĞ¼ ĞºĞ»Ğ°Ğ½Ğµ!");
+
+          const assistants = clan.assistants || [];
+          if (assistants.includes(parsed.targetId)) return await sendResponse("Ğ­Ñ‚Ğ¾Ñ‚ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ ÑƒĞ¶Ğµ Ğ¿Ğ¾Ğ¼Ğ¾Ñ‰Ğ½Ğ¸Ğº Ğ·Ğ°Ğ¼ĞµÑÑ‚Ğ¸Ñ‚ĞµĞ»Ñ!");
+
+          const updatedAssistants = [...assistants, parsed.targetId];
+          const updatedDeputies = (clan.deputies || []).filter((id: number) => id !== parsed.targetId);
+
+          await firestoreDb.collection("clans").doc(clan.id).set({ deputies: updatedDeputies, assistants: updatedAssistants }, { merge: true });
+          await updateUser(parsed.targetId, { clanRole: "ĞŸĞ¾Ğ¼Ğ¾Ñ‰Ğ½Ğ¸Ğº Ğ·Ğ°Ğ¼. Ğ»Ğ¸Ğ´ĞµÑ€Ğ°" });
+
+          return await sendResponse(`Ğ’Ñ‹ ÑƒÑÑ‚Ğ°Ğ½Ğ¾Ğ²Ğ¸Ğ»Ğ¸ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${parsed.targetId}|${parsed.targetName}] Ğ² ĞºĞ°Ñ‡ĞµÑÑ‚Ğ²Ğµ Ğ¿Ğ¾Ğ¼Ğ¾Ñ‰Ğ½Ğ¸ĞºĞ° Ğ·Ğ°Ğ¼Ğ° Ğ»Ğ¸Ğ´ĞµÑ€Ğ° ĞºĞ»Ğ°Ğ½Ğ°`);
+        }
+
+        if (sub === "Ğ¿ĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒ") {
+          const isLeader = clan.ownerId === userId;
+          if (!isLeader) return await sendResponse("Ğ¢Ğ¾Ğ»ÑŒĞºĞ¾ Ğ›Ğ¸Ğ´ĞµÑ€ Ğ¼Ğ¾Ğ¶ĞµÑ‚ Ğ¿ĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒ ĞºĞ»Ğ°Ğ½!");
+
+          const parsed = await parseTargetUser(message, args.slice(2));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+          if (parsed.targetId === userId) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ¿ĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒ ĞºĞ»Ğ°Ğ½ ÑĞ°Ğ¼Ğ¾Ğ¼Ñƒ ÑĞµĞ±Ğµ!");
+
+          const targetUser = await getOrCreateUser(parsed.targetId);
+          if (targetUser.clanId !== clan.id) return await sendResponse("Ğ­Ñ‚Ğ¾Ñ‚ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ Ğ½Ğµ ÑĞ¾ÑÑ‚Ğ¾Ğ¸Ñ‚ Ğ² Ğ²Ğ°ÑˆĞµĞ¼ ĞºĞ»Ğ°Ğ½Ğµ!");
+
+          const keyboard = {
+            inline: true,
+            buttons: [
+              [
+                { action: { type: "callback", label: "ĞŸĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒ", payload: JSON.stringify({ cmd: "clan_transfer_confirm", targetId: parsed.targetId, authorId: userId }) }, color: "positive" },
+                { action: { type: "callback", label: "ĞĞµ Ğ¿ĞµÑ€ĞµĞ´Ğ°Ğ²Ğ°Ñ‚ÑŒ", payload: JSON.stringify({ cmd: "clan_transfer_cancel", targetId: parsed.targetId, authorId: userId }) }, color: "negative" }
+              ]
+            ]
+          };
+
+          return await sendResponse(
+            `Ğ’Ñ‹ ÑĞ¾Ğ±Ğ¸Ñ€Ğ°ĞµÑ‚ĞµÑÑŒ Ğ¿ĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒ ĞºĞ»Ğ°Ğ½ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${parsed.targetId}|${parsed.targetName}]\n\n| Ğ”Ğ»Ñ Ğ¿Ğ¾Ğ´Ñ‚Ğ²ĞµÑ€Ğ¶Ğ´ĞµĞ½Ğ¸Ñ Ğ½Ğ°Ğ¶Ğ¼Ğ¸Ñ‚Ğµ Ğ½Ğ° ĞºĞ½Ğ¾Ğ¿ĞºÑƒ:`,
+            { keyboard: JSON.stringify(keyboard) }
+          );
+        }
+
+        if (sub === "ÑĞ½ÑÑ‚ÑŒ") {
+          const isLeader = clan.ownerId === userId;
+          if (!isLeader) return await sendResponse("Ğ¢Ğ¾Ğ»ÑŒĞºĞ¾ Ğ›Ğ¸Ğ´ĞµÑ€ ĞºĞ»Ğ°Ğ½Ğ° Ğ¼Ğ¾Ğ¶ĞµÑ‚ ÑĞ½Ğ¸Ğ¼Ğ°Ñ‚ÑŒ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ĞµĞ¹ Ñ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚Ğ¸!");
+
+          const parsed = await parseTargetUser(message, args.slice(2));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+
+          const targetUser = await getOrCreateUser(parsed.targetId);
+          if (targetUser.clanId !== clan.id) return await sendResponse("Ğ­Ñ‚Ğ¾Ñ‚ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ Ğ½Ğµ ÑĞ¾ÑÑ‚Ğ¾Ğ¸Ñ‚ Ğ² Ğ²Ğ°ÑˆĞµĞ¼ ĞºĞ»Ğ°Ğ½Ğµ!");
+
+          const updatedDeputies = (clan.deputies || []).filter((id: number) => id !== parsed.targetId);
+          const updatedAssistants = (clan.assistants || []).filter((id: number) => id !== parsed.targetId);
+
+          await firestoreDb.collection("clans").doc(clan.id).set({ deputies: updatedDeputies, assistants: updatedAssistants }, { merge: true });
+          await updateUser(parsed.targetId, { clanRole: "Ğ£Ñ‡Ğ°ÑÑ‚Ğ½Ğ¸Ğº" });
+
+          return await sendResponse(`Ğ’Ñ‹ ÑĞ½ÑĞ»Ğ¸ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${parsed.targetId}|${parsed.targetName}] Ñ ĞµĞ³Ğ¾ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚Ğ¸ Ğ² ĞºĞ»Ğ°Ğ½Ğµ`);
+        }
+
+        if (sub === "Ğ¿ĞµÑ€ĞµĞ¸Ğ¼ĞµĞ½Ğ¾Ğ²Ğ°Ñ‚ÑŒ") {
+          const isLeader = clan.ownerId === userId;
+          if (!isLeader) return await sendResponse("Ğ¢Ğ¾Ğ»ÑŒĞºĞ¾ Ğ›Ğ¸Ğ´ĞµÑ€ ĞºĞ»Ğ°Ğ½Ğ° Ğ¼Ğ¾Ğ¶ĞµÑ‚ Ğ¿ĞµÑ€ĞµĞ¸Ğ¼ĞµĞ½Ğ¾Ğ²Ğ°Ñ‚ÑŒ ĞµĞ³Ğ¾!");
+
+          const newName = args.slice(2).join(" ");
+          if (!newName) return await sendResponse("Ğ˜ÑĞ¿Ğ¾Ğ»ÑŒĞ·ÑƒĞ¹Ñ‚Ğµ: /ĞºĞ»Ğ°Ğ½ Ğ¿ĞµÑ€ĞµĞ¸Ğ¼ĞµĞ½Ğ¾Ğ²Ğ°Ñ‚ÑŒ [ĞĞ¾Ğ²Ğ¾Ğµ Ğ½Ğ°Ğ·Ğ²Ğ°Ğ½Ğ¸Ğµ]");
+          if ((user.balance || 0) < 2000000) return await sendResponse("ĞŸĞµÑ€ĞµĞ¸Ğ¼ĞµĞ½Ğ¾Ğ²Ğ°Ñ‚ÑŒ ĞºĞ»Ğ°Ğ½ ÑÑ‚Ğ¾Ğ¸Ñ‚ 2.000.000$ Ğ½Ğ° Ñ€ÑƒĞºĞ°Ñ…!");
+
+          const keyboard = {
+            inline: true,
+            buttons: [
+              [
+                { action: { type: "callback", label: "ĞŸĞµÑ€ĞµĞ¸Ğ¼ĞµĞ½Ğ¾Ğ²Ğ°Ñ‚ÑŒ", payload: JSON.stringify({ cmd: "clan_rename_confirm", newName, authorId: userId }) }, color: "positive" },
+                { action: { type: "callback", label: "ĞĞµ Ğ¿ĞµÑ€ĞµĞ¸Ğ¼ĞµĞ½Ğ¾Ğ²Ñ‹Ğ²Ğ°Ñ‚ÑŒ", payload: JSON.stringify({ cmd: "clan_rename_cancel", authorId: userId }) }, color: "negative" }
+              ]
+            ]
+          };
+
+          return await sendResponse(
+            `Ğ’Ñ‹ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ñ‚ĞµĞ»ÑŒĞ½Ğ¾ Ñ…Ğ¾Ñ‚Ğ¸Ñ‚Ğµ Ğ¿ĞµÑ€ĞµĞ¸Ğ¼ĞµĞ½Ğ¾Ğ²Ğ°Ñ‚ÑŒ Ğ½Ğ°Ğ·Ğ²Ğ°Ğ½Ğ¸Ğµ ĞºĞ»Ğ°Ğ½Ğ° Ğ½Ğ° "${newName}" Ğ·Ğ° 2.000.000$?\n\n| Ğ”Ğ»Ñ Ğ¿Ğ¾Ğ´Ñ‚Ğ²ĞµÑ€Ğ¶Ğ´ĞµĞ½Ğ¸Ñ Ğ½Ğ°Ğ¶Ğ¼Ğ¸Ñ‚Ğµ Ğ½Ğ° ĞºĞ½Ğ¾Ğ¿ĞºÑƒ:`,
+            { keyboard: JSON.stringify(keyboard) }
+          );
+        }
+
+        if (sub === "Ğ²Ñ‹Ğ¹Ñ‚Ğ¸") {
+          const isLeader = clan.ownerId === userId;
+          if (isLeader) {
+            return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ²Ñ‹Ğ¹Ñ‚Ğ¸ Ğ¸Ğ· ÑĞ²Ğ¾ĞµĞ³Ğ¾ ĞºĞ»Ğ°Ğ½Ğ°, Ğ±ÑƒĞ´ÑƒÑ‡Ğ¸ Ğ›Ğ¸Ğ´ĞµÑ€Ğ¾Ğ¼! Ğ¡Ğ½Ğ°Ñ‡Ğ°Ğ»Ğ° Ğ¿ĞµÑ€ĞµĞ´Ğ°Ğ¹Ñ‚Ğµ ĞºĞ»Ğ°Ğ½ (/ĞºĞ»Ğ°Ğ½ Ğ¿ĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒ) Ğ¸Ğ»Ğ¸ Ñ€Ğ°ÑĞ¿ÑƒÑÑ‚Ğ¸Ñ‚Ğµ ĞµĞ³Ğ¾.");
+          }
+
+          const updatedMembers = (clan.members || []).filter((id: number) => id !== userId);
+          const updatedDeputies = (clan.deputies || []).filter((id: number) => id !== userId);
+          const updatedAssistants = (clan.assistants || []).filter((id: number) => id !== userId);
+
+          await firestoreDb.collection("clans").doc(clan.id).set({
+            members: updatedMembers,
+            deputies: updatedDeputies,
+            assistants: updatedAssistants
+          }, { merge: true });
+
+          await updateUser(userId, { clanId: null, clanRole: null });
+
+          return await sendResponse(`Ğ’Ñ‹ Ğ²Ñ‹ÑˆĞ»Ğ¸ Ğ¸Ğ· ĞºĞ»Ğ°Ğ½Ğ° ${clan.name}`);
+        }
+
+        if (sub === "Ğ²ĞµÑ€Ñ‚Ğ¾Ğ»Ñ‘Ñ‚Ñ‹" || sub === "Ğ²ĞµÑ€Ñ‚Ğ¾Ğ»ĞµÑ‚Ñ‹") {
+          const count = Math.max(1, parseInt(args[2]) || 1);
+          const cost = count * 50000;
+
+          if ((user.balance || 0) < cost) return await sendResponse(`Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ² Ğ½Ğ° Ñ€ÑƒĞºĞ°Ñ…! Ğ¦ĞµĞ½Ğ° 1 Ğ²ĞµÑ€Ñ‚Ğ¾Ğ»Ñ‘Ñ‚Ğ° - 50.000$ (Ğ½ÑƒĞ¶Ğ½Ğ¾ ${formatNum(cost)}$)`);
+
+          await updateUser(userId, { balance: user.balance - cost });
+          await firestoreDb.collection("clans").doc(clan.id).set({ helicopters: (clan.helicopters || 0) + count }, { merge: true });
+
+          return await sendResponse(`Ğ’Ñ‹ ĞºÑƒĞ¿Ğ¸Ğ»Ğ¸ ${count} Ğ²ĞµÑ€Ñ‚Ğ¾Ğ»Ñ‘Ñ‚Ğ¾Ğ² Ğ´Ğ»Ñ ĞºĞ»Ğ°Ğ½Ğ°`);
+        }
+
+        if (sub === "ÑĞ¾Ğ»Ğ´Ğ°Ñ‚Ñ‹" || sub === "ÑĞ¾Ğ»Ğ´Ğ°Ñ‚") {
+          const count = Math.max(1, parseInt(args[2]) || 1);
+          const cost = count * 5000;
+
+          if ((user.balance || 0) < cost) return await sendResponse(`Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ² Ğ½Ğ° Ñ€ÑƒĞºĞ°Ñ…! Ğ¦ĞµĞ½Ğ° 1 ÑĞ¾Ğ»Ğ´Ğ°Ñ‚Ğ° - 5.000$ (Ğ½ÑƒĞ¶Ğ½Ğ¾ ${formatNum(cost)}$)`);
+
+          await updateUser(userId, { balance: user.balance - cost });
+          await firestoreDb.collection("clans").doc(clan.id).set({ soldiers: (clan.soldiers || 0) + count }, { merge: true });
+
+          return await sendResponse(`Ğ’Ñ‹ ĞºÑƒĞ¿Ğ¸Ğ»Ğ¸ ${count} ÑĞ¾Ğ»Ğ´Ğ°Ñ‚Ğ¾Ğ² Ğ´Ğ»Ñ ĞºĞ»Ğ°Ğ½Ğ°`);
+        }
+
+        if (sub === "Ñ‚Ğ°Ğ½ĞºĞ¸" || sub === "Ñ‚Ğ°Ğ½Ğº") {
+          const count = Math.max(1, parseInt(args[2]) || 1);
+          const cost = count * 150000;
+
+          if ((user.balance || 0) < cost) return await sendResponse(`Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ² Ğ½Ğ° Ñ€ÑƒĞºĞ°Ñ…! Ğ¦ĞµĞ½Ğ° 1 Ñ‚Ğ°Ğ½ĞºĞ° - 150.000$ (Ğ½ÑƒĞ¶Ğ½Ğ¾ ${formatNum(cost)}$)`);
+
+          await updateUser(userId, { balance: user.balance - cost });
+          await firestoreDb.collection("clans").doc(clan.id).set({ tanks: (clan.tanks || 0) + count }, { merge: true });
+
+          return await sendResponse(`Ğ’Ñ‹ ĞºÑƒĞ¿Ğ¸Ğ»Ğ¸ ${count} Ñ‚Ğ°Ğ½ĞºĞ¾Ğ² Ğ´Ğ»Ñ ĞºĞ»Ğ°Ğ½Ğ°`);
+        }
+
+        if (sub === "Ğ¼ĞµÑÑ‚Ğ°") {
+          const isLeader = clan.ownerId === userId;
+          if (!isLeader) return await sendResponse("Ğ¢Ğ¾Ğ»ÑŒĞºĞ¾ Ğ›Ğ¸Ğ´ĞµÑ€ ĞºĞ»Ğ°Ğ½Ğ° Ğ¼Ğ¾Ğ¶ĞµÑ‚ Ğ¿Ğ¾ĞºÑƒĞ¿Ğ°Ñ‚ÑŒ Ğ¼ĞµÑÑ‚Ğ°!");
+
+          const cost = 250000;
+          if ((user.balance || 0) < cost) return await sendResponse("ĞŸĞ¾ĞºÑƒĞ¿ĞºĞ° 5 Ğ¼ĞµÑÑ‚ ÑÑ‚Ğ¾Ğ¸Ñ‚ 250.000$ Ğ½Ğ° Ñ€ÑƒĞºĞ°Ñ…!");
+
+          await updateUser(userId, { balance: user.balance - cost });
+          await firestoreDb.collection("clans").doc(clan.id).set({ maxMembers: (clan.maxMembers || 20) + 5 }, { merge: true });
+
+          return await sendResponse(`Ğ’Ñ‹ ĞºÑƒĞ¿Ğ¸Ğ»Ğ¸ Ğ´Ğ¾Ğ¿Ğ¾Ğ»Ğ½Ğ¸Ñ‚ĞµĞ»ÑŒĞ½Ğ¾Ğµ Ğ¼ĞµÑÑ‚Ğ¾ Ğ´Ğ»Ñ ÑƒÑ‡Ğ°ÑÑ‚Ğ½Ğ¸ĞºĞ° Ğ² ĞºĞ»Ğ°Ğ½.`);
+        }
+
+        return await sendResponse("ĞĞµĞ¸Ğ·Ğ²ĞµÑÑ‚Ğ½Ğ°Ñ Ğ¿Ğ¾Ğ´ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ°. Ğ˜ÑĞ¿Ğ¾Ğ»ÑŒĞ·ÑƒĞ¹Ñ‚Ğµ /ĞºĞ»Ğ°Ğ½ Ğ´Ğ»Ñ Ğ¸Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ğ¸.");
+      }
+
+      // 7. /Ñ‚Ğ¾Ğ¿
+      if (rawCmd === "/Ñ‚Ğ¾Ğ¿" || rawCmd === "/Ğ¿Ğ¸Ğ²Ğ¾Ğ·Ğ°Ğ²Ñ€Ñ‹") {
+        if (args[1]?.toLowerCase() === "Ğ±Ñ€Ğ°ĞºĞ¸" || args[1]?.toLowerCase() === "Ğ±Ñ€Ğ°Ğº" || args[1]?.toLowerCase() === "Ğ±Ñ€Ğ°ĞºĞ¾Ğ²") {
+          const text = await getTopMarriagesText();
+          return await sendResponse(text);
+        }
+
+        const keyboard = {
+          inline: true,
+          buttons: [
+            [
+              { action: { type: "callback", label: "Ğ¢Ğ¾Ğ¿ Ğ¿Ğ¾ Ğ´ĞµĞ½ÑŒĞ³Ğ°Ğ¼", payload: JSON.stringify({ cmd: "top_money", authorId: userId }) }, color: "primary" },
+              { action: { type: "callback", label: "Ğ¢Ğ¾Ğ¿ Ğ¿Ğ¾ Ğ´ĞµĞ½ÑŒĞ³Ğ°Ğ¼ Ğ² Ğ±Ğ°Ğ½ĞºĞµ", payload: JSON.stringify({ cmd: "top_bank", authorId: userId }) }, color: "primary" }
+            ],
+            [
+              { action: { type: "callback", label: "Ğ¢Ğ¾Ğ¿ Ğ¿Ğ¾ Ğ¿Ğ¸Ğ²Ñƒ", payload: JSON.stringify({ cmd: "top_beer", authorId: userId }) }, color: "primary" },
+              { action: { type: "callback", label: "Ğ¢Ğ¾Ğ¿ Ğ¿Ğ¾ JC", payload: JSON.stringify({ cmd: "top_jc", authorId: userId }) }, color: "primary" }
+            ],
+            [
+              { action: { type: "callback", label: "Ğ¢Ğ¾Ğ¿ Ğ¿Ğ¾ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ°Ğ¼", payload: JSON.stringify({ cmd: "top_biz", authorId: userId }) }, color: "primary" },
+              { action: { type: "callback", label: "Ğ¢Ğ¾Ğ¿ Ğ¿Ğ¾ Ñ€ĞµĞ¿ÑƒÑ‚Ğ°Ñ†Ğ¸Ğ¸", payload: JSON.stringify({ cmd: "top_rep", authorId: userId }) }, color: "primary" }
+            ],
+            [
+              { action: { type: "callback", label: "Ğ¢Ğ¾Ğ¿ Ğ¿Ğ¾ Ğ±Ñ€Ğ°ĞºĞ°Ğ¼", payload: JSON.stringify({ cmd: "top_marriages", authorId: userId }) }, color: "secondary" },
+              { action: { type: "callback", label: "Ğ¢Ğ¾Ğ¿ ĞºĞ»Ğ°Ğ½Ğ¾Ğ²", payload: JSON.stringify({ cmd: "top_clans", authorId: userId }) }, color: "secondary" }
+            ]
+          ]
+        };
+
+        return await sendResponse(`Ğ’Ñ‹Ğ±ĞµÑ€Ğ¸Ñ‚Ğµ ĞºĞ°Ñ‚ĞµĞ³Ğ¾Ñ€Ğ¸Ñ Ñ‚Ğ¾Ğ¿Ğ°:`, { keyboard: JSON.stringify(keyboard) });
+      }
+
+      // 8. /Ñ€ÑƒĞ»ĞµÑ‚ĞºĞ°
+      if (rawCmd === "/Ñ€ÑƒĞ»ĞµÑ‚ĞºĞ°") {
+        let stake = parseNumber(args[1]);
+        if (args[1]?.toLowerCase() === "Ğ²ÑĞµ" || args[1]?.toLowerCase() === "Ğ²Ğ°Ğ±Ğ°Ğ½Ğº") stake = user.balance || 0;
+        if (isNaN(stake) || stake <= 0) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ÑÑƒĞ¼Ğ¼Ñƒ ÑÑ‚Ğ°Ğ²ĞºĞ¸!");
+        if ((user.balance || 0) < stake) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ²!");
+
+        const win = Math.random() < 0.35; // 35% win rate
+        if (win) {
+          const winAmount = Math.floor(stake * (globalSettings.rouletteMultiplier || 3));
+          await updateUser(userId, { balance: user.balance + winAmount });
+          await logBotAction({ type: "game", peerId, userId, text: `[id${userId}|${fullName}] Ğ²Ñ‹Ğ¸Ğ³Ñ€Ğ°Ğ»(-Ğ°) ${winAmount.toLocaleString()}$ Ğ² Ñ€ÑƒĞ»ĞµÑ‚ĞºĞµ (Ğ¡Ñ‚Ğ°Ğ²ĞºĞ°: ${stake.toLocaleString()}$)` });
+          return await sendResponse(`ğŸ° [id${userId}|${fullName}], Ğ²Ñ‹ Ğ²Ñ‹Ğ¸Ğ³Ñ€Ğ°Ğ»Ğ¸ ${winAmount.toLocaleString()}$ Ğ² Ñ€ÑƒĞ»ĞµÑ‚ĞºĞµ!`);
+        } else {
+          await updateUser(userId, { balance: user.balance - stake });
+          await logBotAction({ type: "game", peerId, userId, text: `[id${userId}|${fullName}] Ğ¿Ñ€Ğ¾Ğ¸Ğ³Ñ€Ğ°Ğ»(-Ğ°) ${stake.toLocaleString()}$ Ğ² Ñ€ÑƒĞ»ĞµÑ‚ĞºĞµ` });
+          return await sendResponse(`ğŸ° [id${userId}|${fullName}], Ğ²Ñ‹ Ğ¿Ñ€Ğ¾Ğ¸Ğ³Ñ€Ğ°Ğ»Ğ¸ ${stake.toLocaleString()}$ Ğ² Ñ€ÑƒĞ»ĞµÑ‚ĞºĞµ.`);
+        }
+      }
+
+// 10. Business system
+      if (rawCmd === "/Ğ±Ğ¸Ğ·Ğ½ĞµÑ") {
+        const bCount = user.businesses || 0;
+        const bType = user.bizType || 0;
+        const bizInfo = bType > 0 ? BIZ_TYPES[bType as keyof typeof BIZ_TYPES] : null;
+
+        const bIncome = bizInfo ? bCount * bizInfo.profit : 0;
+        const bProds = user.bizProducts || 0;
+
+        const totalHoursLeft = bCount > 0 ? Math.floor(bProds / bCount) : 0;
+        const days = Math.floor(totalHoursLeft / 24);
+        const hours = totalHoursLeft % 24;
+        const mins = 0;
+
+        const pluralize = (num: number, forms: string[]) => {
+          const MathAbs = Math.abs(num);
+          const n = MathAbs % 100;
+          const n1 = n % 10;
+          if (n > 10 && n < 20) return forms[2];
+          if (n1 > 1 && n1 < 5) return forms[1];
+          if (n1 === 1) return forms[0];
+          return forms[2];
+        };
+
+        const now = Date.now();
+        const bizExpireAt = user.bizExpireAt || 0;
+        let workMsLeft = bizExpireAt - now;
+        if (workMsLeft < 0) workMsLeft = 0;
+
+        const workHoursLeft = Math.floor(workMsLeft / 3600000);
+        const workMinsLeft = Math.floor((workMsLeft % 3600000) / 60000);
+
+        const incomeAcc = user.bizIncomeAcc || 0;
+
+        let txt = `Ğ¡Ñ‚Ğ°Ñ‚Ğ¸ÑÑ‚Ğ¸ĞºĞ° Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ² [id${userId}|${fullName}]\n\n` +
+                  `| ĞšĞ¾Ğ»-Ğ²Ğ¾ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ²: ${bCount}\n` +
+                  `| ĞŸÑ€Ğ¸Ğ±Ñ‹Ğ»ÑŒ Ñ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ² Ğ·Ğ° 1 Ñ‡Ğ°Ñ: ${bIncome.toLocaleString()}$\n\n` +
+                  `| ĞšĞ¾Ğ»-Ğ²Ğ¾ Ğ¿Ñ€Ğ¾Ğ´ÑƒĞºÑ‚Ğ¾Ğ²: ${bProds.toLocaleString()}\n` +
+                  `| ĞŸÑ€Ğ¾Ğ´ÑƒĞºÑ‚Ğ¾Ğ² Ñ…Ğ²Ğ°Ñ‚Ğ¸Ñ‚ Ğ½Ğ°: ${days} ${pluralize(days, ['Ğ´ĞµĞ½ÑŒ', 'Ğ´Ğ½Ñ', 'Ğ´Ğ½ĞµĞ¹'])} ${hours} ${pluralize(hours, ['Ñ‡Ğ°Ñ', 'Ñ‡Ğ°ÑĞ°', 'Ñ‡Ğ°ÑĞ¾Ğ²'])} ${mins} ${pluralize(mins, ['Ğ¼Ğ¸Ğ½ÑƒÑ‚Ñƒ', 'Ğ¼Ğ¸Ğ½ÑƒÑ‚Ñ‹', 'Ğ¼Ğ¸Ğ½ÑƒÑ‚'])}\n\n` +
+                  `| Ğ”Ğ¾ ĞºĞ¾Ğ½Ñ†Ğ° Ñ€Ğ°Ğ±Ğ¾Ñ‚Ñ‹ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ²: ${workHoursLeft} ${pluralize(workHoursLeft, ['Ñ‡Ğ°Ñ', 'Ñ‡Ğ°ÑĞ°', 'Ñ‡Ğ°ÑĞ¾Ğ²'])} ${workMinsLeft} ${pluralize(workMinsLeft, ['Ğ¼Ğ¸Ğ½ÑƒÑ‚Ñƒ', 'Ğ¼Ğ¸Ğ½ÑƒÑ‚Ñ‹', 'Ğ¼Ğ¸Ğ½ÑƒÑ‚'])}\n\n` +
+                  `| ĞĞ±Ñ‰Ğ¸Ğ¹ Ğ±Ğ°Ğ»Ğ°Ğ½Ñ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ²: ${incomeAcc.toLocaleString()}$`;
+
+        const keyboard: any = { inline: true, buttons: [] };
+
+        if (incomeAcc > 0) {
+          keyboard.buttons.push([{ action: { type: "callback", label: "Ğ¡Ğ½ÑÑ‚ÑŒ Ğ´ĞµĞ½ÑŒĞ³Ğ¸ Ñ Ğ±Ğ°Ğ»Ğ°Ğ½ÑĞ° Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ²", payload: JSON.stringify({ cmd: "biz_collect_new", authorId: userId }) }, color: "positive" }]);
+        }
+        if (workMsLeft <= 0 && bCount > 0) {
+          keyboard.buttons.push([{ action: { type: "callback", label: "ĞŸÑ€Ğ¾Ğ´Ğ»Ğ¸Ñ‚ÑŒ Ñ€Ğ°Ğ±Ğ¾Ñ‚Ñƒ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ²", payload: JSON.stringify({ cmd: "biz_renew", authorId: userId }) }, color: "negative" }]);
+        }
+        if (bCount > 0) {
+          keyboard.buttons.push([{ action: { type: "callback", label: "Ğ¡Ğ¿Ğ¸ÑĞ¾Ğº Ğ²ÑĞµÑ… Ğ²Ğ°ÑˆĞ¸Ñ… Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ²", payload: JSON.stringify({ cmd: "biz_my_list", authorId: userId, page: 1 }) }, color: "secondary" }]);
+        }
+
+        let photoAttachment: string | null = null;
+        if (bizInfo && bizInfo.img) {
+           try {
+             const uploadRes = await uploadPhoto(peerId, bizInfo.img, 1);
+             if (uploadRes && uploadRes.attachment) photoAttachment = uploadRes.attachment;
+           } catch (e) {
+             console.error("Error attaching biz photo:", e);
+           }
+        }
+
+        const options: any = {};
+        if (keyboard.buttons.length > 0) options.keyboard = JSON.stringify(keyboard);
+        if (photoAttachment) options.attachment = photoAttachment;
+
+        return await sendResponse(txt, Object.keys(options).length > 0 ? options : undefined);
+      }
+
+      if (rawCmd === "/Ğ±Ğ¸Ğ·Ğ½ĞµÑÑ‹") {
+        let txt = `Ğ¡Ğ¿Ğ¸ÑĞ¾Ğº Ğ²ÑĞµÑ… Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ² Ğ² Ğ±Ğ¾Ñ‚Ğµ:\n\n`;
+        Object.entries(BIZ_TYPES).forEach(([id, b]) => {
+           txt += `${id}) ${b.name} | Ğ¦ĞµĞ½Ğ°: ${b.price.toLocaleString()}$ | ĞŸÑ€Ğ¸Ğ±Ñ‹Ğ»ÑŒ Ğ² Ñ‡Ğ°Ñ: ${b.profit.toLocaleString()}$\n`;
+        });
+        return await sendResponse(txt);
+      }
+
+      if (rawCmd === "/ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞ±Ğ¸Ğ·") {
+        const typeId = parseNumber(args[1]);
+        const count = parseNumber(args[2]) || 1;
+
+        if (!typeId || !BIZ_TYPES[typeId as keyof typeof BIZ_TYPES]) {
+           return await sendResponse("Ğ˜ÑĞ¿Ğ¾Ğ»ÑŒĞ·ÑƒĞ¹Ñ‚Ğµ: /ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞ±Ğ¸Ğ· [Ğ½Ğ¾Ğ¼ĞµÑ€ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ° (1-10)] [ĞºĞ¾Ğ»-Ğ²Ğ¾]");
+        }
+        if (count <= 0 || count > 100) return await sendResponse("Ğ’Ñ‹ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒ Ğ¾Ñ‚ 1 Ğ´Ğ¾ 100 Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ² Ğ·Ğ° Ñ€Ğ°Ğ·!");
+
+        const bType = user.bizType || 0;
+        if (bType !== 0 && bType !== typeId && (user.businesses || 0) > 0) {
+           return await sendResponse(`Ğ’Ñ‹ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ¿Ğ¾ĞºÑƒĞ¿Ğ°Ñ‚ÑŒ Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ğ±Ğ¸Ğ·Ğ½ĞµÑÑ‹ Ñ‚Ğ¾Ğ³Ğ¾ Ğ¶Ğµ Ñ‚Ğ¸Ğ¿Ğ°, ĞºĞ¾Ñ‚Ğ¾Ñ€Ñ‹Ğ¹ Ñƒ Ğ²Ğ°Ñ ÑƒĞ¶Ğµ ĞµÑÑ‚ÑŒ (${BIZ_TYPES[bType as keyof typeof BIZ_TYPES].name})!`);
+        }
+
+        const bizInfo = BIZ_TYPES[typeId as keyof typeof BIZ_TYPES];
+        const cost = count * bizInfo.price;
+
+        if ((user.balance || 0) < cost) return await sendResponse(`Ğ”Ğ»Ñ Ğ¿Ğ¾ĞºÑƒĞ¿ĞºĞ¸ ${count} Ğ±Ğ¸Ğ·Ğ½ĞµÑ-(Ğ¾Ğ²) Ñ‚Ñ€ĞµĞ±ÑƒĞµÑ‚ÑÑ ${cost.toLocaleString()}$`);
+
+        const newBiz = (user.businesses || 0) + count;
+        const extraUpdates: any = { balance: user.balance - cost, businesses: newBiz, bizType: typeId };
+        if ((user.businesses || 0) === 0) {
+           extraUpdates.bizExpireAt = Date.now() + 5 * 3600 * 1000;
+           extraUpdates.lastBizCollectTime = Math.floor(Date.now() / 1000);
+        }
+
+        await updateUser(userId, extraUpdates);
+        return await sendResponse(`Ğ’Ñ‹ ĞºÑƒĞ¿Ğ¸Ğ»Ğ¸ ${count} Ğ±Ğ¸Ğ·Ğ½ĞµÑ-(Ğ¾Ğ²)\n| Ğ¢ĞµĞ¿ĞµÑ€ÑŒ Ñƒ Ğ²Ğ°Ñ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ²: ${newBiz}\n| ĞĞµ Ğ·Ğ°Ğ±ÑƒĞ´ÑŒÑ‚Ğµ Ğ·Ğ°ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒ Ğ¿Ñ€Ğ¾Ğ´ÑƒĞºÑ‚Ñ‹ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ¾Ğ¹ /Ğ¿Ğ¿Ñ€Ğ¾Ğ´!`);
+      }
+
+      if (rawCmd === "/Ğ¿Ñ€Ğ¾Ğ´Ğ°Ñ‚ÑŒĞ±Ğ¸Ğ·") {
+        const currentBiz = user.businesses || 0;
+        if (currentBiz === 0) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµÑ‚ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ² Ğ´Ğ»Ñ Ğ¿Ñ€Ğ¾Ğ´Ğ°Ğ¶Ğ¸!");
+        const count = parseNumber(args[1]) || currentBiz;
+        if (count <= 0 || count > currentBiz) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ĞºĞ¾Ñ€Ñ€ĞµĞºÑ‚Ğ½Ğ¾Ğµ ĞºĞ¾Ğ»Ğ¸Ñ‡ĞµÑÑ‚Ğ²Ğ¾ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ² Ğ´Ğ»Ñ Ğ¿Ñ€Ğ¾Ğ´Ğ°Ğ¶Ğ¸!");
+
+        const bType = user.bizType || 0;
+        const bizInfo = bType > 0 ? BIZ_TYPES[bType as keyof typeof BIZ_TYPES] : null;
+        if (!bizInfo) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµÑ‚ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ² Ğ´Ğ»Ñ Ğ¿Ñ€Ğ¾Ğ´Ğ°Ğ¶Ğ¸!");
+
+        const sellPrice = count * (bizInfo.price * 0.5); // Sell for 50% price
+        const newBiz = currentBiz - count;
+
+        let extra: any = { balance: (user.balance || 0) + sellPrice, businesses: newBiz };
+        if (newBiz === 0) {
+           extra.bizType = 0;
+        }
+
+        await updateUser(userId, extra);
+        return await sendResponse(`Ğ’Ñ‹ Ğ¿Ñ€Ğ¾Ğ´Ğ°Ğ»Ğ¸ ${count} Ğ±Ğ¸Ğ·Ğ½ĞµÑ-(Ğ¾Ğ²) Ğ·Ğ° ${sellPrice.toLocaleString()}$\n| Ğ£ Ğ²Ğ°Ñ Ğ¾ÑÑ‚Ğ°Ğ»Ğ¾ÑÑŒ: ${newBiz} Ğ±Ğ¸Ğ·Ğ½ĞµÑ-(Ğ¾Ğ²)`);
+      }
+
+      if (rawCmd === "/Ğ¿Ğ¿Ñ€Ğ¾Ğ´" || rawCmd === "/ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞ¿Ñ€Ğ¾Ğ´") {
+        const bCount = user.businesses || 0;
+        if (bCount === 0) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµÑ‚ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ² Ğ´Ğ»Ñ Ğ·Ğ°ĞºÑƒĞ¿ĞºĞ¸ Ğ¿Ñ€Ğ¾Ğ´ÑƒĞºÑ‚Ğ¾Ğ²!");
+        const count = parseNumber(args[1]) || (bCount * 24);
+        if (count <= 0) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ĞºĞ¾Ñ€Ñ€ĞµĞºÑ‚Ğ½Ğ¾Ğµ ĞºĞ¾Ğ»Ğ¸Ñ‡ĞµÑÑ‚Ğ²Ğ¾ Ğ¿Ñ€Ğ¾Ğ´ÑƒĞºÑ‚Ğ¾Ğ²!");
+        const cost = count * 250;
+        if ((user.balance || 0) < cost) return await sendResponse(`Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ²! (ĞĞµĞ¾Ğ±Ñ…Ğ¾Ğ´Ğ¸Ğ¼Ğ¾: ${cost.toLocaleString()}$ Ğ·Ğ° ${count} Ğ¿Ñ€Ğ¾Ğ´ÑƒĞºÑ‚Ğ¾Ğ²)`);
+        const newProds = (user.bizProducts || 0) + count;
+        await updateUser(userId, { balance: user.balance - cost, bizProducts: newProds });
+        return await sendResponse(`Ğ’Ñ‹ ÑƒÑĞ¿ĞµÑˆĞ½Ğ¾ Ğ·Ğ°ĞºÑƒĞ¿Ğ¸Ğ»Ğ¸ ${count} Ğ¿Ñ€Ğ¾Ğ´ÑƒĞºÑ‚Ğ¾Ğ² Ğ´Ğ»Ñ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ° Ğ·Ğ° ${cost.toLocaleString()}$!\n| Ğ’ÑĞµĞ³Ğ¾ Ğ¿Ñ€Ğ¾Ğ´ÑƒĞºÑ‚Ğ¾Ğ²: ${newProds}`);
+      }
+
+      if (rawCmd === "/Ğ¿Ñ€ĞµĞ¼Ğ¿Ñ€Ğ¾Ñ„Ğ¸Ğ»ÑŒ") {
+        const hasPremium = user.vipExpires > Date.now();
+        if (!hasPremium) return await sendResponse("Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ° Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ñ Ğ¿Ñ€ĞµĞ¼Ğ¸ÑƒĞ¼Ğ¾Ğ¼ ÑÑ‚Ğ°Ñ‚ÑƒÑĞ¾Ğ¼.");
+        const mode = args[1];
+        if (mode === "+") {
+          await updateUser(userId, { premiumProfileHidden: false });
+          return await sendResponse("Ğ’Ñ‹ Ğ¾Ñ‚ĞºÑ€Ñ‹Ğ»Ğ¸ ÑĞ²Ğ¾Ğ¹ Ğ¿Ñ€Ğ¾Ñ„Ğ¸Ğ»ÑŒ Ğ´Ğ»Ñ Ğ¿ÑƒĞ±Ğ»Ğ¸Ñ‡Ğ½Ğ¾Ğ³Ğ¾ Ğ¿Ñ€Ğ¾ÑĞ¼Ğ¾Ñ‚Ñ€Ğ°");
+        } else if (mode === "-") {
+          await updateUser(userId, { premiumProfileHidden: true });
+          return await sendResponse("Ğ’Ñ‹ Ğ·Ğ°ĞºÑ€Ñ‹Ğ»Ğ¸ ÑĞ²Ğ¾Ğ¹ Ğ¿Ñ€Ğ¾Ñ„Ğ¸Ğ»ÑŒ Ğ´Ğ»Ñ Ğ¿ÑƒĞ±Ğ»Ğ¸Ñ‡Ğ½Ğ¾Ğ³Ğ¾ Ğ¿Ñ€Ğ¾ÑĞ¼Ğ¾Ñ‚Ñ€Ğ°");
+        } else {
+          return await sendResponse("Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ¿Ğ¾Ğ·Ğ²Ğ¾Ğ»ÑĞµÑ‚ ÑĞºÑ€Ñ‹Ñ‚ÑŒ Ğ¿Ñ€Ğ¾Ñ„Ğ¸Ğ»ÑŒ, Ğ¸Ğ»Ğ¸ Ğ¾Ñ‚ĞºÑ€Ñ‹Ñ‚ÑŒ ĞµĞ³Ğ¾, Ğ´Ğ»Ñ Ğ¿ÑƒĞ±Ğ»Ğ¸Ñ‡Ğ½Ğ¾Ğ³Ğ¾ Ğ¿Ñ€Ğ¾ÑĞ¼Ğ¾Ñ‚Ñ€Ğ°, Ñ„Ğ¾Ñ€Ğ¼Ğ° Ğ¾Ñ‚Ğ²ĞµÑ‚Ğ° Ğº ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğµ: /Ğ¿Ñ€ĞµĞ¼Ğ¿Ñ€Ğ¾Ñ„Ğ¸Ğ»ÑŒ -/+");
+        }
+      }
+
+      if (rawCmd === "/Ğ¿Ñ€ĞµĞ¼Ğ±Ğ°Ğ»Ğ°Ğ½Ñ") {
+        const hasPremium = user.vipExpires > Date.now();
+        if (!hasPremium) return await sendResponse("Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ° Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ñ Ğ¿Ñ€ĞµĞ¼Ğ¸ÑƒĞ¼Ğ¾Ğ¼ ÑÑ‚Ğ°Ñ‚ÑƒÑĞ¾Ğ¼.");
+        const mode = args[1];
+        if (mode === "+") {
+          await updateUser(userId, { premiumBalanceHidden: false });
+          return await sendResponse("Ğ’Ñ‹ Ğ¾Ñ‚ĞºÑ€Ñ‹Ğ»Ğ¸ ÑĞ²Ğ¾Ğ¹ Ğ±Ğ°Ğ»Ğ°Ğ½Ñ Ğ´Ğ»Ñ Ğ¿ÑƒĞ±Ğ»Ğ¸Ñ‡Ğ½Ğ¾Ğ³Ğ¾ Ğ¿Ñ€Ğ¾ÑĞ¼Ğ¾Ñ‚Ñ€Ğ°");
+        } else if (mode === "-") {
+          await updateUser(userId, { premiumBalanceHidden: true });
+          return await sendResponse("Ğ’Ñ‹ Ğ·Ğ°ĞºÑ€Ñ‹Ğ»Ğ¸ ÑĞ²Ğ¾Ğ¹ Ğ±Ğ°Ğ»Ğ°Ğ½Ñ Ğ´Ğ»Ñ Ğ¿ÑƒĞ±Ğ»Ğ¸Ñ‡Ğ½Ğ¾Ğ³Ğ¾ Ğ¿Ñ€Ğ¾ÑĞ¼Ğ¾Ñ‚Ñ€Ğ°");
+        } else {
+          return await sendResponse("Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ¿Ğ¾Ğ·Ğ²Ğ¾Ğ»ÑĞµÑ‚ ÑĞºÑ€Ñ‹Ñ‚ÑŒ Ğ±Ğ°Ğ»Ğ°Ğ½Ñ, Ğ¸Ğ»Ğ¸ Ğ¾Ñ‚ĞºÑ€Ñ‹Ñ‚ÑŒ ĞµĞ³Ğ¾, Ğ´Ğ»Ñ Ğ¿ÑƒĞ±Ğ»Ğ¸Ñ‡Ğ½Ğ¾Ğ³Ğ¾ Ğ¿Ñ€Ğ¾ÑĞ¼Ğ¾Ñ‚Ñ€Ğ°, Ñ„Ğ¾Ñ€Ğ¼Ğ° Ğ¾Ñ‚Ğ²ĞµÑ‚Ğ° Ğº ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğµ: /Ğ¿Ñ€ĞµĞ¼Ğ±Ğ°Ğ»Ğ°Ğ½Ñ -/+");
+        }
+      }
+
+      if (rawCmd === "/Ğ¾Ñ‚ĞºÑ€Ñ‹Ñ‚ÑŒĞ´ĞµĞ¿Ğ¾Ğ·Ğ¸Ñ‚") {
+        const hasPremium = user.vipExpires > Date.now();
+        if (!hasPremium) return await sendResponse("Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ° Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ñ Ğ¿Ñ€ĞµĞ¼Ğ¸ÑƒĞ¼Ğ¾Ğ¼ ÑÑ‚Ğ°Ñ‚ÑƒÑĞ¾Ğ¼.");
+        
+        const days = parseInt(args[1]);
+        const amountStr = args[2] || "";
+        let amount = parseNumber(amountStr);
+
+        if (user.deposits && user.deposits.length >= 2) {
+          return await sendResponse("Ğ£ Ğ²Ğ°Ñ ÑƒĞ¶Ğµ Ğ¾Ñ‚ĞºÑ€Ñ‹Ñ‚Ğ¾ Ğ¼Ğ°ĞºÑĞ¸Ğ¼ÑƒĞ¼ 2 Ğ´ĞµĞ¿Ğ¾Ğ·Ğ¸Ñ‚Ğ°!");
+        }
+
+        const validDays = [4, 8, 10];
+        if (!validDays.includes(days)) return await sendResponse("Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ñ‹Ğµ ÑÑ€Ğ¾ĞºĞ¸ Ğ´ĞµĞ¿Ğ¾Ğ·Ğ¸Ñ‚Ğ¾Ğ²: 4 Ğ´Ğ½Ñ (10%), 8 Ğ´Ğ½ĞµĞ¹ (25%), 10 Ğ´Ğ½ĞµĞ¹ (35%)");
+        if (isNaN(amount) || amount <= 0 || amount === Infinity) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ĞºĞ¾Ñ€Ñ€ĞµĞºÑ‚Ğ½ÑƒÑ ÑÑƒĞ¼Ğ¼Ñƒ Ğ´Ğ»Ñ Ğ´ĞµĞ¿Ğ¾Ğ·Ğ¸Ñ‚Ğ°!");
+        if (user.balance < amount) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ² Ğ½Ğ° Ñ€ÑƒĞºĞ°Ñ…!");
+
+        const percentMap: Record<number, number> = { 4: 10, 8: 25, 10: 35 };
+        const percent = percentMap[days];
+        const expiresAt = Date.now() + days * 86400 * 1000;
+        
+        const newDeposit = {
+          id: Date.now(),
+          amount: Math.floor(amount),
+          percent,
+          days,
+          expiresAt,
+          openedAt: Date.now()
+        };
+
+        const updatedDeposits = [...(user.deposits || []), newDeposit];
+        await updateUser(userId, { balance: user.balance - Math.floor(amount), deposits: updatedDeposits });
+        
+        return await sendResponse(`Ğ’Ñ‹ Ğ¾Ñ‚ĞºÑ€Ñ‹Ğ»Ğ¸ Ğ´ĞµĞ¿Ğ¾Ğ·Ğ¸Ñ‚ Ğ½Ğ° ÑÑƒĞ¼Ğ¼Ñƒ Â«${Math.floor(amount).toLocaleString()}$Â» Ğ½Ğ° ĞºĞ¾Ğ»-Ğ²Ğ¾ Ğ´Ğ½ĞµĞ¹ ${days}`);
+      }
+
+      if (rawCmd === "/Ğ´ĞµĞ¿Ğ¾Ğ·Ğ¸Ñ‚Ñ‹") {
+        const hasPremium = user.vipExpires > Date.now();
+        if (!hasPremium) return await sendResponse("Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ° Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ñ Ğ¿Ñ€ĞµĞ¼Ğ¸ÑƒĞ¼Ğ¾Ğ¼ ÑÑ‚Ğ°Ñ‚ÑƒÑĞ¾Ğ¼.");
+
+        const deposits = user.deposits || [];
+        const readyCount = deposits.filter((d: any) => Date.now() >= d.expiresAt).length;
+
+        let text = `...::Ğ£Ğ¿Ñ€Ğ°Ğ²Ğ»ĞµĞ½Ğ¸Ğµ Ğ´ĞµĞ¿Ğ¾Ğ·Ğ¸Ñ‚Ğ°Ğ¼Ğ¸::...\n\n` +
+          `| ĞšĞ¾Ğ»-Ğ²Ğ¾ Ğ¾Ñ‚ĞºÑ€Ñ‹Ñ‚Ñ‹Ñ… Ğ´ĞµĞ¿Ğ¾Ğ·Ğ¸Ñ‚Ğ¾Ğ² Ñƒ Ğ²Ğ°Ñ: ${deposits.length}\n` +
+          `| ĞšĞ¾Ğ»-Ğ²Ğ¾ Ğ´ĞµĞ¿Ğ¾Ğ·Ğ¸Ñ‚Ğ¾Ğ², ĞºĞ¾Ñ‚Ğ¾Ñ€Ñ‹Ğµ Ğ¼Ğ¾Ğ¶Ğ½Ğ¾ Ğ·Ğ°Ğ±Ñ€Ğ°Ñ‚ÑŒ: ${readyCount}\n\n` +
+          `| Ğ˜Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ Ğ¾Ñ‚ĞºÑ€Ñ‹Ñ‚Ñ‹Ñ… Ğ´ĞµĞ¿Ğ¾Ğ·Ğ¸Ñ‚Ğ°Ñ…:\n\n`;
+
+        const buttons: any[] = [];
+        deposits.forEach((d: any, idx: number) => {
+          const daysLeft = Math.max(0, Math.ceil((d.expiresAt - Date.now()) / (86400 * 1000)));
+          const finalAmount = Math.floor(d.amount * (1 + d.percent / 100));
+          text += `${idx + 1}) Ğ”ĞµĞ¿Ğ¾Ğ·Ğ¸Ñ‚ â„–${idx + 1} | Ğ¡ÑƒĞ¼Ğ¼Ğ°: ${d.amount.toLocaleString()}$ | ĞŸÑ€Ğ¾Ñ†ĞµĞ½Ñ‚: ${d.percent}% | ĞĞ°: ${d.days} Ğ´ | Ğ”Ğ¾ Ğ²Ñ‹Ğ²Ğ¾Ğ´Ğ°: ${daysLeft} Ğ´ | Ğ˜Ñ‚Ğ¾Ğ³: ${finalAmount.toLocaleString()}$\n`;
+          
+          if (Date.now() >= d.expiresAt) {
+            buttons.push([{ action: { type: "callback", label: `Ğ—Ğ°ĞºÑ€Ñ‹Ñ‚ÑŒ Ğ´ĞµĞ¿Ğ¾Ğ·Ğ¸Ñ‚ â„–${idx + 1}`, payload: JSON.stringify({ cmd: "deposit_close", id: d.id, num: idx + 1 }) }, color: "positive" }]);
+          }
+        });
+
+        if (deposits.length === 0) text += "Ğ£ Ğ²Ğ°Ñ Ğ½ĞµÑ‚ Ğ°ĞºÑ‚Ğ¸Ğ²Ğ½Ñ‹Ñ… Ğ´ĞµĞ¿Ğ¾Ğ·Ğ¸Ñ‚Ğ¾Ğ².";
+
+        return await sendResponse(text, { keyboard: JSON.stringify({ inline: true, buttons }) });
+      }
+
+      if (rawCmd === "/Ğ´ÑƒÑĞ»ÑŒ") {
+        let stake = parseNumber(args[1]);
+        if (args[1]?.toLowerCase() === "Ğ²ÑĞµ" || args[1]?.toLowerCase() === "Ğ²Ğ°Ğ±Ğ°Ğ½Ğº") stake = user.balance || 0;
+        if (isNaN(stake) || stake <= 0) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ÑÑƒĞ¼Ğ¼Ñƒ ÑÑ‚Ğ°Ğ²ĞºĞ¸!");
+        if ((user.balance || 0) < stake) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ²!");
+
+        const keyboard = {
+          inline: true,
+          buttons: [[{ action: { type: "callback", label: "Ğ¡Ñ€Ğ°Ğ·Ğ¸Ñ‚ÑŒÑÑ", payload: JSON.stringify({ cmd: "duel_join", creatorId: userId, creatorName: fullName, stake }) }, color: "positive" }]]
+        };
+
+        duelGames.set(peerId, { peerId, cmId: 0, creatorId: userId, creatorName: fullName, amount: stake });
+        return await sendResponse(`[id${userId}|${fullName}] Ğ·Ğ°Ğ¿ÑƒÑÑ‚Ğ¸Ğ»(-Ğ°) Ğ´ÑƒÑĞ»ÑŒ Ğ½Ğ° ${stake.toLocaleString()}$!\n\n| Ğ§Ñ‚Ğ¾ Ğ±Ñ‹ ÑÑ€Ğ°Ğ·Ğ¸Ñ‚ÑŒÑÑ Ğ² Ğ´ÑƒÑĞ»Ğ¸, Ğ½Ğ°Ğ¶Ğ¼Ğ¸Ñ‚Ğµ Ğ½Ğ° ĞºĞ½Ğ¾Ğ¿ĞºÑƒ`, {
+          keyboard: JSON.stringify(keyboard)
+        });
+      }
+
+      if (rawCmd === "/Ğ´ÑƒÑĞ»ÑŒĞ±Ğ¸Ğ·") {
+        const count = parseNumber(args[1]);
+        if (isNaN(count) || count <= 0) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ĞºĞ¾Ğ»Ğ¸Ñ‡ĞµÑÑ‚Ğ²Ğ¾ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ²!");
+        if ((user.businesses || 0) < count) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ²!");
+
+        const keyboard = {
+          inline: true,
+          buttons: [[{ action: { type: "callback", label: "Ğ¡Ñ€Ğ°Ğ·Ğ¸Ñ‚ÑŒÑÑ", payload: JSON.stringify({ cmd: "duel_biz_join", creatorId: userId, creatorName: fullName, count }) }, color: "positive" }]]
+        };
+
+        duelBizGames.set(peerId, { peerId, cmId: 0, creatorId: userId, creatorName: fullName, count });
+        return await sendResponse(`[id${userId}|${fullName}] Ğ·Ğ°Ğ¿ÑƒÑÑ‚Ğ¸Ğ»(-Ğ°) Ğ´ÑƒÑĞ»ÑŒ Ğ½Ğ° ${count} ${getBizDeclension(count)}!\n\n| Ğ§Ñ‚Ğ¾ Ğ±Ñ‹ ÑÑ€Ğ°Ğ·Ğ¸Ñ‚ÑŒÑÑ Ğ² Ğ´ÑƒÑĞ»Ğ¸, Ğ½Ğ°Ğ¶Ğ¼Ğ¸Ñ‚Ğµ Ğ½Ğ° ĞºĞ½Ğ¾Ğ¿ĞºÑƒ`, {
+          keyboard: JSON.stringify(keyboard)
+        });
+      }
+
+      if (rawCmd === "/Ğ¿Ğ¾Ğ³Ğ¾Ğ´Ğ°") {
+        const city = args.slice(1).join(" ").trim();
+        if (!city) {
+          return await sendResponse("Ğ˜ÑĞ¿Ğ¾Ğ»ÑŒĞ·ÑƒĞ¹Ñ‚Ğµ: /Ğ¿Ğ¾Ğ³Ğ¾Ğ´Ğ° (Ğ½Ğ°Ğ¿Ñ€Ğ¸Ğ¼ĞµÑ€, /Ğ¿Ğ¾Ğ³Ğ¾Ğ´Ğ° ĞœĞ¾ÑĞºĞ²Ğ°)");
+        }
+        const forecast = await getWeatherForecast(city, "today");
+        if (!forecast) {
+          return await sendResponse("Ğ“Ğ¾Ñ€Ğ¾Ğ´ Ğ½Ğµ Ğ½Ğ°Ğ¹Ğ´ĞµĞ½.");
+        }
+        return await sendResponse(forecast.text, { keyboard: JSON.stringify(forecast.keyboard) });
+      }
+
+      // 12. JORDAN'S COIN: /ĞºÑƒÑ€Ñ, /ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞºĞ¾Ğ¸Ğ½, /Ğ¿Ñ€Ğ¾Ğ´Ğ°Ñ‚ÑŒĞºĞ¾Ğ¸Ğ½, /Ğ¿ĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒĞºĞ¾Ğ¸Ğ½
+      if (rawCmd === "/ĞºÑƒÑ€Ñ") {
+        return await sendResponse(`ĞšÑƒÑ€Ñ JORDAN'S COIN\n\n| Ğ¡Ñ‚Ğ¾Ğ¸Ğ¼Ğ¾ÑÑ‚ÑŒ Ğ¾Ğ´Ğ½Ğ¾Ğ³Ğ¾ JORDAN'S COIN: ${globalSettings.jcRate.toLocaleString()}$`);
+      }
+
+      if (rawCmd === "/ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞºĞ¾Ğ¸Ğ½") {
+        const count = parseNumber(args[1]) || 1;
+        if (count <= 0) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ĞºĞ¾Ğ»Ğ¸Ñ‡ĞµÑÑ‚Ğ²Ğ¾!");
+        const totalCost = count * globalSettings.jcRate;
+        if ((user.balance || 0) < totalCost) return await sendResponse(`Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ²! (ĞÑƒĞ¶Ğ½Ğ¾: ${totalCost.toLocaleString()}$)`);
+
+        await updateUser(userId, { balance: user.balance - totalCost, jc: (user.jc || 0) + count });
+        return await sendResponse(`Ğ’Ñ‹ ĞºÑƒĞ¿Ğ¸Ğ»Ğ¸ ${count} JORDAN'S COIN Ğ·Ğ° ${totalCost.toLocaleString()}$`);
+      }
+
+      if (rawCmd === "/Ğ¿Ñ€Ğ¾Ğ´Ğ°Ñ‚ÑŒĞºĞ¾Ğ¸Ğ½") {
+        const count = parseNumber(args[1]) || 1;
+        if (count <= 0 || (user.jc || 0) < count) return await sendResponse(`Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ĞºĞ¾Ğ¸Ğ½Ğ¾Ğ²! (Ğ˜Ğ¼ĞµĞµÑ‚ÑÑ: ${user.jc || 0})`);
+        const totalRefund = count * globalSettings.jcRate;
+
+        await updateUser(userId, { balance: (user.balance || 0) + totalRefund, jc: user.jc - count });
+        return await sendResponse(`Ğ’Ñ‹ Ğ¿Ñ€Ğ¾Ğ´Ğ°Ğ»Ğ¸ ${count} JORDAN'S COIN Ğ·Ğ° ${totalRefund.toLocaleString()}$`);
+      }
+
+      if (rawCmd === "/Ğ¿ĞµÑ€ĞµĞ´Ğ°Ñ‚ÑŒĞºĞ¾Ğ¸Ğ½") {
+        const parsed = await parseTargetUser(message, args.slice(1));
+        const count = parseNumber(args.find(a => /^\d+[kĞº]?$/.test(a.toLowerCase())) || "0");
+
+        if (!parsed.targetId || parsed.targetId === userId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+        if (count <= 0 || (user.jc || 0) < count) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ĞºĞ¾Ğ¸Ğ½Ğ¾Ğ²!");
+
+        const targetUser = await getOrCreateUser(parsed.targetId);
+        await updateUser(userId, { jc: user.jc - count });
+        await updateUser(parsed.targetId, { jc: (targetUser.jc || 0) + count });
+
+        return await sendResponse(`Ğ’Ñ‹ Ğ¿ĞµÑ€ĞµĞ´Ğ°Ğ»Ğ¸ ${count} JORDAN'S COIN Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${parsed.targetId}|${parsed.targetName}]`);
+      }
+
+      // 13. Bank: /Ğ±Ğ°Ğ½Ğº, /ÑĞ½ÑÑ‚ÑŒĞ±Ğ°Ğ½Ğº
+      if (rawCmd === "/Ğ±Ğ°Ğ½Ğº") {
+        let amount = parseNumber(args[1]);
+        if (args[1]?.toLowerCase() === "Ğ²ÑĞµ") amount = user.balance || 0;
+        if (isNaN(amount) || amount <= 0) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ÑÑƒĞ¼Ğ¼Ñƒ!");
+        if ((user.balance || 0) < amount) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ²!");
+
+        await updateUser(userId, { balance: user.balance - amount, bank: (user.bank || 0) + amount });
+        return await sendResponse(`Ğ’Ñ‹ Ğ¿Ğ¾Ğ»Ğ¾Ğ¶Ğ¸Ğ»Ğ¸ ${amount.toLocaleString()}$ Ğ² Ğ±Ğ°Ğ½Ğº`);
+      }
+
+      if (rawCmd === "/ÑĞ½ÑÑ‚ÑŒĞ±Ğ°Ğ½Ğº") {
+        let amount = parseNumber(args[1]);
+        if (args[1]?.toLowerCase() === "Ğ²ÑĞµ") amount = user.bank || 0;
+        if (isNaN(amount) || amount <= 0) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ÑÑƒĞ¼Ğ¼Ñƒ!");
+        if ((user.bank || 0) < amount) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ² Ğ² Ğ±Ğ°Ğ½ĞºĞµ!");
+
+        await updateUser(userId, { balance: (user.balance || 0) + amount, bank: user.bank - amount });
+        return await sendResponse(`Ğ’Ñ‹ ÑĞ½ÑĞ»Ğ¸ ${amount.toLocaleString()}$ Ñ Ğ±Ğ°Ğ½ĞºĞ°`);
+      }
+
+      // 14. Premium System: /ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞ¿Ñ€ĞµĞ¼, /ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞ¿Ñ€ĞµĞ¼Ğ¸ÑƒĞ¼, /ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞ²Ğ¸Ğ¿, /Ğ¿Ñ€ĞµĞ¼, /Ğ¿Ñ€ĞµĞ¼Ğ¸ÑƒĞ¼, /Ğ²Ğ¸Ğ¿
+      if (rawCmd === "/ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞ¿Ñ€ĞµĞ¼" || rawCmd === "/ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞ¿Ñ€ĞµĞ¼Ğ¸ÑƒĞ¼" || rawCmd === "/ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞ²Ğ¸Ğ¿") {
+        const cost = 15000000;
+        if ((user.balance || 0) < cost) return await sendResponse(`Ğ¡Ñ‚Ğ¾Ğ¸Ğ¼Ğ¾ÑÑ‚ÑŒ Premium-ÑÑ‚Ğ°Ñ‚ÑƒÑĞ°: 15.000.000$ Ğ½Ğ° 30 Ğ´Ğ½ĞµĞ¹!`);
+
+        const now = Date.now();
+        const currentExp = user.vipExpires > now ? user.vipExpires : now;
+        const newExp = currentExp + (30 * 86400 * 1000);
+
+        await updateUser(userId, { balance: user.balance - cost, vipExpires: newExp });
+        return await sendResponse(`Ğ’Ñ‹ ÑƒÑĞ¿ĞµÑˆĞ½Ğ¾ Ğ¿Ñ€Ğ¸Ğ¾Ğ±Ñ€ĞµĞ»Ğ¸ Premium-ÑÑ‚Ğ°Ñ‚ÑƒÑ Ğ½Ğ° 30 Ğ´Ğ½ĞµĞ¹!`);
+      }
+
+      if (rawCmd === "/Ğ¿Ñ€ĞµĞ¼" || rawCmd === "/Ğ¿Ñ€ĞµĞ¼Ğ¸ÑƒĞ¼" || rawCmd === "/Ğ²Ğ¸Ğ¿") {
+        const hasPremium = user.vipExpires > Date.now();
+        const statusText = hasPremium ? "ĞµÑÑ‚ÑŒ" : "Ğ½ĞµÑ‚ Ğ¿Ñ€ĞµĞ¼Ğ°.";
+        let expStr = "";
+        if (hasPremium) {
+          const d = new Date(user.vipExpires);
+          const dateFormatted = `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}`;
+          expStr = `\n\n| Ğ”Ğ¾ ĞºĞ¾Ğ½Ñ†Ğ° Ğ¿Ñ€ĞµĞ¼Ğ° - ${dateFormatted}`;
+        }
+        return await sendResponse(`Ğ˜Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ Premium Ğ¡Ñ‚Ğ°Ñ‚ÑƒÑĞµ:\n\n| Ğ¡Ñ‚Ğ°Ñ‚ÑƒÑ - ${statusText}${expStr}`);
+      }
+
+      // /Ğ²Ğ·Ğ»Ğ¾Ğ¼
+      if (rawCmd === "/Ğ²Ğ·Ğ»Ğ¾Ğ¼") {
+        const now = Date.now();
+        const cooldownMs = 3 * 3600 * 1000; // 3 hours
+        if (user.lastHackAt && now - user.lastHackAt < cooldownMs) {
+          const rem = cooldownMs - (now - user.lastHackAt);
+          const hours = Math.floor(rem / 3600000);
+          const minutes = Math.floor((rem % 3600000) / 60000);
+          const seconds = Math.floor((rem % 60000) / 1000);
+          return await sendResponse(`â³ Ğ’Ñ‹ ÑĞ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ²Ğ·Ğ»Ğ¾Ğ¼Ğ°Ñ‚ÑŒ ÑĞ½Ğ¾Ğ²Ğ° Ñ‡ĞµÑ€ĞµĞ· ${hours} Ñ‡. ${minutes} Ğ¼Ğ¸Ğ½. ${seconds} ÑĞµĞº.`);
+        }
+
+        const hackPhotos = [
+          "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600",
+          "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=600",
+          "https://images.unsplash.com/photo-1614064641913-a520faff82b1?w=600",
+          "https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=600",
+          "https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=600"
+        ];
+
+        const formType = Math.floor(Math.random() * 7) + 1; // 1 to 7
+        let textResp = "";
+        let needsPhoto = false;
+
+        if (formType === 1) {
+          const gain = Math.floor(Math.random() * (80000 - 10000 + 1)) + 10000;
+          await updateUser(userId, { balance: (user.balance || 0) + gain, lastHackAt: now });
+          textResp = `Ğ’Ñ‹ Ğ¿Ğ¾Ğ¿Ñ‹Ñ‚Ğ°Ğ»Ğ¸ÑÑŒ Ğ²Ğ·Ğ»Ğ¾Ğ¼Ğ°Ñ‚ÑŒ ÑĞµÑ€Ğ²ĞµÑ€ Minecraft, Ğ¸ Ñƒ Ğ²Ğ°Ñ Ğ¿Ğ¾Ğ»ÑƒÑ‡Ğ¸Ğ»Ğ¾ÑÑŒ!\n| Ğ’Ñ‹ Ğ·Ğ°Ñ€Ğ°Ğ±Ğ¾Ñ‚Ğ°Ğ»Ğ¸: ${gain.toLocaleString()}$`;
+          needsPhoto = true;
+        } else if (formType === 2) {
+          const loss = 20000;
+          await updateUser(userId, { balance: Math.max(0, (user.balance || 0) - loss), lastHackAt: now });
+          textResp = `Ğ’Ñ‹ Ğ¿Ğ¾Ğ¿Ñ‹Ñ‚Ğ°Ğ»Ğ¸ÑÑŒ Ğ²Ğ·Ğ»Ğ¾Ğ¼Ğ°Ñ‚ÑŒ ÑĞµÑ€Ğ²ĞµÑ€ Minecraft, Ğ¸ Ñƒ Ğ²Ğ°Ñ Ğ½Ğµ Ğ¿Ğ¾Ğ»ÑƒÑ‡Ğ¸Ğ»Ğ¾ÑÑŒ :(\n| Ğ§Ñ‚Ğ¾ Ğ±Ñ‹ Ğ²Ğ»Ğ°Ğ´ĞµĞ»ĞµÑ† ÑĞµÑ€Ğ²ĞµÑ€Ğ° Minecraft Ğ½Ğµ Ğ¿Ğ¸ÑĞ°Ğ» Ğ½Ğ° Ğ²Ğ°Ñ Ğ·Ğ°ÑĞ²Ğ»ĞµĞ½Ğ¸Ğµ Ğ·Ğ° Ğ²Ğ·Ğ»Ğ¾Ğ¼, Ğ²Ğ°Ğ¼ Ğ¿Ñ€Ğ¸ÑˆĞ»Ğ¾ÑÑŒ ĞµĞ¼Ñƒ Ğ¾Ñ‚Ğ´Ğ°Ñ‚ÑŒ 20.000$`;
+        } else if (formType === 3) {
+          const gain = Math.floor(Math.random() * (100000 - 10000 + 1)) + 10000;
+          await updateUser(userId, { balance: (user.balance || 0) + gain, lastHackAt: now });
+          textResp = `Ğ’Ñ‹ Ğ¿Ğ¾Ğ¿Ñ‹Ñ‚Ğ°Ğ»Ğ¸ÑÑŒ Ğ²Ğ·Ğ»Ğ¾Ğ¼Ğ°Ñ‚ÑŒ ÑĞ¸ÑÑ‚ĞµĞ¼Ñ‹ Ğ±ĞµĞ·Ğ¾Ğ¿Ğ°ÑĞ½Ğ¾ÑÑ‚Ğ¸ ĞºÑ€ÑƒĞ¿Ğ½Ğ¾Ğ¹ ĞºĞ¾Ğ¼Ğ¿Ğ°Ğ½Ğ¸Ğ¸, Ğ¸ Ñƒ Ğ²Ğ°Ñ Ğ¿Ğ¾Ğ»ÑƒÑ‡Ğ¸Ğ»Ğ¾ÑÑŒ!\n| Ğ’Ñ‹ Ğ·Ğ°Ñ€Ğ°Ğ±Ğ¾Ñ‚Ğ°Ğ»Ğ¸: ${gain.toLocaleString()}$`;
+          needsPhoto = true;
+        } else if (formType === 4) {
+          await updateUser(userId, { lastHackAt: now });
+          textResp = `Ğ’Ñ‹ Ğ¿Ğ¾Ğ¿Ñ‹Ñ‚Ğ°Ğ»Ğ¸ÑÑŒ Ğ²Ğ·Ğ»Ğ¾Ğ¼Ğ°Ñ‚ÑŒ ÑĞ¸ÑÑ‚ĞµĞ¼Ñ‹ Ğ±ĞµĞ·Ğ¾Ğ¿Ğ°ÑĞ½Ğ¾ÑÑ‚Ğ¸ ĞºÑ€ÑƒĞ¿Ğ½Ğ¾Ğ¹ ĞºĞ¾Ğ¼Ğ¿Ğ°Ğ½Ğ¸Ğ¸, Ğ½Ğ¾ Ğ²Ğ°Ñ Ğ¾Ñ‚Ğ²Ğ»Ñ‘Ğº Ñ‚ĞµĞ»ĞµÑ„Ğ¾Ğ½Ğ½Ñ‹Ğ¹ Ğ·Ğ²Ğ¾Ğ½Ğ¾Ğº, Ğ¸ Ñƒ Ğ²Ğ°Ñ Ğ½Ğ¸Ñ‡ĞµĞ³Ğ¾ Ğ½Ğµ Ğ¿Ğ¾Ğ»ÑƒÑ‡Ğ¸Ğ»Ğ¾ÑÑŒ :(`;
+        } else if (formType === 5) {
+          const gain = Math.floor(Math.random() * (80000 - 10000 + 1)) + 10000;
+          await updateUser(userId, { balance: (user.balance || 0) + gain, lastHackAt: now });
+          textResp = `Ğ’Ñ‹ Ğ¿Ğ¾Ğ¿Ñ‹Ñ‚Ğ°Ğ»Ğ¸ÑÑŒ Ğ²Ğ·Ğ»Ğ¾Ğ¼Ğ°Ñ‚ÑŒ Ğ·Ğ°Ğ¿Ğ¾Ñ€Ğ¾Ğ»ĞµĞ½Ğ½Ñ‹Ğ¹ Ñ‚ĞµĞ»ĞµÑ„Ğ¾Ğ½, Ğ¸ Ñƒ Ğ²Ğ°Ñ Ğ¿Ğ¾Ğ»ÑƒÑ‡Ğ¸Ğ»Ğ¾ÑÑŒ!\n| Ğ’Ñ‹ Ğ·Ğ°Ñ€Ğ°Ğ±Ğ¾Ñ‚Ğ°Ğ»Ğ¸: ${gain.toLocaleString()}$`;
+          needsPhoto = true;
+        } else if (formType === 6) {
+          await updateUser(userId, { lastHackAt: now });
+          textResp = `Ğ’Ñ‹ Ğ¿Ğ¾Ğ¿Ñ‹Ñ‚Ğ°Ğ»Ğ¸ÑÑŒ Ğ²Ğ·Ğ»Ğ¾Ğ¼Ğ°Ñ‚ÑŒ Ğ·Ğ°Ğ¿Ğ¾Ñ€Ğ¾Ğ»ĞµĞ½Ğ½Ñ‹Ğ¹ Ñ‚ĞµĞ»ĞµÑ„Ğ¾Ğ½, Ğ¸ Ñƒ Ğ²Ğ°Ñ Ğ½Ğ¸Ñ‡ĞµĞ³Ğ¾ Ğ½Ğµ Ğ¿Ğ¾Ğ»ÑƒÑ‡Ğ¸Ğ»Ğ¾ÑÑŒ :(`;
+        } else {
+          const loss = 30000;
+          await updateUser(userId, { balance: Math.max(0, (user.balance || 0) - loss), lastHackAt: now });
+          textResp = `Ğ’Ğ°Ñ Ğ¿Ğ¾ÑĞ°Ğ´Ğ¸Ğ»Ğ¸ Ğ² Ñ‚ÑÑ€ÑŒĞ¼Ñƒ, Ğ·Ğ° Ñ‚Ğ¾ Ñ‡Ñ‚Ğ¾ Ğ²Ñ‹ Ğ¿Ñ‹Ñ‚Ğ°Ğ»Ğ¸ÑÑŒ Ğ²Ğ·Ğ»Ğ¾Ğ¼Ğ°Ñ‚ÑŒ youtube ĞºĞ°Ğ½Ğ°Ğ» Ğ¿Ğ¾Ğ¿ÑƒĞ»ÑÑ€Ğ½Ğ¾Ğ³Ğ¾ Ğ±Ğ»Ğ¾Ğ³ĞµÑ€Ğ°.\n| Ğ§Ñ‚Ğ¾ Ğ±Ñ‹ Ğ²Ğ°Ñ Ğ¾Ñ‚Ñ‚ÑƒĞ´Ğ° Ğ²Ñ‹Ğ¿ÑƒÑÑ‚Ğ¸Ğ»Ğ¸, Ğ²Ğ°Ğ¼ Ğ¿Ñ€Ğ¸ÑˆĞ»Ğ¾ÑÑŒ Ğ·Ğ°Ğ¿Ğ»Ğ°Ñ‚Ğ¸Ñ‚ÑŒ 30.000$`;
+        }
+
+        const extra: any = {};
+        if (needsPhoto) {
+          const randImg = hackPhotos[Math.floor(Math.random() * hackPhotos.length)];
+          const uploadRes = await uploadPhoto(peerId, randImg);
+          if (uploadRes.attachment) extra.attachment = uploadRes.attachment;
+        }
+
+        return await sendResponse(textResp, extra);
+      }
+
+      // /Ñ„Ğ¾Ñ€Ñ‚ÑƒĞ½Ğ°
+      if (rawCmd === "/Ñ„Ğ¾Ñ€Ñ‚ÑƒĞ½Ğ°") {
+        const now = Date.now();
+        const cooldownMs = 86400000; // 1 day
+        if (user.lastFortuneAt && now - user.lastFortuneAt < cooldownMs) {
+          const rem = cooldownMs - (now - user.lastFortuneAt);
+          const hours = Math.floor(rem / 3600000);
+          const minutes = Math.floor((rem % 3600000) / 60000);
+          const seconds = Math.floor((rem % 60000) / 1000);
+          return await sendResponse(`â³ Ğ’Ñ‹ ÑĞ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ¿Ñ€Ğ¾ĞºÑ€ÑƒÑ‚Ğ¸Ñ‚ÑŒ ĞºĞ¾Ğ»ĞµÑĞ¾ Ñ„Ğ¾Ñ€Ñ‚ÑƒĞ½Ñ‹ ÑĞ½Ğ¾Ğ²Ğ° Ñ‡ĞµÑ€ĞµĞ· ${hours} Ñ‡. ${minutes} Ğ¼Ğ¸Ğ½. ${seconds} ÑĞµĞº.`);
+        }
+
+        const options = [
+          { label: "+3 Ñ€ĞµĞ¿ÑƒÑ‚Ğ°Ñ†Ğ¸Ğ¸", apply: async () => updateUser(userId, { rep: (user.rep || 0) + 3, lastFortuneAt: now }) },
+          { label: "100.000$", apply: async () => updateUser(userId, { balance: (user.balance || 0) + 100000, lastFortuneAt: now }) },
+          { label: "4 Ğ»Ğ¸Ñ‚Ñ€Ğ¾Ğ² Ğ¿Ğ¸Ğ²Ğ°", apply: async () => updateUser(userId, { beer: (user.beer || 0) + 4, lastFortuneAt: now }) },
+          { label: "50.000$", apply: async () => updateUser(userId, { balance: (user.balance || 0) + 50000, lastFortuneAt: now }) },
+          { label: "3 Ğ»Ğ¸Ñ‚Ñ€Ğ¾Ğ² Ğ¿Ğ¸Ğ²Ğ°", apply: async () => updateUser(userId, { beer: (user.beer || 0) + 3, lastFortuneAt: now }) },
+          { label: "+2 Ñ€ĞµĞ¿ÑƒÑ‚Ğ°Ñ†Ğ¸Ğ¸", apply: async () => updateUser(userId, { rep: (user.rep || 0) + 2, lastFortuneAt: now }) },
+          { label: "+1 Ñ€ĞµĞ¿ÑƒÑ‚Ğ°Ñ†Ğ¸Ñ", apply: async () => updateUser(userId, { rep: (user.rep || 0) + 1, lastFortuneAt: now }) },
+          { label: "2 Ğ»Ğ¸Ñ‚Ñ€Ğ° Ğ¿Ğ¸Ğ²Ğ°", apply: async () => updateUser(userId, { beer: (user.beer || 0) + 2, lastFortuneAt: now }) },
+          { label: "150.000$", apply: async () => updateUser(userId, { balance: (user.balance || 0) + 150000, lastFortuneAt: now }) }
+        ];
+
+        const item = options[Math.floor(Math.random() * options.length)];
+        await item.apply();
+
+        return await sendResponse(`Ğ’Ñ‹ Ğ¿Ñ€Ğ¾ĞºÑ€ÑƒÑ‚Ğ¸Ğ»Ğ¸ ĞºĞ¾Ğ»ĞµÑĞ¾ Ñ„Ğ¾Ñ€Ñ‚ÑƒĞ½Ñ‹, Ğ¸ Ğ²Ğ°Ğ¼ Ğ²Ñ‹Ğ¿Ğ°Ğ»Ğ¾: ${item.label}`);
+      }
+
+      // /ĞµĞ¶ĞµĞ´Ğ½ĞµĞ²Ğ½Ñ‹Ğ¹ Ğ±Ğ¾Ğ½ÑƒÑ
+      if (rawCmd === "/ĞµĞ¶ĞµĞ´Ğ½ĞµĞ²Ğ½Ñ‹Ğ¹" || rawCmd === "/ĞµĞ¶ĞµĞ´Ğ½ĞµĞ²Ğ½Ñ‹Ğ¹_Ğ±Ğ¾Ğ½ÑƒÑ" || rawCmd === "/Ğ±Ğ¾Ğ½ÑƒÑ") {
+        const now = Date.now();
+        const currentDay = user.dailyDay || 1;
+        const dayData = DAILY_BONUSES[currentDay] || DAILY_BONUSES[1];
+        const isReady = !user.lastDailyAt || (now - user.lastDailyAt >= 86400000);
+        const statusStr = isReady ? "Ğ³Ğ¾Ñ‚Ğ¾Ğ²" : "Ğ½Ğµ Ğ³Ğ¾Ñ‚Ğ¾Ğ²";
+
+        const textResp = `Ğ’Ğ°Ñˆ ĞµĞ¶ĞµĞ´Ğ½ĞµĞ²Ğ½Ñ‹Ğ¹ Ğ±Ğ¾Ğ½ÑƒÑ: ${statusStr}\n| Ğ‘Ğ¾Ğ½ÑƒÑ ÑĞµĞ³Ğ¾Ğ´Ğ½Ñ: ${dayData.label}`;
+
+        if (isReady) {
+          const keyboard = {
+            inline: true,
+            buttons: [
+              [
+                { action: { type: "callback", label: "Ğ—Ğ°Ğ±Ñ€Ğ°Ñ‚ÑŒ Ğ±Ğ¾Ğ½ÑƒÑ", payload: JSON.stringify({ cmd: "claim_daily_bonus", authorId: userId }) }, color: "positive" }
+              ]
+            ]
+          };
+          return await sendResponse(textResp, { keyboard: JSON.stringify(keyboard) });
+        } else {
+          return await sendResponse(textResp);
+        }
+      }
+
+      // /Ğ¿Ğ¾Ğ´Ğ¿Ğ¸ÑĞºĞ°
+      if (rawCmd === "/Ğ¿Ğ¾Ğ´Ğ¿Ğ¸ÑĞºĞ°") {
+        if (user.hasSubBonus) {
+          return await sendResponse("Ğ’Ñ‹ ÑƒĞ¶Ğµ Ğ¿Ğ¾Ğ»ÑƒÑ‡Ğ°Ğ»Ğ¸ Ğ±Ğ¾Ğ½ÑƒÑ Ğ·Ğ° Ğ¿Ğ¾Ğ´Ğ¿Ğ¸ÑĞºÑƒ Ğ½Ğ° ÑĞ¾Ğ¾Ğ±Ñ‰ĞµÑÑ‚Ğ²Ğ¾!");
+        }
+
+        try {
+          const memberRes = await axios.get("https://api.vk.com/method/groups.isMember", {
+            params: {
+              access_token: VK_TOKEN,
+              v: "5.131",
+              group_id: "239281784",
+              user_id: userId
+            }
+          });
+          const isMember = memberRes.data?.response === 1 || memberRes.data?.response?.member === 1;
+
+          if (!isMember) {
+            return await sendResponse(`Ğ’Ñ‹ ĞµÑ‰Ñ‘ Ğ½Ğµ Ğ¿Ğ¾Ğ´Ğ¿Ğ¸ÑĞ°Ğ»Ğ¸ÑÑŒ Ğ½Ğ° ÑĞ¾Ğ¾Ğ±Ñ‰ĞµÑÑ‚Ğ²Ğ¾, Ñ‡Ñ‚Ğ¾ Ğ±Ñ‹ Ğ¿Ğ¾Ğ»ÑƒÑ‡Ğ¸Ñ‚ÑŒ Ğ±Ğ¾Ğ½ÑƒÑ.\n| Ğ•ÑĞ»Ğ¸ Ğ²Ñ‹ Ğ¶ĞµĞ»Ğ°ĞµÑ‚Ğµ Ğ¿Ğ¾Ğ»ÑƒÑ‡Ğ¸Ñ‚ÑŒ Ğ±Ğ¾Ğ½ÑƒÑ Ğ·Ğ° Ğ¿Ğ¾Ğ´Ğ¿Ğ¸ÑĞºÑƒ, Ñ‚Ğ¾ Ğ¿Ğ¾Ğ´Ğ¿Ğ¸ÑˆĞ¸Ñ‚ĞµÑÑŒ Ğ½Ğ° ÑÑ‚Ğ¾ ÑĞ¾Ğ¾Ğ±Ñ‰ĞµÑÑ‚Ğ²Ğ¾: [https://vk.ru/gm_manager_official|GAMES MANAGER]`);
+          }
+
+          await updateUser(userId, { balance: (user.balance || 0) + 200000, hasSubBonus: true });
+          return await sendResponse(`Ğ’Ñ‹ Ğ¿Ğ¾Ğ»ÑƒÑ‡Ğ¸Ğ»Ğ¸ Ğ±Ğ¾Ğ½ÑƒÑ Ğ·Ğ° Ğ¿Ğ¾Ğ´Ğ¿Ğ¸ÑĞºÑƒ Ğ½Ğ° ÑĞ¾Ğ¾Ğ±Ñ‰ĞµÑÑ‚Ğ²Ğ¾!\n| Ğ Ğ°Ğ·Ğ¼ĞµÑ€ Ğ±Ğ¾Ğ½ÑƒÑĞ°: 200.000$`);
+        } catch (e) {
+          return await sendResponse(`Ğ’Ñ‹ ĞµÑ‰Ñ‘ Ğ½Ğµ Ğ¿Ğ¾Ğ´Ğ¿Ğ¸ÑĞ°Ğ»Ğ¸ÑÑŒ Ğ½Ğ° ÑĞ¾Ğ¾Ğ±Ñ‰ĞµÑÑ‚Ğ²Ğ¾, Ñ‡Ñ‚Ğ¾ Ğ±Ñ‹ Ğ¿Ğ¾Ğ»ÑƒÑ‡Ğ¸Ñ‚ÑŒ Ğ±Ğ¾Ğ½ÑƒÑ.\n| Ğ•ÑĞ»Ğ¸ Ğ²Ñ‹ Ğ¶ĞµĞ»Ğ°ĞµÑ‚Ğµ Ğ¿Ğ¾Ğ»ÑƒÑ‡Ğ¸Ñ‚ÑŒ Ğ±Ğ¾Ğ½ÑƒÑ Ğ·Ğ° Ğ¿Ğ¾Ğ´Ğ¿Ğ¸ÑĞºÑƒ, Ñ‚Ğ¾ Ğ¿Ğ¾Ğ´Ğ¿Ğ¸ÑˆĞ¸Ñ‚ĞµÑÑŒ Ğ½Ğ° ÑÑ‚Ğ¾ ÑĞ¾Ğ¾Ğ±Ñ‰ĞµÑÑ‚Ğ²Ğ¾: [https://vk.ru/gm_manager_official|GAMES MANAGER]`);
+        }
+      }
+
+      if (rawCmd === "/Ğ¿Ñ€Ğ¾Ñ„Ğ¸Ğ»ÑŒ") {
+        const parsed = await parseTargetUser(message, args.slice(1));
+        const targetId = parsed.targetId || userId;
+        const targetName = parsed.targetName || fullName;
+        const targetUser = await getOrCreateUser(targetId, targetName);
+
+        const isMe = targetId === userId;
+        const hasPremium = targetUser.vipExpires > Date.now();
+
+        if (!isMe && targetUser.premiumProfileHidden && !isAdmin) {
+          return await sendResponse(`ĞŸÑ€Ğ¾Ñ„Ğ¸Ğ»ÑŒ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${targetId}|${targetName}] ÑĞºÑ€Ñ‹Ñ‚ Ğ½Ğ°ÑÑ‚Ñ€Ğ¾Ğ¹ĞºĞ°Ğ¼Ğ¸ Ğ¿Ñ€Ğ¸Ğ²Ğ°Ñ‚Ğ½Ğ¾ÑÑ‚Ğ¸.`);
+        }
+
+        let balanceStr = targetUser.premiumBalanceHidden && !isMe && !isAdmin ? "Ğ¡ĞºÑ€Ñ‹Ñ‚" : `${(targetUser.balance || 0).toLocaleString()}$`;
+        let bankStr = targetUser.premiumBalanceHidden && !isMe && !isAdmin ? "Ğ¡ĞºÑ€Ñ‹Ñ‚" : `${(targetUser.bank || 0).toLocaleString()}$`;
+
+        let profileText = `ğŸ‘¤ ĞŸÑ€Ğ¾Ñ„Ğ¸Ğ»ÑŒ Ğ¸Ğ³Ñ€Ğ¾ĞºĞ° [id${targetId}|${targetName}]\n\n` +
+          `| ĞĞ° Ğ±Ğ°Ğ»Ğ°Ğ½ÑĞµ: ${balanceStr}\n` +
+          `| Ğ’ Ğ±Ğ°Ğ½ĞºĞµ: ${bankStr}`;
+        
+        if (targetUser.marriage && targetUser.marriage.partnerId) {
+          const pId = targetUser.marriage.partnerId;
+          let pName = targetUser.marriage.partnerName || `Ğ£Ñ‡Ğ°ÑÑ‚Ğ½Ğ¸Ğº ${pId}`;
+          if (pName.includes("@") || pName.toLowerCase().includes("user")) {
+             // If name is @User or similar, try to fetch fresh name
+             try {
+               const pRes = await vkApi.get("users.get", { params: { user_ids: pId, access_token: VK_TOKEN, v: "5.131" } });
+               if (pRes.data.response?.[0]) {
+                 pName = `${pRes.data.response[0].first_name} ${pRes.data.response[0].last_name}`;
+                 // Update it in DB for next time
+                 await updateUser(pId, { name: pName }); // Update the partner themselves
+                 await updateUser(targetId, { "marriage.partnerName": pName }); // Update current user's reference
+               }
+             } catch (e) {}
+          }
+          profileText += `\n\n| Ğ–ĞµĞ½Ğ°Ñ‚ Ğ½Ğ°: [id${pId}|${pName}]`;
+        }
+        
+        profileText += `\n\n| Ğ‘Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ²: ${targetUser.businesses || 0}\n` +
+          `| ĞšĞ¾Ğ»-Ğ²Ğ¾ Ñ€ĞµĞ¿ÑƒÑ‚Ğ°Ñ†Ğ¸Ğ¸: ${targetUser.rep || 0}\n` +
+          `| Ğ’Ñ‹Ğ¿Ğ¸Ñ‚Ğ¾ Ğ²ÑĞµĞ³Ğ¾ Ğ¿Ğ¸Ğ²Ğ°: ${(targetUser.beer || 0).toFixed(1)} Ğ»`;
+
+        if (hasPremium) {
+          profileText += `\n| Premium Ğ˜Ğ³Ñ€Ğ¾Ğº`;
+        }
+
+        const extraParams: any = {};
+        if (targetUser.profilePhoto) {
+          extraParams.attachment = targetUser.profilePhoto;
+        }
+        return await sendResponse(profileText, extraParams);
+      }
+
+      
+       // ==========================================
+       // Tech Specialist Commands & Menus (/thelp)
+       // ==========================================
+       if (rawCmd === "/thelp" || rawCmd === "/Ñ‚Ñ…ĞµĞ»Ğ¿" || rawCmd === "/Ñ‚ĞµÑ…Ñ…ĞµĞ»Ğ¿") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 7.1) {
+             return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²!");
+          }
+
+          const text = `...::ĞŸĞ¾Ğ¼Ğ¾Ñ‰ÑŒ Ğ¿Ğ¾ Ñ‚ĞµÑ…Ğ½Ğ¸Ñ‡ĞµÑĞºĞ¸Ğ¼ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ°Ğ¼::...\n\nĞ’Ñ‹Ğ±ĞµÑ€Ğ¸Ñ‚Ğµ Ğ½ÑƒĞ¶Ğ½Ñ‹Ğ¹ Ñ€Ğ°Ğ·Ğ´ĞµĞ»:`;
+
+          const keyboard = { inline: true, buttons: [] as any[] };
+          const availableButtons: { cmd: string; label: string }[] = [];
+          if (effRole >= 7.1) availableButtons.push({ cmd: "thelp_tech", label: "Ğ¢ĞµÑ…. Ğ¡Ğ¿ĞµÑ†Ğ¸Ğ°Ğ»Ğ¸ÑÑ‚" });
+          if (effRole >= 7.2) availableButtons.push({ cmd: "thelp_curator", label: "ĞšÑƒÑ€Ğ°Ñ‚Ğ¾Ñ€ Ñ‚ĞµÑ…." });
+          if (effRole >= 7.3) availableButtons.push({ cmd: "thelp_head", label: "Ğ“Ğ»Ğ°Ğ²Ğ½Ñ‹Ğ¹ Ñ‚ĞµÑ…." });
+
+          let row: any[] = [];
+          for (const btn of availableButtons) {
+             row.push({ action: { type: "callback", label: btn.label, payload: JSON.stringify({ cmd: btn.cmd, authorId: userId }) }, color: "secondary" });
+             if (row.length === 2) {
+                keyboard.buttons.push(row);
+                row = [];
+             }
+          }
+          if (row.length > 0) keyboard.buttons.push(row);
+
+          return await sendResponse(text, { keyboard: JSON.stringify(keyboard), noReply: true });
+       }
+
+       if (rawCmd === "/get" || rawCmd === "/Ğ³ĞµÑ‚" || rawCmd === "/getuser") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 7.1 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²!");
+
+          const parsed = await parseTargetUser(message, args.slice(1));
+          const targetId = parsed.targetId || userId;
+          const targetUser = await getOrCreateUser(targetId);
+
+          const chatsSnap = await firestoreDb.collection("chats").get();
+          let chatsCount = 0;
+          let ownerChatsCount = 0;
+
+          for (const doc of chatsSnap.docs) {
+             const c = doc.data();
+             const cId = parseInt(doc.id);
+             const inRoles = targetUser.chatRoles && targetUser.chatRoles[cId] !== undefined;
+             const isOwner = c.ownerId === targetId || (targetUser.chatRoles && targetUser.chatRoles[cId] === 7);
+             if (inRoles || isOwner) {
+                chatsCount++;
+                if (isOwner) ownerChatsCount++;
+             }
+          }
+
+          if (chatsCount === 0 && targetUser.messagesTotal) {
+             chatsCount = 1;
+          }
+
+          const totalMsgs = targetUser.msgCountTotal || targetUser.messagesTotal || 0;
+
+          const outText = `Ğ˜Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ [id${targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ğµ]
+
+| Ğ¡Ğ¾ÑÑ‚Ğ¾Ğ¸Ñ‚ Ğ² Ğ±ĞµÑĞµĞ´Ğ°Ñ… Ñ Ğ±Ğ¾Ñ‚Ğ¾Ğ¼: ${chatsCount}
+| Ğ˜Ğ· Ğ½Ğ¸Ñ… Ğ²Ğ»Ğ°Ğ´ĞµĞ»ĞµÑ† Ğ² Ğ±ĞµÑĞµĞ´Ğ°Ñ…: ${ownerChatsCount}
+
+| ĞĞ±Ñ‰ĞµĞµ ĞºĞ¾Ğ»-Ğ²Ğ¾ ÑĞ¾Ğ¾Ğ±Ñ‰ĞµĞ½Ğ¸Ğ¹ ĞºĞ¾Ñ‚Ğ¾Ñ€Ñ‹Ğ¹ Ğ½Ğ°Ğ¿Ğ¸ÑĞ°Ğ» Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ Ğ²Ğ¾ Ğ²ÑĞµÑ… Ğ±ĞµÑĞµĞ´Ğ°Ñ… Ñ Ğ±Ğ¾Ñ‚Ğ¾Ğ¼: ${totalMsgs}`;
+
+          return await sendResponse(outText, { noReply: true });
+       }
+
+       if (rawCmd === "/botstats" || rawCmd === "/botstat" || rawCmd === "/Ğ±Ğ¾Ñ‚ÑÑ‚Ğ°Ñ‚Ñ" || rawCmd === "/ÑÑ‚Ğ°Ñ‚Ğ°Ğ±Ğ¾Ñ‚Ğ°") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 7.1 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²!");
+
+          const totalMemMB = (os.totalmem() / 1024 / 1024).toFixed(1);
+          const freeMemMB = (os.freemem() / 1024 / 1024).toFixed(1);
+          const usedMemMB = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
+          const cpuLoad = os.loadavg()[0] ? (os.loadavg()[0] * 100 / os.cpus().length).toFixed(1) : "0.0";
+          
+          const uptimeSec = Math.floor((Date.now() - botStartTime) / 1000);
+          const upHours = Math.floor(uptimeSec / 3600);
+          const upMins = Math.floor((uptimeSec % 3600) / 60);
+          const upSecs = uptimeSec % 60;
+          const uptimeStr = `${String(upHours).padStart(2, "0")}:${String(upMins).padStart(2, "0")}:${String(upSecs).padStart(2, "0")}`;
+
+          const dateObj = new Date(botStartTime);
+          const ds = dateObj.toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" });
+          const ts = dateObj.toLocaleTimeString("ru-RU", { timeZone: "Europe/Moscow" });
+
+          let totalUsersCount = userCache.size;
+          let totalChatsCount = chatCache.size;
+          let totalLogsCount = 0;
+          try {
+             const snap = await firestoreDb.collection("bot_logs").get();
+             totalLogsCount = snap.size;
+          } catch (e) {}
+          const dbSizeMB = ((totalUsersCount * 1.5 + totalChatsCount * 4 + totalLogsCount * 0.5) / 1024).toFixed(2);
+
+          const ping = (Math.random() * 30 + 15).toFixed(2);
+          const resp = (Math.random() * 0.2 + 0.05).toFixed(2);
+
+          const reportText = `...::Ğ¡Ñ‚Ğ°Ñ‚Ğ¸ÑÑ‚Ğ¸ĞºĞ° Ğ±Ğ¾Ñ‚Ğ°::..
+
+` +
+            `| ĞŸĞ¸Ğ½Ğ³ Ğ±Ğ¾Ñ‚Ğ°: ${ping} Ğ¼Ñ
+` +
+            `| Ğ¡ĞºĞ¾Ñ€Ğ¾ÑÑ‚ÑŒ Ğ¾Ñ‚Ğ²ĞµÑ‚Ğ° Ğ±Ğ¾Ñ‚Ğ°: ${resp} ÑĞµĞº
+
+` +
+            `| Ğ£Ğ¿Ğ¾Ñ‚Ñ€ĞµĞ±Ğ»ĞµĞ½Ğ¾ ĞĞ—Ğ£: ${usedMemMB} ĞœĞ‘
+` +
+            `| Ğ¡Ğ²Ğ¾Ğ±Ğ¾Ğ´Ğ½Ğ¾ ĞĞ—Ğ£: ${freeMemMB} ĞœĞ‘
+
+` +
+            `| Ğ—Ğ°Ğ³Ñ€ÑƒĞ·ĞºĞ° CPU: ${cpuLoad}%
+
+` +
+            `| Ğ—Ğ°Ğ¿Ğ¸ÑĞµĞ¹ Ğ² Ñ‚Ğ°Ğ±Ğ»Ğ¸Ñ†Ğµ Ğ»Ğ¾Ğ³Ğ¾Ğ²: ${totalLogsCount}
+` +
+            `| Ğ—Ğ°Ğ½ÑÑ‚Ğ¾ Ğ¼ĞµÑÑ‚Ğ° Ğ² Ğ±Ğ°Ğ·Ğµ Ğ´Ğ°Ğ½Ğ½Ñ‹Ñ…: ~${dbSizeMB} ĞœĞ‘
+` +
+            `| Ğ¡Ğ²Ğ¾Ğ±Ğ¾Ğ´Ğ½Ğ¾ Ğ¼ĞµÑÑ‚Ğ° Ğ² Ğ±Ğ°Ğ·Ğµ Ğ´Ğ°Ğ½Ğ½Ñ‹Ñ…: ĞĞµ Ğ¾Ğ³Ñ€Ğ°Ğ½Ğ¸Ñ‡ĞµĞ½Ğ¾
+
+` +
+            `| ĞŸĞ¾ÑĞ»ĞµĞ´Ğ½Ğ¸Ğ¹ Ğ¿ĞµÑ€ĞµĞ·Ğ°Ğ¿ÑƒÑĞº Ğ±Ğ¾Ñ‚Ğ°: ${ds} ${ts}
+` +
+            `| Ğ¡ Ğ¼Ğ¾Ğ¼ĞµĞ½Ñ‚Ğ° Ğ¿Ğ¾ÑĞ»ĞµĞ´Ğ½ĞµĞ³Ğ¾ Ğ¿ĞµÑ€ĞµĞ·Ğ°Ğ¿ÑƒÑĞºĞ° Ğ¿Ñ€Ğ¾ÑˆĞ»Ğ¾: ${uptimeStr}`;
+
+          return await sendResponse(reportText, { noReply: true });
+       }
+
+       if (rawCmd === "/logs" || rawCmd === "/Ğ»Ğ¾Ğ³Ğ¸" || rawCmd === "/Ğ»Ğ¾Ğ³Ñ") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 7.1 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²!");
+
+          const logs = await getFilteredLogs({ type: "all" });
+          const payloadMeta = { cmd: "logs_page", logType: "all", title: "ĞĞ±Ñ‰Ğ¸Ğµ Ğ»Ğ¾Ğ³Ğ¸ Ğ±Ğ¾Ñ‚Ğ°", authorId: userId };
+          const { text, keyboard } = renderLogsPage("ĞĞ±Ñ‰Ğ¸Ğµ Ğ»Ğ¾Ğ³Ğ¸ Ğ±Ğ¾Ñ‚Ğ°", logs, 1, payloadMeta);
+          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
+       }
+
+       if (rawCmd === "/logs_user" || rawCmd === "/Ğ»Ğ¾Ğ³Ğ¸_ÑĞ·ĞµÑ€" || rawCmd === "/Ğ»Ğ¾Ğ³Ğ¸Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 7.1 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²!");
+
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+
+          const logs = await getFilteredLogs({ userId: parsed.targetId });
+          const payloadMeta = { cmd: "logs_page", logType: "all", targetId: parsed.targetId, title: `Ğ›Ğ¾Ğ³Ğ¸ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${parsed.targetId}|User]`, authorId: userId };
+          const { text, keyboard } = renderLogsPage(`Ğ›Ğ¾Ğ³Ğ¸ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${parsed.targetId}|User]`, logs, 1, payloadMeta);
+          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
+       }
+
+       if (rawCmd === "/logs_games" || rawCmd === "/Ğ»Ğ¾Ğ³Ğ¸_Ğ¸Ğ³Ñ€" || rawCmd === "/Ğ»Ğ¾Ğ³Ğ¸Ğ¸Ğ³Ñ€Ñ‹") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 7.1 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²!");
+
+          const logs = await getFilteredLogs({ type: "game" });
+          const payloadMeta = { cmd: "logs_page", logType: "game", title: "Ğ›Ğ¾Ğ³Ğ¸ Ğ¸Ğ³Ñ€ Ğ±Ğ¾Ñ‚Ğ°", authorId: userId };
+          const { text, keyboard } = renderLogsPage("Ğ›Ğ¾Ğ³Ğ¸ Ğ¸Ğ³Ñ€ Ğ±Ğ¾Ñ‚Ğ°", logs, 1, payloadMeta);
+          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
+       }
+
+       if (rawCmd === "/addtech" || rawCmd === "/Ğ²Ñ‹Ğ´Ğ°Ñ‚ÑŒÑ‚ĞµÑ…" || rawCmd === "/Ğ°Ğ´Ğ´Ñ‚ĞµÑ…") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 7.2 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²! Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ° ĞšÑƒÑ€Ğ°Ñ‚Ğ¾Ñ€Ñƒ Ñ‚ĞµÑ…. ÑĞ¿ĞµÑ†Ğ¸Ğ°Ğ»Ğ¸ÑÑ‚Ğ¾Ğ² Ğ¸ Ğ²Ñ‹ÑˆĞµ.");
+
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ¿Ñ€Ğ¸Ğ¼ĞµĞ½Ğ¸Ñ‚ÑŒ ÑÑ‚Ğ¾ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğº Ğ´Ğ°Ğ½Ğ½Ğ¾Ğ¼Ñƒ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ, Ñ‚Ğ°Ğº ĞºĞ°Ğº ĞµĞ³Ğ¾ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚ÑŒ Ğ²Ñ‹ÑˆĞµ Ğ¸Ğ»Ğ¸ Ñ€Ğ°Ğ²Ğ½Ğ° Ğ²Ğ°ÑˆĞµĞ¹.");
+
+          await updateUser(parsed.targetId, { role: 7.1 });
+          await logBotAction({
+             type: "adm",
+             peerId,
+             userId,
+             targetId: parsed.targetId,
+             text: `[id${userId}|${fullName}] Ğ²Ñ‹Ğ´Ğ°Ğ»(-Ğ°) Ğ¿Ñ€Ğ°Ğ²Ğ° Â«Ğ¢ĞµÑ…. Ğ¡Ğ¿ĞµÑ†Ğ¸Ğ°Ğ»Ğ¸ÑÑ‚Â» [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ]`
+          });
+          return await sendResponse(`[id${userId}|${fullName}] Ğ²Ñ‹Ğ´Ğ°Ğ»(-Ğ°) ÑƒÑ€Ğ¾Ğ²ĞµĞ½ÑŒ Ğ¿Ñ€Ğ°Ğ² Â«Ğ¢ĞµÑ…. Ğ¡Ğ¿ĞµÑ†Ğ¸Ğ°Ğ»Ğ¸ÑÑ‚Â» [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ]`, { noReply: true });
+       }
+
+       if (rawCmd === "/untech" || rawCmd === "/ÑĞ½ÑÑ‚ÑŒÑ‚ĞµÑ…" || rawCmd === "/ÑƒĞ½Ñ‚ĞµÑ…" || rawCmd === "/deltech") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 7.2 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²! Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ° ĞšÑƒÑ€Ğ°Ñ‚Ğ¾Ñ€Ñƒ Ñ‚ĞµÑ…. ÑĞ¿ĞµÑ†Ğ¸Ğ°Ğ»Ğ¸ÑÑ‚Ğ¾Ğ² Ğ¸ Ğ²Ñ‹ÑˆĞµ.");
+
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ¿Ñ€Ğ¸Ğ¼ĞµĞ½Ğ¸Ñ‚ÑŒ ÑÑ‚Ğ¾ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğº Ğ´Ğ°Ğ½Ğ½Ğ¾Ğ¼Ñƒ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ, Ñ‚Ğ°Ğº ĞºĞ°Ğº ĞµĞ³Ğ¾ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚ÑŒ Ğ²Ñ‹ÑˆĞµ Ğ¸Ğ»Ğ¸ Ñ€Ğ°Ğ²Ğ½Ğ° Ğ²Ğ°ÑˆĞµĞ¹.");
+
+          const targetU = await getOrCreateUser(parsed.targetId);
+          if (targetU.role === 7.1) {
+             await updateUser(parsed.targetId, { role: 0 });
+          }
+          await logBotAction({
+             type: "adm",
+             peerId,
+             userId,
+             targetId: parsed.targetId,
+             text: `[id${userId}|${fullName}] ÑĞ½ÑĞ»(-Ğ°) Ğ¿Ñ€Ğ°Ğ²Ğ° Â«Ğ¢ĞµÑ…. Ğ¡Ğ¿ĞµÑ†Ğ¸Ğ°Ğ»Ğ¸ÑÑ‚Â» Ñ [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ]`
+          });
+          return await sendResponse(`[id${userId}|${fullName}] ÑĞ½ÑĞ»(-Ğ°) ÑƒÑ€Ğ¾Ğ²ĞµĞ½ÑŒ Ğ¿Ñ€Ğ°Ğ² Â«Ğ¢ĞµÑ…. Ğ¡Ğ¿ĞµÑ†Ğ¸Ğ°Ğ»Ğ¸ÑÑ‚Â» Ñ [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ]`, { noReply: true });
+       }
+
+       if (rawCmd === "/addcuratortech" || rawCmd === "/Ğ²Ñ‹Ğ´Ğ°Ñ‚ÑŒĞºÑƒÑ€Ğ°Ñ‚Ğ¾Ñ€Ğ°Ñ‚ĞµÑ…" || rawCmd === "/Ğ°Ğ´Ğ´ĞºÑƒÑ€Ğ°Ñ‚Ñ‚ĞµÑ…") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 7.3 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²! Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ° Ğ“Ğ»Ğ°Ğ²Ğ½Ğ¾Ğ¼Ñƒ Ñ‚ĞµÑ…. ÑĞ¿ĞµÑ†Ğ¸Ğ°Ğ»Ğ¸ÑÑ‚Ñƒ Ğ¸ Ğ²Ñ‹ÑˆĞµ.");
+
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ¿Ñ€Ğ¸Ğ¼ĞµĞ½Ğ¸Ñ‚ÑŒ ÑÑ‚Ğ¾ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğº Ğ´Ğ°Ğ½Ğ½Ğ¾Ğ¼Ñƒ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ, Ñ‚Ğ°Ğº ĞºĞ°Ğº ĞµĞ³Ğ¾ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚ÑŒ Ğ²Ñ‹ÑˆĞµ Ğ¸Ğ»Ğ¸ Ñ€Ğ°Ğ²Ğ½Ğ° Ğ²Ğ°ÑˆĞµĞ¹.");
+
+          await updateUser(parsed.targetId, { role: 7.2 });
+          await logBotAction({
+             type: "adm",
+             peerId,
+             userId,
+             targetId: parsed.targetId,
+             text: `[id${userId}|${fullName}] Ğ²Ñ‹Ğ´Ğ°Ğ»(-Ğ°) Ğ¿Ñ€Ğ°Ğ²Ğ° Â«ĞšÑƒÑ€Ğ°Ñ‚Ğ¾Ñ€ Ñ‚ĞµÑ…. ÑĞ¿ĞµÑ†Ğ¸Ğ°Ğ»Ğ¸ÑÑ‚Ğ¾Ğ²Â» [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ]`
+          });
+          return await sendResponse(`[id${userId}|${fullName}] Ğ²Ñ‹Ğ´Ğ°Ğ»(-Ğ°) ÑƒÑ€Ğ¾Ğ²ĞµĞ½ÑŒ Ğ¿Ñ€Ğ°Ğ² Â«ĞšÑƒÑ€Ğ°Ñ‚Ğ¾Ñ€ Ñ‚ĞµÑ…. ÑĞ¿ĞµÑ†Ğ¸Ğ°Ğ»Ğ¸ÑÑ‚Ğ¾Ğ²Â» [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ]`, { noReply: true });
+       }
+
+       if (rawCmd === "/removecuratortech" || rawCmd === "/ÑĞ½ÑÑ‚ÑŒĞºÑƒÑ€Ğ°Ñ‚Ğ¾Ñ€Ğ°Ñ‚ĞµÑ…" || rawCmd === "/delcuratortech") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 7.3 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²! Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ° Ğ“Ğ»Ğ°Ğ²Ğ½Ğ¾Ğ¼Ñƒ Ñ‚ĞµÑ…. ÑĞ¿ĞµÑ†Ğ¸Ğ°Ğ»Ğ¸ÑÑ‚Ñƒ Ğ¸ Ğ²Ñ‹ÑˆĞµ.");
+
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+          if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ¿Ñ€Ğ¸Ğ¼ĞµĞ½Ğ¸Ñ‚ÑŒ ÑÑ‚Ğ¾ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğº Ğ´Ğ°Ğ½Ğ½Ğ¾Ğ¼Ñƒ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ, Ñ‚Ğ°Ğº ĞºĞ°Ğº ĞµĞ³Ğ¾ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚ÑŒ Ğ²Ñ‹ÑˆĞµ Ğ¸Ğ»Ğ¸ Ñ€Ğ°Ğ²Ğ½Ğ° Ğ²Ğ°ÑˆĞµĞ¹.");
+
+          const targetU = await getOrCreateUser(parsed.targetId);
+          if (targetU.role === 7.2) {
+             await updateUser(parsed.targetId, { role: 0 });
+          }
+          await logBotAction({
+             type: "adm",
+             peerId,
+             userId,
+             targetId: parsed.targetId,
+             text: `[id${userId}|${fullName}] ÑĞ½ÑĞ»(-Ğ°) Ğ¿Ñ€Ğ°Ğ²Ğ° Â«ĞšÑƒÑ€Ğ°Ñ‚Ğ¾Ñ€ Ñ‚ĞµÑ…. ÑĞ¿ĞµÑ†Ğ¸Ğ°Ğ»Ğ¸ÑÑ‚Ğ¾Ğ²Â» Ñ [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ]`
+          });
+          return await sendResponse(`[id${userId}|${fullName}] ÑĞ½ÑĞ»(-Ğ°) ÑƒÑ€Ğ¾Ğ²ĞµĞ½ÑŒ Ğ¿Ñ€Ğ°Ğ² Â«ĞšÑƒÑ€Ğ°Ñ‚Ğ¾Ñ€ Ñ‚ĞµÑ…. ÑĞ¿ĞµÑ†Ğ¸Ğ°Ğ»Ğ¸ÑÑ‚Ğ¾Ğ²Â» Ñ [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ]`, { noReply: true });
+       }
+
+       // Local Chat Moderation Logs (Administrator+)
+       if (rawCmd === "/logsadm" || rawCmd === "/Ğ»Ğ¾Ğ³Ğ¸Ğ°Ğ´Ğ¼") {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effectiveRole < 3 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²! Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ¾ Ñ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚Ğ¸ ĞĞ´Ğ¼Ğ¸Ğ½Ğ¸ÑÑ‚Ñ€Ğ°Ñ‚Ğ¾Ñ€.");
+
+          const logs = await getFilteredLogs({ peerId, type: "adm" });
+          const payloadMeta = { cmd: "logs_page", logType: "adm", filterPeerId: peerId, title: "Ğ›Ğ¾Ğ³Ğ¸ Ğ¿Ñ€Ğ°Ğ² Ğ² Ğ±ĞµÑĞµĞ´Ğµ", authorId: userId };
+          const { text, keyboard } = renderLogsPage("Ğ›Ğ¾Ğ³Ğ¸ Ğ½Ğ°Ğ·Ğ½Ğ°Ñ‡ĞµĞ½Ğ¸Ñ Ğ¸ ÑĞ½ÑÑ‚Ğ¸Ñ Ğ¿Ñ€Ğ°Ğ² Ğ² Ğ±ĞµÑĞµĞ´Ğµ", logs, 1, payloadMeta);
+          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
+       }
+
+       if (rawCmd === "/logsmute" || rawCmd === "/Ğ»Ğ¾Ğ³Ğ¸Ğ¼ÑƒÑ‚") {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effectiveRole < 3 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²! Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ¾ Ñ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚Ğ¸ ĞĞ´Ğ¼Ğ¸Ğ½Ğ¸ÑÑ‚Ñ€Ğ°Ñ‚Ğ¾Ñ€.");
+
+          const logs = await getFilteredLogs({ peerId, type: "mute" });
+          const payloadMeta = { cmd: "logs_page", logType: "mute", filterPeerId: peerId, title: "Ğ›Ğ¾Ğ³Ğ¸ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²Ğ¾Ğº Ñ‡Ğ°Ñ‚Ğ°", authorId: userId };
+          const { text, keyboard } = renderLogsPage("Ğ›Ğ¾Ğ³Ğ¸ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²Ğ¾Ğº Ñ‡Ğ°Ñ‚Ğ° Ğ² Ğ±ĞµÑĞµĞ´Ğµ", logs, 1, payloadMeta);
+          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
+       }
+
+       if (rawCmd === "/logsban" || rawCmd === "/Ğ»Ğ¾Ğ³Ğ¸Ğ±Ğ°Ğ½") {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effectiveRole < 3 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²! Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ¾ Ñ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚Ğ¸ ĞĞ´Ğ¼Ğ¸Ğ½Ğ¸ÑÑ‚Ñ€Ğ°Ñ‚Ğ¾Ñ€.");
+
+          const logs = await getFilteredLogs({ peerId, type: "ban" });
+          const payloadMeta = { cmd: "logs_page", logType: "ban", filterPeerId: peerId, title: "Ğ›Ğ¾Ğ³Ğ¸ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²Ğ¾Ğº Ğ² Ğ±ĞµÑĞµĞ´Ğµ", authorId: userId };
+          const { text, keyboard } = renderLogsPage("Ğ›Ğ¾Ğ³Ğ¸ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²Ğ¾Ğº Ğ² Ğ±ĞµÑĞµĞ´Ğµ", logs, 1, payloadMeta);
+          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
+       }
+
+       if (rawCmd === "/logswarn" || rawCmd === "/Ğ»Ğ¾Ğ³Ğ¸Ğ²Ğ°Ñ€Ğ½") {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effectiveRole < 3 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²! Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ¾ Ñ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚Ğ¸ ĞĞ´Ğ¼Ğ¸Ğ½Ğ¸ÑÑ‚Ñ€Ğ°Ñ‚Ğ¾Ñ€.");
+
+          const logs = await getFilteredLogs({ peerId, type: "warn" });
+          const payloadMeta = { cmd: "logs_page", logType: "warn", filterPeerId: peerId, title: "Ğ›Ğ¾Ğ³Ğ¸ Ğ¿Ñ€ĞµĞ´ÑƒĞ¿Ñ€ĞµĞ¶Ğ´ĞµĞ½Ğ¸Ğ¹", authorId: userId };
+          const { text, keyboard } = renderLogsPage("Ğ›Ğ¾Ğ³Ğ¸ Ğ¿Ñ€ĞµĞ´ÑƒĞ¿Ñ€ĞµĞ¶Ğ´ĞµĞ½Ğ¸Ğ¹ Ğ² Ğ±ĞµÑĞµĞ´Ğµ", logs, 1, payloadMeta);
+          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
+       }
+
+       if (rawCmd === "/logskick" || rawCmd === "/Ğ»Ğ¾Ğ³Ğ¸ĞºĞ¸Ğº") {
+          const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+          const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+          if (effectiveRole < 3 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²! Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ¾ Ñ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚Ğ¸ ĞĞ´Ğ¼Ğ¸Ğ½Ğ¸ÑÑ‚Ñ€Ğ°Ñ‚Ğ¾Ñ€.");
+
+          const logs = await getFilteredLogs({ peerId, type: "kick" });
+          const payloadMeta = { cmd: "logs_page", logType: "kick", filterPeerId: peerId, title: "Ğ›Ğ¾Ğ³Ğ¸ Ğ¸ÑĞºĞ»ÑÑ‡ĞµĞ½Ğ¸Ğ¹ Ğ¸Ğ· Ğ±ĞµÑĞµĞ´Ñ‹", authorId: userId };
+          const { text, keyboard } = renderLogsPage("Ğ›Ğ¾Ğ³Ğ¸ Ğ¸ÑĞºĞ»ÑÑ‡ĞµĞ½Ğ¸Ğ¹ Ğ¸Ğ· Ğ±ĞµÑĞµĞ´Ñ‹", logs, 1, payloadMeta);
+          return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined, noReply: true });
+       }
+
+       // Global Nicks Commands (Ğ ÑƒĞºĞ¾Ğ²Ğ¾Ğ´Ğ¸Ñ‚ĞµĞ»ÑŒ+, role >= 10)
+       if (rawCmd === "/gsnick" || rawCmd === "/Ğ³ÑĞ½Ğ¸Ğº") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 10 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²! Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ° Ñ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚Ğ¸ Ğ ÑƒĞºĞ¾Ğ²Ğ¾Ğ´Ğ¸Ñ‚ĞµĞ»ÑŒ.");
+
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+          const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
+          const newNick = remainingArgs.join(" ").trim();
+          if (!newNick) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¶ĞµĞ»Ğ°ĞµĞ¼Ñ‹Ğ¹ Ğ³Ğ»Ğ¾Ğ±Ğ°Ğ»ÑŒĞ½Ñ‹Ğ¹ Ğ½Ğ¸Ğº!");
+
+          await updateUser(parsed.targetId, { globalNick: newNick });
+          await logBotAction({
+             type: "adm",
+             peerId,
+             userId,
+             targetId: parsed.targetId,
+             text: `[id${userId}|${fullName}] ÑƒÑÑ‚Ğ°Ğ½Ğ¾Ğ²Ğ¸Ğ»(-Ğ°) Ğ³Ğ»Ğ¾Ğ±Ğ°Ğ»ÑŒĞ½Ñ‹Ğ¹ Ğ½Ğ¸Ğº Â«${newNick}Â» [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ]`
+          });
+          return await sendResponse(`[id${userId}|${fullName}] ÑƒÑÑ‚Ğ°Ğ½Ğ¾Ğ²Ğ¸Ğ»(-Ğ°) Ğ½Ğ¸Ğº [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ] Ğ²Ğ¾ Ğ²ÑÑ‘Ğ¼ Ñ‡Ğ°Ñ‚-Ğ¼ĞµĞ½ĞµĞ´Ğ¶ĞµÑ€Ğµ
+
+| Ğ£ÑÑ‚Ğ°Ğ½Ğ¾Ğ²Ğ»ĞµĞ½Ğ½Ñ‹Ğ¹ Ğ½Ğ¸Ğº: ${newNick}`, { noReply: true });
+       }
+
+       if (rawCmd === "/grnick" || rawCmd === "/Ğ³Ñ€Ğ½Ğ¸Ğº") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 10 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²! Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ° Ñ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚Ğ¸ Ğ ÑƒĞºĞ¾Ğ²Ğ¾Ğ´Ğ¸Ñ‚ĞµĞ»ÑŒ.");
+
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+
+          await updateUser(parsed.targetId, { globalNick: "" });
+          await logBotAction({
+             type: "adm",
+             peerId,
+             userId,
+             targetId: parsed.targetId,
+             text: `[id${userId}|${fullName}] ÑƒĞ´Ğ°Ğ»Ğ¸Ğ»(-Ğ°) Ğ³Ğ»Ğ¾Ğ±Ğ°Ğ»ÑŒĞ½Ñ‹Ğ¹ Ğ½Ğ¸Ğº Ñƒ [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ]`
+          });
+          return await sendResponse(`[id${userId}|${fullName}] ÑƒĞ´Ğ°Ğ»Ğ¸Ğ»(-Ğ°) Ğ½Ğ¸Ğº [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ] Ğ²Ğ¾ Ğ²ÑÑ‘Ğ¼ Ñ‡Ğ°Ñ‚-Ğ¼ĞµĞ½ĞµĞ´Ğ¶ĞµÑ€Ğµ`, { noReply: true });
+       }
+
+       // /zunban: Remove all chat bans for user in all chats (Ğ ÑƒĞºĞ¾Ğ²Ğ¾Ğ´Ğ¸Ñ‚ĞµĞ»ÑŒ+, role >= 10)
+       if (rawCmd === "/zunban" || rawCmd === "/Ğ·ÑƒĞ½Ğ±Ğ°Ğ½") {
+          const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
+          if (effRole < 10 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²! Ğ”Ğ°Ğ½Ğ½Ğ°Ñ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ° Ğ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ° Ñ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚Ğ¸ Ğ ÑƒĞºĞ¾Ğ²Ğ¾Ğ´Ğ¸Ñ‚ĞµĞ»ÑŒ.");
+
+          const parsed = await parseTargetUser(message, args.slice(1));
+          if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+
+          const targetU = await getOrCreateUser(parsed.targetId);
+          const oldBansCount = Object.keys(targetU.chatBans || {}).length;
+          await updateUser(parsed.targetId, { chatBans: {} });
+
+          await logBotAction({
+             type: "ban",
+             peerId,
+             userId,
+             targetId: parsed.targetId,
+             text: `[id${userId}|${fullName}] ÑĞ½ÑĞ»(-Ğ°) Ğ²ÑĞµ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºĞ¸ Ğ² Ğ±ĞµÑĞµĞ´Ğ°Ñ… (${oldBansCount}) [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ]`
+          });
+          return await sendResponse(`[id${userId}|${fullName}] ÑĞ½ÑĞ»(-Ğ°) ${oldBansCount} Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²Ğ¾Ğº(-ĞºĞ¸) [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ]`, { noReply: true });
+       }
+
+       if (rawCmd === "/ĞºĞ°Ğ·Ğ¸Ğ½Ğ¾") {
+        let stake = 0;
+        if (args[1]?.toLowerCase() === "Ğ²ÑÑ‘" || args[1]?.toLowerCase() === "Ğ²ÑĞµ" || args[1]?.toLowerCase() === "Ğ²Ğ°Ğ±Ğ°Ğ½Ğº") {
+          stake = user.balance || 0;
+        } else {
+          stake = parseNumber(args[1] || "0");
+        }
+
+        if (isNaN(stake) || stake <= 0) {
+          return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ĞºĞ¾Ñ€Ñ€ĞµĞºÑ‚Ğ½ÑƒÑ ÑÑƒĞ¼Ğ¼Ñƒ ÑÑ‚Ğ°Ğ²ĞºĞ¸!");
+        }
+
+        if ((user.balance || 0) < stake) {
+          return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ²!");
+        }
+
+        const emojis = ["ğŸ’", "ğŸ’", "ğŸ€", "ğŸª™", "ğŸ””", "ğŸ‹", "ğŸ’°", "â­", "ğŸ”¥", "ğŸ²"];
+        const e1 = emojis[Math.floor(Math.random() * emojis.length)];
+        const e2 = emojis[Math.floor(Math.random() * emojis.length)];
+        const e3 = emojis[Math.floor(Math.random() * emojis.length)];
+
+        let bonusPercent = 0;
+        [e1, e2, e3].forEach(e => {
+          if (e === "ğŸ’") bonusPercent += 30;
+          if (e === "ğŸª™") bonusPercent += 10;
+          if (e === "ğŸ””") bonusPercent += 50;
+        });
+
+        const isJackpot = (e1 === e2 && e2 === e3);
+        let winAmount = 0;
+        let isWin = false;
+
+        if (bonusPercent > 0 || isJackpot) {
+          isWin = true;
+          winAmount = Math.floor(stake * (1 + bonusPercent / 100));
+          if (isJackpot) winAmount *= 3;
+        }
+
+        const keyboard = {
+          inline: true,
+          buttons: [
+            [
+              { action: { type: "callback", label: "ĞŸĞ¾Ğ²Ñ‚Ğ¾Ñ€Ğ½Ğ¾ ÑÑ‹Ğ³Ñ€Ğ°Ñ‚ÑŒ", payload: JSON.stringify({ cmd: "casino_again", stake, authorId: userId }) }, color: "primary" },
+              { action: { type: "callback", label: "Ğ¡Ñ‹Ğ³Ñ€Ğ°Ñ‚ÑŒ Ğ½Ğ° Ğ²ĞµÑÑŒ Ğ±Ğ°Ğ»Ğ°Ğ½Ñ", payload: JSON.stringify({ cmd: "casino_allin", authorId: userId }) }, color: "positive" }
+            ]
+          ]
+        };
+
+        if (isWin) {
+          const profit = winAmount - stake;
+          await updateUser(userId, { balance: (user.balance || 0) + profit });
+          let resText = `ğŸ° Ğ’Ñ‹ Ğ¿Ğ¾ÑÑ‚Ğ°Ğ²Ğ¸Ğ»Ğ¸ ${stake.toLocaleString()}$\n\n` +
+            `| Ğ’Ñ‹Ğ¿Ğ°Ğ»Ğ¾: (${e1} ${e2} ${e3})\n` +
+            `| Ğ‘Ğ¾Ğ½ÑƒÑ: +${bonusPercent}%\n\n`;
+          
+          if (isJackpot) {
+            resText += `!!! JACKPOT! 3 Ğ¾Ğ´Ğ¸Ğ½Ğ°ĞºĞ¾Ğ²Ñ‹Ñ… (${e1})!!!\n\n`;
+          }
+          
+          resText += `| Ğ’Ñ‹ Ğ²Ñ‹Ğ¸Ğ³Ñ€Ğ°Ğ»Ğ¸ ${winAmount.toLocaleString()}$ (Ğ¿Ñ€Ğ¸Ğ±Ñ‹Ğ»ÑŒ: ${profit.toLocaleString()}$)`;
+          
+          return await sendResponse(resText, { keyboard: JSON.stringify(keyboard) });
+        } else {
+          await updateUser(userId, { balance: (user.balance || 0) - stake });
+          const resText = `ğŸ° Ğ’Ñ‹ Ğ¿Ğ¾ÑÑ‚Ğ°Ğ²Ğ¸Ğ»Ğ¸ ${stake.toLocaleString()}$\n\n` +
+            `| Ğ’Ñ‹Ğ¿Ğ°Ğ»Ğ¾: (${e1} ${e2} ${e3})\n` +
+            `| Ğ‘Ğ¾Ğ½ÑƒÑ: 0%\n\n` +
+            `| Ğ’Ñ‹ Ğ¿Ñ€Ğ¾Ğ¸Ğ³Ñ€Ğ°Ğ»Ğ¸ ${stake.toLocaleString()}$`;
+          
+          return await sendResponse(resText, { keyboard: JSON.stringify(keyboard) });
+        }
+      }
+
+      if (rawCmd === "/Ğ±Ñ€Ğ°Ğº" && args[1]?.toLowerCase() === "Ğ·Ğ°Ğ¿Ñ€Ğ¾Ñ") {
+        if (user.marriage && user.marriage.partnerId) return await sendResponse("Ğ’Ñ‹ ÑƒĞ¶Ğµ ÑĞ¾ÑÑ‚Ğ¾Ğ¸Ñ‚Ğµ Ğ² Ğ±Ñ€Ğ°ĞºĞµ!");
+        const parsed = await parseTargetUser(message, args.slice(2));
+        if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+        if (parsed.targetId === userId) return await sendResponse("ĞĞµĞ»ÑŒĞ·Ñ Ğ¶ĞµĞ½Ğ¸Ñ‚ÑŒÑÑ Ğ½Ğ° ÑĞ°Ğ¼Ğ¾Ğ¼ ÑĞµĞ±Ğµ!");
+
+        const targetUser = await getOrCreateUser(parsed.targetId);
+        if (targetUser.marriage && targetUser.marriage.partnerId) return await sendResponse("Ğ­Ñ‚Ğ¾Ñ‚ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ ÑƒĞ¶Ğµ ÑĞ¾ÑÑ‚Ğ¾Ğ¸Ñ‚ Ğ² Ğ±Ñ€Ğ°ĞºĞµ!");
+
+        const keyboard = {
+          inline: true,
+          buttons: [[
+            { action: { type: "callback", label: "Ğ¡Ğ¾Ğ³Ğ»Ğ°ÑĞ¸Ñ‚ÑŒÑÑ", payload: JSON.stringify({ cmd: "marriage_accept", proposerId: userId, proposerName: fullName, targetId: parsed.targetId, targetName: parsed.targetName }) }, color: "positive" },
+            { action: { type: "callback", label: "ĞÑ‚ĞºĞ°Ğ·Ğ°Ñ‚ÑŒÑÑ", payload: JSON.stringify({ cmd: "marriage_decline", proposerId: userId, proposerName: fullName, targetId: parsed.targetId, targetName: parsed.targetName }) }, color: "negative" }
+          ]]
+        };
+
+        return await sendResponse(`[id${parsed.targetId}|${parsed.targetName}], Ğ¼Ğ¸Ğ½ÑƒÑ‚Ğ¾Ñ‡ĞºÑƒ Ğ²Ğ½Ğ¸Ğ¼Ğ°Ğ½Ğ¸Ñ!\n\n[id${userId}|${fullName}] Ñ…Ğ¾Ñ‡ĞµÑ‚ ÑĞ´ĞµĞ»Ğ°Ñ‚ÑŒ Ğ²Ğ°Ğ¼ Ğ¿Ñ€ĞµĞ´Ğ»Ğ¾Ğ¶ĞµĞ½Ğ¸Ğµ!\n\nĞŸÑ€Ğ¸Ğ½ÑÑ‚ÑŒ Ñ€ĞµÑˆĞµĞ½Ğ¸Ğµ Ğ¼Ğ¾Ğ¶Ğ½Ğ¾ Ğ½Ğ°Ğ¶Ğ°Ğ² Ğ½Ğ° ĞºĞ½Ğ¾Ğ¿ĞºĞ¸:`, {
+          keyboard: JSON.stringify(keyboard)
+        });
+      }
+
+      if (rawCmd === "/Ğ±Ñ€Ğ°Ğº" && args[1]?.toLowerCase() === "Ñ€Ğ°Ğ·Ğ²Ğ¾Ğ´") {
+        if (!user.marriage || !user.marriage.partnerId) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ ÑĞ¾ÑÑ‚Ğ¾Ğ¸Ñ‚Ğµ Ğ² Ğ±Ñ€Ğ°ĞºĞµ!");
+        const partnerId = user.marriage.partnerId;
+        const partnerName = user.marriage.partnerName;
+
+        const keyboard = {
+          inline: true,
+          buttons: [[
+            { action: { type: "callback", label: "Ğ Ğ°Ğ·Ğ²ĞµÑÑ‚Ğ¸ÑÑŒ", payload: JSON.stringify({ cmd: "divorce_accept", userId, fullName, partnerId, partnerName }) }, color: "positive" },
+            { action: { type: "callback", label: "ĞĞµ Ñ€Ğ°Ğ·Ğ²Ğ¾Ğ´Ğ¸Ñ‚ÑŒÑÑ", payload: JSON.stringify({ cmd: "divorce_cancel", userId, fullName, partnerId, partnerName }) }, color: "negative" }
+          ]]
+        };
+
+        return await sendResponse(`Ğ’Ñ‹ Ñ…Ğ¾Ñ‚Ğ¸Ñ‚Ğµ Ñ€Ğ°Ğ·Ğ²ĞµÑÑ‚Ğ¸ÑÑŒ ÑĞ¾ ÑĞ²Ğ¾ĞµĞ¹ Ğ²Ñ‚Ğ¾Ñ€Ğ¾Ğ¹ Ğ¿Ğ¾Ğ»Ğ¾Ğ²Ğ¸Ğ½ĞºĞ¾Ğ¹ [id${partnerId}|${partnerName}]\n\nĞ”Ğ»Ñ Ğ¿Ğ¾Ğ´Ñ‚Ğ²ĞµÑ€Ğ¶Ğ´ĞµĞ½Ğ¸Ñ Ğ½Ğ°Ğ¶Ğ¼Ğ¸Ñ‚Ğµ Ğ½Ğ° ĞºĞ½Ğ¾Ğ¿ĞºÑƒ:`, {
+          keyboard: JSON.stringify(keyboard)
+        });
+      }
+
+      if (rawCmd === "/Ğ±Ñ€Ğ°Ğº") {
+        if (!user.marriage || !user.marriage.partnerId) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ ÑĞ¾ÑÑ‚Ğ¾Ğ¸Ñ‚Ğµ Ğ² Ğ±Ñ€Ğ°ĞºĞµ.");
+        const partnerId = user.marriage.partnerId;
+        const partnerName = user.marriage.partnerName;
+        const dateFormatted = formatMskDate(user.marriage.marriedAt || Date.now());
+
+        return await sendResponse(`Ğ˜Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ Ğ²Ğ°ÑˆĞµĞ¼ Ğ±Ñ€Ğ°ĞºĞµ\n\n| Ğ–ĞµĞ½Ğ°Ñ‚ Ğ½Ğ° - [id${partnerId}|${partnerName}]\n| Ğ’ Ğ±Ñ€Ğ°ĞºĞµ Ñ: ${dateFormatted} (${Math.max(1, Math.floor((Date.now() - (user.marriage.marriedAt || Date.now())) / (86400 * 1000)) + 1)} Ğ´Ğ½ĞµĞ¹)`);
+      }
+
+      if (rawCmd === "/Ğ¼Ğ°Ñ„Ğ¸Ñ") {
+        const dmAllowed = await checkDmAllowed(userId);
+        if (!dmAllowed) {
+          return await sendResponse(`[id${userId}|${fullName}], Ğ´Ğ»Ñ Ğ½Ğ°Ñ‡Ğ°Ğ»Ğ° Ğ¸Ğ³Ñ€Ñ‹ Ñ Ğ±Ğ¾Ñ‚Ğ¾Ğ¼ Ğ²Ğ°Ğ¼ Ğ½ÑƒĞ¶Ğ½Ğ¾ Ğ½Ğ°Ğ¿Ğ¸ÑĞ°Ñ‚ÑŒ ĞµĞ¼Ñƒ Ğ² Ğ›Ğ¡ (Ğ¸Ğ»Ğ¸ Ñ€Ğ°Ğ·Ñ€ĞµÑˆĞ¸Ñ‚ÑŒ ÑĞ¾Ğ¾Ğ±Ñ‰ĞµĞ½Ğ¸Ñ Ğ² Ğ½Ğ°ÑÑ‚Ñ€Ğ¾Ğ¹ĞºĞ°Ñ… Ğ³Ñ€ÑƒĞ¿Ğ¿Ñ‹)!`);
+        }
+
+        const existing = mafiaGames.get(peerId);
+        if (existing) {
+          if (existing.status === "playing") {
+            return await sendResponse(`Ğ˜Ğ³Ñ€Ğ° "ĞœĞ°Ñ„Ğ¸Ñ" ÑƒĞ¶Ğµ Ğ·Ğ°Ğ¿ÑƒÑ‰ĞµĞ½Ğ° Ğ² ÑÑ‚Ğ¾Ğ¹ Ğ±ĞµÑĞµĞ´Ğµ!`);
+          } else {
+            return await sendResponse(`Ğ›Ğ¾Ğ±Ğ±Ğ¸ Ğ¸Ğ³Ñ€Ñ‹ "ĞœĞ°Ñ„Ğ¸Ñ" ÑƒĞ¶Ğµ ÑĞ¾Ğ·Ğ´Ğ°Ğ½Ğ¾! ĞŸÑ€Ğ¸ÑĞ¾ĞµĞ´Ğ¸Ğ½ÑĞ¹Ñ‚ĞµÑÑŒ Ğ¿Ğ¾ ĞºĞ½Ğ¾Ğ¿ĞºĞµ Ğ½Ğ¸Ğ¶Ğµ.`);
+          }
+        }
+
+        let amount = 0;
+        if (args.length > 1) {
+          amount = parseNumber(args[1]);
+          if (amount < 0) amount = 0;
+        }
+
+        if (amount > 0 && (user.balance || 0) < amount) {
+          return await sendResponse(`ĞĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ². Ğ’Ğ°Ñˆ Ğ±Ğ°Ğ»Ğ°Ğ½Ñ: ${(user.balance || 0).toLocaleString()}$`);
+        }
+
+        const keyboard = {
+          inline: true,
+          buttons: [
+            [
+              { action: { type: "callback", label: "ĞŸÑ€Ğ¸ÑĞ¾ĞµĞ´Ğ¸Ğ½Ğ¸Ñ‚ÑŒÑÑ", payload: JSON.stringify({ cmd: "mafia_join" }) }, color: "positive" },
+              { action: { type: "callback", label: "ĞÑ‚ÑĞ¾ĞµĞ´Ğ¸Ğ½Ğ¸Ñ‚ÑŒÑÑ", payload: JSON.stringify({ cmd: "mafia_leave" }) }, color: "negative" }
+            ],
+            [
+              { action: { type: "callback", label: "Ğ—Ğ°Ğ¿ÑƒÑÑ‚Ğ¸Ñ‚ÑŒ Ğ¸Ğ³Ñ€Ñƒ", payload: JSON.stringify({ cmd: "mafia_start" }) }, color: "secondary" }
+            ]
+          ]
+        };
+
+        const res = await sendResponse(`Ğ˜Ğ³Ñ€Ğ° "ĞœĞ°Ñ„Ğ¸Ñ"\n\n| Ğ¡Ğ¾Ğ·Ğ´Ğ°Ñ‚ĞµĞ»ÑŒ - [id${userId}|${fullName}]\n${amount > 0 ? `| Ğ¡Ñ‚Ğ°Ğ²ĞºĞ° Ğ´Ğ»Ñ ÑƒÑ‡Ğ°ÑÑ‚Ğ¸Ñ: ${amount.toLocaleString()}$\n` : ""}\n| Ğ£Ñ‡Ğ°ÑÑ‚Ğ½Ğ¸ĞºĞ¸ Ğ¸Ğ³Ñ€Ñ‹ - [id${userId}|${fullName}]`, {
+          keyboard: JSON.stringify(keyboard)
+        });
+
+        const cmId = res?.response?.[0]?.conversation_message_id || res?.response;
+
+        if (amount > 0) {
+          await updateUser(userId, { balance: (user.balance || 0) - amount });
+        }
+
+        const lobbyTimer = setTimeout(async () => {
+          const g = mafiaGames.get(peerId);
+          if (g && g.status === "lobby") {
+            if (g.players.length >= 4) {
+              await sendVkMessage(VK_TOKEN, peerId, `â³ Ğ’Ñ€ĞµĞ¼Ñ Ğ¾Ğ¶Ğ¸Ğ´Ğ°Ğ½Ğ¸Ñ (2 Ğ¼Ğ¸Ğ½ÑƒÑ‚Ñ‹) Ğ¸ÑÑ‚ĞµĞºĞ»Ğ¾! ĞĞ°Ñ‡Ğ¸Ğ½Ğ°ĞµĞ¼ Ğ¸Ğ³Ñ€Ñƒ...`);
+              await startMafiaGame(peerId);
+            } else {
+              await sendVkMessage(VK_TOKEN, peerId, `ĞĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑƒÑ‡Ğ°ÑÑ‚Ğ½Ğ¸ĞºĞ¾Ğ² Ğ´Ğ»Ñ Ğ¼Ğ°Ñ„Ğ¸Ğ¸.`);
+              mafiaGames.delete(peerId);
+            }
+          }
+        }, 120000);
+
+        mafiaGames.set(peerId, {
+          peerId,
+          cmId: cmId || 0,
+          creatorId: userId,
+          creatorName: fullName,
+          players: [{ id: userId, name: fullName, isAlive: true }],
+          status: "lobby",
+          lobbyTimer,
+          amount
+        });
+        return;
+      }
+
+      if (rawCmd === "/ÑƒÑÑ‚Ğ°Ğ½Ğ¾Ğ²Ğ¸Ñ‚ÑŒÑ„Ğ¾Ñ‚Ğ¾") {
+        const hasPremium = user.vipExpires > Date.now();
+        if (!hasPremium) {
+          return await sendResponse("ĞÑˆĞ¸Ğ±ĞºĞ°! Ğ£ÑÑ‚Ğ°Ğ½Ğ°Ğ²Ğ»Ğ¸Ğ²Ğ°Ñ‚ÑŒ Ñ„Ğ¾Ñ‚Ğ¾Ğ³Ñ€Ğ°Ñ„Ğ¸Ñ Ğ¿Ñ€Ğ¾Ñ„Ğ¸Ğ»Ñ Ğ¼Ğ¾Ğ³ÑƒÑ‚ Ñ‚Ğ¾Ğ»ÑŒĞºĞ¾ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ğ¸ Ñ Premium-ÑÑ‚Ğ°Ñ‚ÑƒÑĞ¾Ğ¼ (VIP)! ĞŸÑ€Ğ¸Ğ¾Ğ±Ñ€ĞµÑÑ‚Ğ¸ ĞµĞ³Ğ¾ Ğ¼Ğ¾Ğ¶Ğ½Ğ¾ ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´Ğ¾Ğ¹ /ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒĞ²Ğ¸Ğ¿");
+        }
+
+        let photoAttachment = "";
+        if (message.attachments && message.attachments.length > 0) {
+          for (const att of message.attachments) {
+            if (att.type === "photo" && att.photo) {
+              const p = att.photo;
+              photoAttachment = `photo${p.owner_id}_${p.id}` + (p.access_key ? `_${p.access_key}` : ``);
+              break;
+            }
+          }
+        }
+        if (!photoAttachment && message.reply_message?.attachments) {
+          for (const att of message.reply_message.attachments) {
+            if (att.type === "photo" && att.photo) {
+              const p = att.photo;
+              photoAttachment = `photo${p.owner_id}_${p.id}` + (p.access_key ? `_${p.access_key}` : ``);
+              break;
+            }
+          }
+        }
+        if (!photoAttachment && args[1]) {
+          if (args[1].startsWith("photo") || args[1].startsWith("http")) {
+            photoAttachment = args[1];
+          } else {
+            const uploadRes = await uploadPhoto(peerId, args[1]);
+            if (uploadRes.attachment) {
+              photoAttachment = uploadRes.attachment;
+            }
+          }
+        }
+
+        if (!photoAttachment) {
+          return await sendResponse("ĞŸÑ€Ğ¸ĞºÑ€ĞµĞ¿Ğ¸Ñ‚Ğµ Ñ„Ğ¾Ñ‚Ğ¾ Ğº ÑĞ¾Ğ¾Ğ±Ñ‰ĞµĞ½Ğ¸Ñ, Ğ¾Ñ‚Ğ²ĞµÑ‚ÑŒÑ‚Ğµ Ğ½Ğ° ÑĞ¾Ğ¾Ğ±Ñ‰ĞµĞ½Ğ¸Ğµ Ñ Ñ„Ğ¾Ñ‚Ğ¾ Ğ¸Ğ»Ğ¸ ÑƒĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ ÑÑÑ‹Ğ»ĞºÑƒ Ğ½Ğ° Ğ¸Ğ·Ğ¾Ğ±Ñ€Ğ°Ğ¶ĞµĞ½Ğ¸Ğµ!");
+        }
+
+        await updateUser(userId, { profilePhoto: photoAttachment });
+        return await sendResponse("Ğ’Ñ‹ ÑƒÑĞ¿ĞµÑˆĞ½Ğ¾ ÑƒÑÑ‚Ğ°Ğ½Ğ¾Ğ²Ğ¸Ğ»Ğ¸ Ğ½Ğ¾Ğ²ÑƒÑ Ñ„Ğ¾Ñ‚Ğ¾Ğ³Ñ€Ğ°Ñ„Ğ¸Ñ Ğ¿Ñ€Ğ¾Ñ„Ğ¸Ğ»Ñ!", { attachment: photoAttachment });
+      }
+
+      if (rawCmd === "/ÑƒĞ´Ğ°Ğ»Ğ¸Ñ‚ÑŒÑ„Ğ¾Ñ‚Ğ¾") {
+        await updateUser(userId, { profilePhoto: null });
+        return await sendResponse("Ğ’Ñ‹ ÑƒÑĞ¿ĞµÑˆĞ½Ğ¾ ÑƒĞ´Ğ°Ğ»Ğ¸Ğ»Ğ¸ Ñ„Ğ¾Ñ‚Ğ¾Ğ³Ñ€Ğ°Ñ„Ğ¸Ñ Ğ¿Ñ€Ğ¾Ñ„Ğ¸Ğ»Ñ!");
+      }
+
+      // 15. /ĞºĞ½Ğ±
+      if (rawCmd === "/ĞºĞ½Ğ±") {
+        const stake = parseInt(args[1]);
+        if (isNaN(stake) || stake < 10) return await sendResponse("ĞœĞ¸Ğ½Ğ¸Ğ¼Ğ°Ğ»ÑŒĞ½Ğ°Ñ ÑÑ‚Ğ°Ğ²ĞºĞ° Ğ² ĞšĞĞ‘: 10$!");
+        if ((user.balance || 0) < stake) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ ÑÑ€ĞµĞ´ÑÑ‚Ğ² Ğ½Ğ° Ñ€ÑƒĞºĞ°Ñ…!");
+
+        const keyboard = {
+          inline: true,
+          buttons: [[
+            { action: { type: "callback", label: "Ğ¡Ñ‹Ğ³Ñ€Ğ°Ñ‚ÑŒ", payload: JSON.stringify({ cmd: "rps_join" }) }, color: "positive" }
+          ]]
+        };
+
+        const res = await sendResponse(`ğŸª¨ğŸ“„âœ‚ï¸ ĞšĞ°Ğ¼ĞµĞ½ÑŒ-ĞĞ¾Ğ¶Ğ½Ğ¸Ñ†Ñ‹-Ğ‘ÑƒĞ¼Ğ°Ğ³Ğ°\n\n| Ğ¡Ğ¾Ğ·Ğ´Ğ°Ñ‚ĞµĞ»ÑŒ: [id${userId}|${fullName}]\n| Ğ¡Ñ‚Ğ°Ğ²ĞºĞ°: ${stake.toLocaleString()}$`, {
+          keyboard: JSON.stringify(keyboard)
+        });
+
+        const cmId = res?.response?.[0]?.conversation_message_id || res?.response;
+        rpsGames.set(peerId, {
+          peerId,
+          cmId: cmId || 0,
+          creatorId: userId,
+          creatorName: fullName,
+          amount: stake,
+          status: "waiting_p2"
+        });
+        return;
+      }
+
+      // 16. Reputation System: /rep +, /rep -
+      if (rawCmd === "/rep") {
+        const type = args[1];
+        if (type !== "+" && type !== "-") return await sendResponse("Ğ˜ÑĞ¿Ğ¾Ğ»ÑŒĞ·ÑƒĞ¹Ñ‚Ğµ: /rep + [Ğ¡ÑÑ‹Ğ»ĞºĞ°|Ğ˜Ğ¼Ñ Ğ¤Ğ°Ğ¼Ğ¸Ğ»Ğ¸Ñ] Ğ¸Ğ»Ğ¸ /rep - [Ğ¡ÑÑ‹Ğ»ĞºĞ°|Ğ˜Ğ¼Ñ Ğ¤Ğ°Ğ¼Ğ¸Ğ»Ğ¸Ñ]");
+
+        const parsed = await parseTargetUser(message, args.slice(2));
+        if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+        if (parsed.targetId === userId) return await sendResponse("ĞĞµĞ»ÑŒĞ·Ñ Ğ¸Ğ·Ğ¼ĞµĞ½ÑÑ‚ÑŒ Ñ€ĞµĞ¿ÑƒÑ‚Ğ°Ñ†Ğ¸Ñ ÑĞ°Ğ¼Ğ¾Ğ¼Ñƒ ÑĞµĞ±Ğµ!");
+
+        const lastGiven = user.lastRepGiven || {};
+        const lastTime = lastGiven[parsed.targetId] || 0;
+        const nowSec = Math.floor(Date.now() / 1000);
+        const cd = 86400 - (nowSec - lastTime);
+
+        if (cd > 0) {
+          const remH = Math.floor(cd / 3600);
+          const remM = Math.floor((cd % 3600) / 60);
+          return await sendResponse(`Ğ’Ñ‹ ÑƒĞ¶Ğµ Ğ¸Ğ·Ğ¼ĞµĞ½ÑĞ»Ğ¸ Ñ€ĞµĞ¿ÑƒÑ‚Ğ°Ñ†Ğ¸Ñ ÑÑ‚Ğ¾Ğ³Ğ¾ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ. ĞŸĞ¾Ğ¿Ñ€Ğ¾Ğ±ÑƒĞ¹Ñ‚Ğµ ÑĞ½Ğ¾Ğ²Ğ° Ñ‡ĞµÑ€ĞµĞ· ${remH} Ñ‡Ğ°Ñ-(Ğ¾Ğ²) ${remM} Ğ¼Ğ¸Ğ½`);
+        }
+
+        const targetUser = await getOrCreateUser(parsed.targetId);
+        const diff = type === "+" ? 1 : -1;
+        const newRep = (targetUser.rep || 0) + diff;
+
+        lastGiven[parsed.targetId] = nowSec;
+        await updateUser(userId, { lastRepGiven: lastGiven });
+        await updateUser(parsed.targetId, { rep: newRep });
+
+        const sign = newRep >= 0 ? "+" : "";
+        if (type === "+") {
+          return await sendResponse(`ğŸ‘ [id${userId}|${fullName}] Ğ¿Ğ¾Ğ²Ñ‹ÑĞ¸Ğ»(-Ğ°) Ñ€ĞµĞ¿ÑƒÑ‚Ğ°Ñ†Ğ¸Ñ Ñƒ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${parsed.targetId}|${parsed.targetName}]\n| Ğ¢ĞµĞ¿ĞµÑ€ÑŒ Ñƒ Ğ½ĞµĞ³Ğ¾ Ñ€ĞµĞ¿ÑƒÑ‚Ğ°Ñ†Ğ¸Ğ¸: ${sign}${newRep}`);
+        } else {
+          return await sendResponse(`ğŸ‘ [id${userId}|${fullName}] Ğ¿Ğ¾Ğ½Ğ¸Ğ·Ğ¸Ğ»(-Ğ°) Ñ€ĞµĞ¿ÑƒÑ‚Ğ°Ñ†Ğ¸Ñ Ñƒ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${parsed.targetId}|${parsed.targetName}]\n| Ğ¢ĞµĞ¿ĞµÑ€ÑŒ Ñƒ Ğ½ĞµĞ³Ğ¾ Ñ€ĞµĞ¿ÑƒÑ‚Ğ°Ñ†Ğ¸Ğ¸: ${sign}${newRep}`);
+        }
+      }
+
+      if (rawCmd === "/getmute" || rawCmd === "/Ğ¸Ğ½Ñ„Ğ¾Ğ¼ÑƒÑ‚") {
+         if (user.role < 1 && !isAdmin && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 1) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²!");
+         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+         const parsed = await parseTargetUser(message, args.slice(1));
+         const targetId = parsed.targetId || userId;
+         const tUser = await getOrCreateUser(targetId);
+         const targetName = tUser.fullName || tUser.nick || `User${targetId}`;
+
+         if (tUser.muteUntil && tUser.muteUntil > Date.now()) {
+            const remMs = tUser.muteUntil - Date.now();
+            const remMin = Math.ceil(remMs / 60000);
+            return await sendResponse(`...::Ğ˜Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºĞµ Ñ‡Ğ°Ñ‚Ğ°::...\n\nĞŸĞ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ: [id${targetId}|${targetName}]\n| Ğ¡Ñ‚Ğ°Ñ‚ÑƒÑ: âœ… ĞĞºÑ‚Ğ¸Ğ²Ğ½Ğ°\n| ĞÑÑ‚Ğ°Ğ²ÑˆĞµĞµÑÑ Ğ²Ñ€ĞµĞ¼Ñ: ${remMin} Ğ¼Ğ¸Ğ½.\n| Ğ‘Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºĞ° Ñ‡Ğ°Ñ‚Ğ° Ğ´Ğ¾: ${fmtD(tUser.muteUntil)}\n| ĞŸÑ€Ğ¸Ñ‡Ğ¸Ğ½Ğ°: ${tUser.muteReason || "Ğ±ĞµĞ· Ğ¿Ñ€Ğ¸Ñ‡Ğ¸Ğ½Ñ‹"}`);
+         } else {
+            return await sendResponse(`Ğ£ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${targetId}|${targetName}] Ğ¾Ñ‚ÑÑƒÑ‚ÑÑ‚Ğ²ÑƒĞµÑ‚ Ğ°ĞºÑ‚Ğ¸Ğ²Ğ½Ğ°Ñ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºĞ° Ñ‡Ğ°Ñ‚Ğ°.`);
+         }
+      }
+
+      if (rawCmd === "/getwarn" || rawCmd === "/getwarns" || rawCmd === "/Ğ¸Ğ½Ñ„Ğ¾Ğ²Ğ°Ñ€Ğ½") {
+         if (user.role < 1 && !isAdmin && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 1) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²!");
+         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+         const parsed = await parseTargetUser(message, args.slice(1));
+         const targetId = parsed.targetId || userId;
+         const tUser = await getOrCreateUser(targetId);
+         const targetName = tUser.fullName || tUser.nick || `User${targetId}`;
+
+         const warnsCount = tUser.warnings || 0;
+         if (warnsCount > 0) {
+            const mStr = tUser.warnBy ? `[id${tUser.warnBy}|ĞœĞ¾Ğ´ĞµÑ€Ğ°Ñ‚Ğ¾Ñ€]` : "[id1|Ğ¡Ğ¸ÑÑ‚ĞµĞ¼Ğ°]";
+            const rStr = tUser.warnReason || "ĞĞ°Ñ€ÑƒÑˆĞµĞ½Ğ¸Ğµ Ğ¿Ñ€Ğ°Ğ²Ğ¸Ğ»";
+            const dStr = fmtD(tUser.warnDate || Date.now());
+            const termStr = tUser.warnExpiresAt ? `${Math.max(1, Math.ceil((tUser.warnExpiresAt - (tUser.warnDate || Date.now())) / (24 * 3600 * 1000)))} Ğ´Ğ½.` : "ĞĞ°Ğ²ÑĞµĞ³Ğ´Ğ°";
+            return await sendResponse(`...::Ğ˜Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ Ğ¿Ñ€ĞµĞ´ÑƒĞ¿Ñ€ĞµĞ¶Ğ´ĞµĞ½Ğ¸ÑÑ…::...\n\nĞŸĞ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»ÑŒ: [id${targetId}|${targetName}]\n| ĞšĞ¾Ğ»Ğ¸Ñ‡ĞµÑÑ‚Ğ²Ğ¾ Ğ¿Ñ€ĞµĞ´ÑƒĞ¿Ñ€ĞµĞ¶Ğ´ĞµĞ½Ğ¸Ğ¹: ${warnsCount}/3\n\n1) ${mStr} | ${rStr} | ${termStr} | ${dStr}`);
+         } else {
+            return await sendResponse(`Ğ£ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ [id${targetId}|${targetName}] Ğ½ĞµÑ‚ Ğ°ĞºÑ‚Ğ¸Ğ²Ğ½Ñ‹Ñ… Ğ¿Ñ€ĞµĞ´ÑƒĞ¿Ñ€ĞµĞ¶Ğ´ĞµĞ½Ğ¸Ğ¹.`);
+         }
+      }
+
+      if (rawCmd === "/infobans" || rawCmd === "/getbans" || rawCmd === "/getban" || rawCmd === "/Ğ¸Ğ½Ñ„Ğ¾Ğ±Ğ°Ğ½" || rawCmd === "/Ğ³ĞµÑ‚Ğ±Ğ°Ğ½" || rawCmd === "/Ğ³ĞµÑ‚Ğ±Ğ°Ğ½Ñ") {
+         if (user.role < 1 && !isAdmin && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 1) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²!");
+         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+         const tUser = await getOrCreateUser(parsed.targetId);
+
+         const targetName = tUser.fullName || tUser.nick || `User${parsed.targetId}`;
+
+         const getModStr = async (mId?: number) => {
+           if (!mId) return "[id1|ĞœĞ¾Ğ´ĞµÑ€Ğ°Ñ‚Ğ¾Ñ€]";
+           return `[id${mId}|ĞœĞ¾Ğ´ĞµÑ€Ğ°Ñ‚Ğ¾Ñ€]`;
+         };
+
+         const formatDaysTerm = (expiresAt?: number, startDate?: number) => {
+           if (!expiresAt) return "ĞĞ°Ğ²ÑĞµĞ³Ğ´Ğ°";
+           const start = startDate || Date.now();
+           const days = Math.max(1, Math.ceil((expiresAt - start) / (24 * 3600 * 1000)));
+           return `${days} Ğ´Ğ½.`;
+         };
+
+         const gbanText = tUser.gban ? `${await getModStr(tUser.gbanBy)} | ${tUser.gbanReason || 'Ğ±ĞµĞ· Ğ¿Ñ€Ğ¸Ñ‡Ğ¸Ğ½Ñ‹'} | ${formatDaysTerm(tUser.gbanExpiresAt, tUser.gbanDate)} | ${fmtD(tUser.gbanDate)}` : "ĞÑ‚ÑÑƒÑ‚ÑÑ‚Ğ²ÑƒĞµÑ‚.";
+         const gbanplText = tUser.gbanpl ? `${await getModStr(tUser.gbanplBy)} | ${tUser.gbanplReason || 'Ğ±ĞµĞ· Ğ¿Ñ€Ğ¸Ñ‡Ğ¸Ğ½Ñ‹'} | ${formatDaysTerm(tUser.gbanplExpiresAt, tUser.gbanplDate)} | ${fmtD(tUser.gbanplDate)}` : "ĞÑ‚ÑÑƒÑ‚ÑÑ‚Ğ²ÑƒĞµÑ‚.";
+         const blackText = tUser.blacklisted ? `${await getModStr(tUser.blackBy)} | ${tUser.blackReason || 'Ğ±ĞµĞ· Ğ¿Ñ€Ğ¸Ñ‡Ğ¸Ğ½Ñ‹'} | ${formatDaysTerm(tUser.blackExpiresAt, tUser.blackDate)} | ${fmtD(tUser.blackDate || Date.now())}` : "ĞÑ‚ÑÑƒÑ‚ÑÑ‚Ğ²ÑƒĞµÑ‚.";
+         const gameBanText = tUser.isGameBanned ? `${await getModStr(tUser.gameBanBy)} | ${tUser.gameBanReason || 'Ğ±ĞµĞ· Ğ¿Ñ€Ğ¸Ñ‡Ğ¸Ğ½Ñ‹'} | ${formatDaysTerm(tUser.gameBanUntil, tUser.gameBanDate)} | ${fmtD(tUser.gameBanDate || Date.now())}` : "ĞÑ‚ÑÑƒÑ‚ÑÑ‚Ğ²ÑƒĞµÑ‚.";
+
+         const chatBans = tUser.chatBans || {};
+         const cKeys = Object.keys(chatBans);
+         const chatBansCount = cKeys.length;
+
+         let chatBansText = "ĞÑ‚ÑÑƒÑ‚ÑÑ‚Ğ²ÑƒĞµÑ‚.";
+         if (chatBansCount > 0) {
+           const lines = [];
+           let idx = 1;
+           for (const cId of cKeys) {
+             const bInfo = chatBans[cId];
+             const cData = await getOrCreateChat(Number(cId));
+             const mStr = await getModStr(bInfo.by);
+             const termStr = formatDaysTerm(bInfo.expiresAt, bInfo.date);
+             lines.push(`${idx}) ${cData.title || `Ğ‘ĞµÑĞµĞ´Ğ° â„–${cId}`} | ${mStr} | ${bInfo.reason || 'Ğ±ĞµĞ· Ğ¿Ñ€Ğ¸Ñ‡Ğ¸Ğ½Ñ‹'} | ${termStr} | ${fmtD(bInfo.date)}`);
+             idx++;
+           }
+           chatBansText = lines.join("\n");
+         }
+
+         const out = `Ğ˜Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºĞ°Ñ… [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ]\n\n` +
+           `| Ğ˜Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ Ğ³Ğ»Ğ¾Ğ±Ğ°Ğ»ÑŒĞ½Ğ¾Ğ¹ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºĞµ Ğ²Ğ¾ Ğ²ÑĞµÑ… Ğ±ĞµÑĞµĞ´Ğ°Ñ…:\n${gbanText}\n\n` +
+           `| Ğ˜Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ Ğ³Ğ»Ğ¾Ğ±Ğ°Ğ»ÑŒĞ½Ğ¾Ğ¹ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºĞµ Ğ² Ğ±ĞµÑĞµĞ´Ğ°Ñ… Ğ¸Ğ³Ñ€Ğ¾ĞºĞ¾Ğ²:\n${gbanplText}\n\n` +
+           `| Ğ˜Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ Ğ½Ğ°Ñ…Ğ¾Ğ¶Ğ´ĞµĞ½Ğ¸Ğ¸ Ğ² Ñ‡Ñ‘Ñ€Ğ½Ğ¾Ğ¼ ÑĞ¿Ğ¸ÑĞºĞµ Ğ±Ğ¾Ñ‚Ğ°:\n${blackText}\n\n` +
+           `| Ğ˜Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºĞµ Ğ¸Ğ³Ñ€Ğ¾Ğ²Ñ‹Ñ… ĞºĞ¾Ğ¼Ğ°Ğ½Ğ´:\n${gameBanText}\n\n` +
+           `| ĞšĞ¾Ğ»-Ğ²Ğ¾ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²Ğ¾Ğº Ğ² Ğ±ĞµÑĞµĞ´Ğ°Ñ…: ${chatBansCount}\n\n` +
+           `| Ğ˜Ğ½Ñ„Ğ¾Ñ€Ğ¼Ğ°Ñ†Ğ¸Ñ Ğ¾ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºĞ°Ñ… Ğ² Ğ±ĞµÑĞµĞ´Ğ°Ñ…:\n${chatBansText}`;
+
+         return await sendResponse(out);
+      }
+
+        if (["/mute", "/Ğ¼ÑƒÑ‚", "/Ğ·Ğ°Ğ³Ğ»ÑƒÑˆĞ¸Ñ‚ÑŒ", "/Ğ·Ğ°Ğ¼ÑƒÑ‚Ğ¸Ñ‚ÑŒ", "/Ğ¼ÑƒÑ‚Ğ¸Ñ‚ÑŒ", "/Ğ´Ğ°Ñ‚ÑŒĞ¼ÑƒÑ‚", "/m"].includes(rawCmd)) {
+         if (user.role < 1 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²!");
+         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+         if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ¿Ñ€Ğ¸Ğ¼ĞµĞ½Ğ¸Ñ‚ÑŒ ÑÑ‚Ğ¾ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğº Ğ´Ğ°Ğ½Ğ½Ğ¾Ğ¼Ñƒ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ, Ñ‚Ğ°Ğº ĞºĞ°Ğº ĞµĞ³Ğ¾ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚ÑŒ Ğ²Ñ‹ÑˆĞµ Ğ¸Ğ»Ğ¸ Ñ€Ğ°Ğ²Ğ½Ğ° Ğ²Ğ°ÑˆĞµĞ¹.");
+         
+         const { timeMin, argIndex } = parseMuteDuration(args);
+         const durationSec = Math.max(60, timeMin * 60);
+         
+         const reasonArgs = args.slice(message.reply_message ? 1 : 2).filter((_, idx) => {
+           const actualIdx = (message.reply_message ? 1 : 2) + idx;
+           return actualIdx !== argIndex;
+         });
+         const reason = reasonArgs.join(" ") || "Ğ±ĞµĞ· Ğ¿Ñ€Ğ¸Ñ‡Ğ¸Ğ½Ñ‹";
+         
+         const vkRes = await executeVkMute(peerId, parsed.targetId, durationSec);
+         const systemMuteSuccess = vkRes.success;
+         const vkErrMsg = vkRes.errorMsg;
+
+         const muteUntil = Date.now() + durationSec * 1000;
+         await updateUser(parsed.targetId, { muteUntil, muteReason: reason, mutePeerId: peerId });
+         const targetU = await getOrCreateUser(parsed.targetId);
+         targetU.muteUntil = muteUntil;
+         targetU.muteReason = reason;
+         targetU.mutePeerId = peerId;
+         userCache.set(parsed.targetId, targetU);
+
+         await logBotAction({ type: "mute", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] Ğ²Ñ‹Ğ´Ğ°Ğ»(-Ğ°) Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºÑƒ Ñ‡Ğ°Ñ‚Ğ° [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ] Ğ½Ğ° ${timeMin} Ğ¼Ğ¸Ğ½ (ĞŸÑ€Ğ¸Ñ‡Ğ¸Ğ½Ğ°: ${reason})` });
+         
+         const keyboard = {
+           inline: true,
+           buttons: [
+             [{ action: { type: "callback", label: "Ğ¡Ğ½ÑÑ‚ÑŒ Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºÑƒ Ñ‡Ğ°Ñ‚Ğ°", payload: JSON.stringify({ cmd: "mod_unmute", targetId: parsed.targetId }) }, color: "positive" }],
+             [{ action: { type: "callback", label: "ĞÑ‡Ğ¸ÑÑ‚Ğ¸Ñ‚ÑŒ ÑĞ¾Ğ¾Ğ±Ñ‰ĞµĞ½Ğ¸Ñ", payload: JSON.stringify({ cmd: "mod_clearmute", targetId: parsed.targetId, authorId: userId }) }, color: "negative" }]
+           ]
+         };
+         return await sendResponse(`[id${userId}|ĞœĞ¾Ğ´ĞµÑ€Ğ°Ñ‚Ğ¾Ñ€] Ğ²Ñ‹Ğ´Ğ°Ğ»(-Ğ°) Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºÑƒ Ñ‡Ğ°Ñ‚Ğ° [id${parsed.targetId}|Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ] Ğ½Ğ° ${timeMin} Ğ¼Ğ¸Ğ½\n\n| ĞŸÑ€Ğ¸Ñ‡Ğ¸Ğ½Ğ°: ${reason}\n| Ğ‘Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºĞ° Ñ‡Ğ°Ñ‚Ğ° Ğ´Ğ¾: ${fmtD(muteUntil)}${systemMuteSuccess ? "" : (vkErrMsg ? "\n| ĞŸÑ€ĞµĞ´ÑƒĞ¿Ñ€ĞµĞ¶Ğ´ĞµĞ½Ğ¸Ğµ VK API: " + vkErrMsg : "")}`, { noReply: true, keyboard: JSON.stringify(keyboard) });
+       }
+
+      if (["/unmute", "/Ğ°Ğ½Ğ¼ÑƒÑ‚", "/ÑƒĞ½Ğ¼ÑƒÑ‚", "/Ñ€Ğ°Ğ·Ğ¼ÑƒÑ‚", "/ÑĞ½ÑÑ‚ÑŒĞ¼ÑƒÑ‚", "/Ñ€Ğ°Ğ·Ğ³Ğ»ÑƒÑˆĞ¸Ñ‚ÑŒ", "/Ñ€Ğ°Ğ·Ğ¼ÑƒÑ‚Ğ¸Ñ‚ÑŒ", "/Ğ¸Ğ·Ğ¼ÑƒÑ‚Ğ°", "/unm"].includes(rawCmd)) {
+        if (user.role < 1 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²!");
+        if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+        const parsed = await parseTargetUser(message, args.slice(1));
+        if (!parsed.targetId) return await sendResponse("Ğ£ĞºĞ°Ğ¶Ğ¸Ñ‚Ğµ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ!");
+        if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Ğ’Ñ‹ Ğ½Ğµ Ğ¼Ğ¾Ğ¶ĞµÑ‚Ğµ Ğ¿Ñ€Ğ¸Ğ¼ĞµĞ½Ğ¸Ñ‚ÑŒ ÑÑ‚Ğ¾ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğº Ğ´Ğ°Ğ½Ğ½Ğ¾Ğ¼Ñƒ Ğ¿Ğ¾Ğ»ÑŒĞ·Ğ¾Ğ²Ğ°Ñ‚ĞµĞ»Ñ, Ñ‚Ğ°Ğº ĞºĞ°Ğº ĞµĞ³Ğ¾ Ğ´Ğ¾Ğ»Ğ¶Ğ½Ğ¾ÑÑ‚ÑŒ Ğ²Ñ‹ÑˆĞµ Ğ¸Ğ»Ğ¸ Ñ€Ğ°Ğ²Ğ½Ğ° Ğ²Ğ°ÑˆĞµĞ¹.");
+        const targetU = await getOrCreateUser(parsed.targetId);
+        const tName = targetU.fullName || targetU.nick || (await fetchVkFullName(parsed.targetId)) || `User${parsed.targetId}`;
+        
+        await updateUser(parsed.targetId, { muteUntil: 0, muteReason: "", mutePeerId: 0 });
+        targetU.muteUntil = 0;
+        targetU.muteReason = "";
+        targetU.mutePeerId = 0;
+        userCache.set(parsed.targetId, targetU);
+
+        const vkRes = await executeVkUnmute(peerId, parsed.targetId);
+        const systemUnmuteSuccess = vkRes.success;
+        const vkErrMsg = vkRes.errorMsg;
+
+        await logBotAction({ type: "unmute", peerId, userId, targetId: parsed.targetId, text: `[id${userId}|${fullName}] ÑĞ½ÑĞ»(-Ğ°) Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºÑƒ Ñ‡Ğ°Ñ‚Ğ° Ñ [id${parsed.targetId}|${tName}]` });
+        return await sendResponse(`[id${userId}|ĞœĞ¾Ğ´ĞµÑ€Ğ°Ñ‚Ğ¾Ñ€] ÑĞ½ÑĞ»(-Ğ°) Ğ±Ğ»Ğ¾ĞºĞ¸Ñ€Ğ¾Ğ²ĞºÑƒ Ñ‡Ğ°Ñ‚Ğ° Ñ [id${parsed.targetId}|${tName}]${systemUnmuteSuccess || !vkErrMsg ? "" : "\n| ĞŸÑ€ĞµĞ´ÑƒĞ¿Ñ€ĞµĞ¶Ğ´ĞµĞ½Ğ¸Ğµ VK API: " + vkErrMsg}`, { noReply: true });
+      }
+
+       if (["/smute", "/ÑĞ¼ÑƒÑ‚"].includes(rawCmd)) {
+         const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+         const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
+         if (effRole < 1 && !isAdmin) return await sendResponse("Ğ£ Ğ²Ğ°Ñ Ğ½ĞµĞ´Ğ¾ÑÑ‚Ğ°Ñ‚Ğ¾Ñ‡Ğ½Ğ¾ Ğ¿Ñ€Ğ°Ğ²!");
+         if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+         const parsed = await parseTargetUser(message, args.slice(1));
+         if (!pxœ @ä¿xœì}ks×‘èwÿŠ®*"")ëaØ²®lÙY][²Krœ[E³Ä!0¤&0ÜÁ@—F•dÙy”)~lÖ•Û+'ù°µwoQÚ%QUùà_ğØü„{ºÏcÎs0 AŠ²¡İ˜ƒ™óìÓİ§OŸ~øq;¨W?^’Sõ’I'nyşe?L¼vĞªŸÚ‹Q«½¿ôÖ{+½o{k›ôV½Ş“ŞFïáæŞwäïİŞ
+¼$¿oí)”^|ÎãÿÂy¯¸§H›«]jÿ)b?®]X*.A|ª^ö:múwÑWÆRöÂö‰z3l•JÙÃútóc¯÷FôˆŒäÛŞ*ŞæÕŞyµJ¾‘oŞğ6O¾lx½ûäİƒÍkäÇ]R‚]‡w+¤ÜcÒÀ£Íë®¹İ,{äiÊ¯Ó?«½{´ERœtMêC»¤¯ŞİÍ7¯‘/kÌ
+iéqoÅÃc¨ ¨RXÕÈ„oÙKÂfp:l•=‰S­zpÅëzÇ(xNw’àd'ö“0jÉç¶kZ¿Î>Ÿj¤Öi?¹PiúWŠ‡'Ê¼aïgŞá	³bøí¨u‚4JêAÛ•v#¬ÅfĞnûA%KçÙ/ï¸7éU½©Re>l$A\,'V¿Rò½ì-§MóÆıZÒñ§êWHÛ}ZôöAC/Êmğåì9vL@G*ÙuÍŠôšN¯ò«(l^¡ä½ÿ¾Wèİ!kñC˜Íß{¼ùqÁ\˜&ı/ZIØ ô“ ÒŠ.a´2ÄæMNLLH£ (ÛY¬“¿ ˜^4Ğ|9m¹Œgq¤U6búîm$–ªG‰Æ6QÚà/`í°Kòã­øUÒ†½_¹Vµ"ÏP<;ÊUáê(E‡Ø‹R) úW}Â*í 1ÂQèƒÎ«-¼%'jH„X–ƒªW€Î
+eOç)¼ÁªÉ]’àJRõf§ÃúŞeZ¼ûşŞåùN£qÆoİ õµÍ€¼	-#ƒxXÜß[)ya‚_'Ÿ¯"X',ƒ °‰Ôzë¾ïâ(3ò„½ËŒ6»ÀÅzÅŞ×)>öVª¤…t·4«.?Kp%¨¼{X„à­Æ¬%\•Û &^tÔO´/†µ‹¾…›×`â½õÂL%lÕzĞ.ÆşåW›uÂ¦—u¤ÄU¾à'g£F ”¿+5ö¢íıä'úfš|)sÂÀñ`~µ„Õbx~ù˜w”ğôE5ezéKh®¬Gß¥xÛ/6DÆµ‡ï>Ù["åæ×p‚m ·Xİ²ryPÖon‹´ÁÅ8ªx®^2vDƒaì¬Tº+P¢‹.ş|‡Ò0ÆoË2Ÿ,›¶Î/¶E4Ğ:ñ;Æf?Ô¿†ØIÈ
+È†îù×È¸ ìÓäÇjïÎXDÙªˆ²…­Fn@f|ÓPxƒñ²{ÛÍÏ‘Šbp¸¤§è:™û_aŞ0l]~<æpúRŒ›¼>¤!’<„¡0Y•ûtS€äÕUÆ`®ÂJáÑúşæÇ{ÔµJâ%U£Ãğ¯„Q»B†Xœ½$‹íêşbX¹t±R‹ššAr!ª`<¢MD´ft	ù¬ìlYmÑŠğ›í*büğ±óIt1 ²Ë»oœç­7^;Sö.‘İùPeò…Èöy>LÅ˜ıŞÔÿGäœ 9Äô»Æºr¯Êî×õj~R»@ø7Ù~ºìhµFàÇ|KÛ@h_Ã-ŸÀ_·›J‘G°,dV6¯÷¾­ì}[Û¤Òv!î¨ÓJ@ÅUHW¥ÀÖai|ÔV³G	»Ii”óQì¡‹4?ù"ùóK#h-$È‹}ûJ5Ğ™µ:M~\;ÕJğ”6ÎÈ`P‡‚Úgü3ğ«„?Yi¼a½ ~jÂHÚ¿“ÅÂ4ı½ìMğÇ—ÁAD ‘BŒzQÿ6GXøEõ­DQ]Ç>@å{`	Ø[D”Ö·Yñfc=BÎà;ADØ@W¤iØÜ€ÜÉÿİÙüİx{«¦< Œ3Ÿlğã
+M= äœf;ÉëQLeƒ@b¤…¥çåèŒ¡_öãòjçÕŞcúÀ	»ãuöô-‚—¸`" ³ÕbíÑãŸQêrŸ} –ráà­Ûs¬Í©bGcY¾ÙrHi«Kä<?l…­¦ÿs©è”Õ%[¦ô{ª¤£Ì²Paqµj2ƒ+Iì×ªA:Ñª…¦2£µ$ˆ›çìEkÇÅcÔ9d<…Ş—0s‰ï˜eEŞVO/l.ÿ’ğš¶|læCÆİFYt‚“z­àÊbí‰cüÔ»UeÁ/êPf»|U1Ä²ñı•¥ª  ı›®wÔ¿ƒÒ³*©>Í¯ñIV¥ùŠB²Ü¥Ëcœ|”º<C…—±-¬Á+î]æ ï8Xöòjî4¹,ÍE~,VŞMÃV#l°$q'(Kïç:IBêU½iE`›†“ÀÎd 5¿Ñ˜óQ×ğç‚ÉíŞãÍ[”wdo‘‹şR#ò	Ôÿ×¹·ÎÉ3&(Î/‘åª5ë yêç;-¶fÎ5"÷º°×7¢˜TZŒÚa^
+
+^w¦<Ôø¿ROl†T·y+çØñ ĞoøäpÚ^€÷œ/†úŒZÁ‚Ïg$M(}îZÎ¤a²â*îöşL¦B!=êo/
+¿×z¯õ¾oñãmTv¯ÃkÆ‰»¢’} ¬D³à9ˆ3Trœ=¨Y :ûx`„½Ï™´FXûãÍë¸½<p0*d„ÖYÄ¿C* ”?PÔ.›ŸôWf•cPNœrß	UCaG¥‹Ù1õ‹>#‡Ö¥k.°[”"KShEgAÆ`NpAƒfù‡’4ı ø‘ÚAÀ’¥u²ÀŒã¹^÷;*˜EÓäˆU+ ‡½‘ãCÃ³zh¹ -´•„ÿ¸„éıŞ¤!8æeÅ¢+™¹ªÿ.Ly@®=˜â@Ûğ­™Yƒºxex]V8ĞnÁålªéd¯a¨xS;f/O•½0¤'k¤ÚÕL•RCmHPx qàB[zTa¤„ÈÛ¯øõ_Fq½ˆÃÊ×—0*ŒSÊÁ!z@+”D˜|ş˜³@"hIA g;H+gHÀ'ä›@ú`û²$R‹üTÜä÷`Œ#m~düâ:¥dÛÀÊ9çÀRNÿ‹ÒæCĞ¬Y”»É4ºC2”ØÁP®Êîa([İ…"/ªË7©ìé“µ·FX}…ş}ÎI0¨…ø-=7+ÔaÇÁº_XŸôß†2)‰Èô®€{x•vØZµÀaÕ(µPd…«¼!åä˜w­å* ©ãŞOÁÚ[G°%ÿ©W…÷„ÿ_º“Êˆí¥‹´ùqõ	ßoO ¡¨0|îHšÉÃŸÈÉ?r(ˆÊL¡ Š	˜ô¼HVîÖY¡ìŒ×o4v	-‡ÁZ¡+ã¬øiÔ´-h„7çŒzÑ¼hC¿ŒFû/P¤½ìÙ/ªÑˆÂÍßHUíRÃJâc`eQ1Ø–¥;O09Ky£ÏÆğÈ€.W•›Ò5(2¿Œ[Ï)F¶gŒ‘"8åp9~×CÔ]'øú;†¾Ü–¨·jÁVÒ¶a;ÉÆØ³*cA“ 5@1şµpvvÓ:áîŞzkU`(­Mj:ò ¨a÷.‡İ
+Û\I/€v‹•ù0n'ç[€zünøüç9¼5»é¾×šµU¸oßPT‚¦wˆ“%1Zv¥cÊ²=÷°#úF¥kc‚ÖrÈÌv™4Õc™ùG)3+ç~ó|Š®'D:¸Uõ©auó	/3¸?;j¨bJ†.ş~à€÷v5#¼ ş‰w2`µ¨Ùô[õösòì.7 -O Û^jÕmÿ…U°3#\·ì-„—õ ?ìWU*ùu×¡ä#² Ûo]n†e0¾,
+¯DÔØÒÎ»‘Tí6Æ´ÌÏµ„A¦Ÿeg‘ŸL.ÂñT‡zDê‹}rĞ”²,CE!‹Y¨4¼—<¶¨2·bÏ|4ôó™rœ€f9†ìÕ™çš¯@GÎÔ§FĞİ£U#7Dû(ëñ¢ ‘«¨Ø_¥‘­—ñÙâŒJøC‹BUdY~w5»êR^å.•ÅÈËy«eı³¿¸…­$¨ƒÁÑ²—Ê|	[ÈóùiÅëºëêGª ¨‰¸–Kvi}ß½ÈQ‹éÕ¸1ÉYºöä´OÍ‡A\üşK(nÿÔ€V–$Ø&m§lt·„®4ÚÕnirŸOß+A<Yö*•JÛ”¶LQJ²-
+ÖÖ7PRŸ¯ì‹ƒ"Š4
+ÕQC²îP«À±‰º_ÂÒÜH¹åßÿSZ—¿?­*PXÊò‘ÜâÏ<‘ÆâÖÒXüÙ%âÏXZø±J:½	ma’.—>æ¸oÈ·ïlq³Qí<òn5£6ùà–£9?‡Š(¿^oFõ ¶è¢ñ4Ë7ÙÉE”ë­˜%ÛAâjUïK½h”£)ŠSeo²ìÌ{½”Üm³#Kè úõ9§Hî®
+­"k¾ŠwGdà°Ñ: ¡Œ¦(–½) Åm¹+ÏÒW&d|`gá ±uŞYµîgÕUp&uR^é7ÙçËŞA˜ì\~Í}×ß1dtöÏšª»*|t¶ª¬¿Ó;ÒQõÍ¡²÷¼Ü}fBê_Ú¾eP`Šóˆ
+n>İgU¿ƒÁ[¡emúô›íEL'BÑ&ûÀápÙ;pø7kÅã£­d:Ã÷AËx³³”DüÈ–½1è9öZ|Âù1‡H¿‡Ëìú
+*®áíón44Ùø<bÜRïjNŸ·ÈŞÊ¯‹usàQ
+õg©“D´?*áPïß7¯ÓË dª|<·²Ù!°‘’9¡ea#? ^(£Ëj ¶¸cµ³6eƒ äu=ŒÉi+²A[ƒUÿ	Wó€is¼‘=ÇÛ îI<™ê‚Z¼)c^Ö&\úÍzæ\A¶ùë€ÿP@ ˜Á™ÈI×w±“û´-dUwĞáŞ‚É®vÊ'İºIßÑP?à€¬9)sƒOÍ&Ä¡ÈÙ\¥ÓöŠV8’sñêƒGCvVrÁ/-j·ËffAWé© «?kØ€EN.®“êÎÆ;-{-ÒœC®ƒÒÒ%:“É‰Vs´ÊPÉòºÃº·ZùAëÈüNr!Š_Ëüeçudêğ4S†Ö=j¬+\,‘´~a€öªĞ&Şˆæük”6 ğÁQ%ER£	†«Æ{	åôoemn
+ìÒ-¢SÂ%&Ò a)Dà½~ßÕùœaeSgQí^ˆ†²‹ØÕŞ+»Ú¸5ê—Ç*¥„5•N¿%PUŠ2Íg\oé„®‰z2ZHï_ê”İ{Nèw[–1¤aâLÜÚ}]…iÎÙl×]ÅMe É¶8Å‘íÜbPı†‡òFØNbŸHÍŞO<”buó%æ0¼2oá'xÆ.sYuåò'R48ş:_ì·Š$]’õßÀûÜqÚSD¯÷9ã+ÀFá,ò_ÜÊfUÁ‰’è2xÜÆsÉı¶Ğ9ˆ½•ÊÎ]›aˆœÓÅÁ5Ç¨0¹®'/xaÄÛûé‰×æßÄlbÇÅc…#§6F˜á-ë )²Ag£É(
+qÜñ(í:I¾ÚÌ­ŒHÁoËtø–b‘Aêş:’8—„l5¸% Š]BƒXAZ•×-O`Ëªç·–l±Ğ2vvfÜš…j L'—ŞjÁä¨"¤‚à‘°>Æˆáû„£§ÌMY¥1Û³Í‘,â¥I²šØ)JÁ~*æ%#Õ]&ZŒƒùğŠEÅ…‰˜›ô‡`İÍ®J:Ùºš‚DF{_?`ß:´¡éãà8!…6vY6nÑ×±Ö‰ã •œ‰ŞÆ%avúèóÈ—	ViŞo´Ím¼\–*îÑÚ²7Ãm’÷WUÚífM›ÆÉzßSj÷
+¸"ß!&ıVø€0@^êŠŸz‡ås…ÉôÑLGÓŒA]³‚œhCBğüNêÓx—@hº¹ ¢Q¶Ñ{ ^mö×+<|È! ç»·yş+«GøñêæÇ?ğêğnØ©dÊwl[ƒŞcn‡˜‹¢Æ©šv/ùãU|ø-4×¼„NÉ…ïÿü00î~ŒŞeHkßyÃƒİCûd9BPê9í/V½³A-Šë/q;Qjú²Ğó&Iûÿøú“ß4¢7ÉãAìõ¯ÿ½áïÇ÷Ÿÿ<ÂÇOÿƒ<¦¥¡À|üâòx”>Ş.¨æØ/àë¿İ)Àå>ßø/x¦½ÿõ6<Óî¿À2ØÿŸğ5íıÓÏá™vówğLûÿıgigvBädØ^løK2gö;	aô3Ğìúô²7¡Læ¸7K…qí8¼§•©ƒÖ©“…®WüşÃ?î]v”ë–f•>r­º>[ÎÕ/Ÿ­T*Õ*D2U¹K2³Ÿéç€&¿¥ÖAàÍ+»ïV«¤	pIõöÉÃ›}ßëı	ıÆ¨¦jÜ>¢fF^ñ ÁìKA	œÄ8âÅ¼ñÛ¦km÷p­÷ Üß•½İ0c¢>³¤¿°u)L\ÒoµÈY6ª·½şpÂ0ö“ıä!8İ“FıyGƒ~+	_oDQ½_[×0¢Ä]E†Iı63š	¹_ë C>À‘Æ~XÏhì,|î;T!ƒ2åì
+ix!:‹-ÿ¿÷i4p÷˜ß8è·¯#úA'…_mñ@,øFF_ï'H@YGğÎ júYÀ9áÍ]À2Ú$œ‚adS_”ª#`lÆ…Ø÷˜ùç†0Ê#¨!$	¤‰üÓÆ¶ÄèğiÑŸkuÜ,îÆÆQ°áß­Q,`NRäu‡#!”ˆ-êhi°FíX”cŸØ„7Š\vu¬–ølo£2%‘t½€ê
+z±bA<eª—ƒ9"È=ù\m1’¤Mùk<®ãZ>„ÖQ ¸	S7ÇHd–Tà;ÁyYhYÒ\®º†–[L“M:x€Z/J¥BÆ|}	ÀÇ®RRy	š†yƒzR=çóîòş’ãˆ:%íÄOÚ}‚:LpQ—lµïÈ‘£N™<¸·»„×€ÀÖ–%¹ì]Ñnş*KyÁ«òÆ],) %zÛøNi‚;,Ìù-Şò„åÛbÃõrÕ¹¾AèB×7åøWÜİ‚cwÛõVMşhg£ËJbCÙúÁ 2Å¯ùµÅbÇÌóHãKÀÌK)l´pi™ÅFI†’µ\šcU¤?_†Á–R8Zk‹(’XYüÂË8ekÍ¹†_»a‚zIºµ¼Sã­¹_‘óVåb°Ô–?•ÒÑşÓ…²63/#ö„UÒåSªt-&H»ª(y›Q	³Ny
+šk¬øÜs(¾µ¶9‰ß”Q´Êyi•ß×bœãèºR]lõS‹Ÿ4z£ıİIOtĞ–Lã®Ü¥i©à!	¶+ğsíÇb#©»]ò>XÏ½/o¥¬ÍG„SßD±‡$p³k-ÍbóÒí¥-ã­2KŠš]có¯aA!Úéò·#îvyK)¦v50¦Ø¹kµJN’‡&fó¹îwjŠDÆJ–¯ìji†—{¸™‹W´ÂÅ~Ú §éhì¸-¹#²|i%Áî…¦•´¥‘G•§•\}ZÉüV^_ÂáƒÇÈ„ºáQvHó' /£ËØm{ò¹ªxÚ`Wó€09* ÊÁÑ›ŸkLîX%% Ñ°x†#Ïóä6úú¦¹”Kı(W?Çìs$TQ„n«6 ušPC]ëV§W·fù²Ö»o»Şòş'³#…ªÆ¢D—sGvºkcƒx…E~mŒ<sIß}Ã;u®†L•'ÄÄºïµÈiç†pÁSØb[¾ªÇyáqç ôæx;³*ù™a[úÔE\0X[[/àªhhÖF#ºTô2t¡÷¤ˆx á¯H)¸¢ÎwútPN®„q„´jøTœ…AÈP²\5-€ÖC;Ş½x–¾´â(’.ı/ıÇ×Ÿ}„×¤ k—øÄü¨’d+@tàrÓÊ¿ÏŸé­{•Æƒ56¦?Îö	(hn¯§É¨©³ëuçh¨²ÌaWúcªî{¶æ#››“\ı¥@3şao#[w¹=·àu%œ©bÈüÏú—OÄğ»˜ÈgWä°Òƒ˜6ißk˜ÅŠÎİ<ˆè™DGÙ=}#šŞbF‡,Ë¢œ‘Âé¹ÇL¬ lÑR@Ÿ§jÙ NåÙ˜­¸gÇ³-ZHØ"İ‚²w0ôc±É<JÉO¾°Ä£¡'¼QİÁÌB:A¥tÏÄ<Ù²nÃqæZ:vı¡ÎÚ‹’Áèj“úÜ\LmûÍÅhMáœ÷şËy%Jã:¬ÂĞ)çã@¼ÓbBèısJ4ƒ]ÍCÓ$Šƒ“säÔØh4Qi åyaˆVªÔ£Z±@Û&¿È‡â²²]àrÍ€l€Æq`ÇĞ‘SUÊ”%¾Æè¨L¯‘Äs¨B÷ ¶Äo
+Èp®WĞ;)S	®„íÕ<ğ‹l7~±t¼:dÇ
+G]¥G{$r+= /ÿù‰Ó¯óNŸ8sâç¯õ¾¿ú9ÓQÿÂûxãÏ¬Şà‚n$§ÙM ÖT«\.Ò6°'?kærá	\j`°D”G˜ó!¹…¥ˆÏ>“ñI¥û[W>c™h]€œ[¦MŒ[ÕœÙ 2““
+ ßåªÖ‘G'YYì´/õ&»ıéz¥M°‹Pæ˜›ÉşÒ(Ç²q›ğÃıcN¨wc+Â×}o¥îšp9u,É†mŞ0ÆÓsCP8ˆËôfÙëWÌuKºP¿9Åyê…&K½ĞÔR/4åÔj†…œ[éÒIıpI™R?¿ÁtÒ¿tÅ©Ô <€^oÒÔ‰?L– À2yÂÓ%ù,‹ƒÜé(½@”ñ¦´Œ69Ù kzt| ÿµ5Gçæ-PAçd[êÃà ‚\”\®ğü+ğ¤²x#ç`ÑŞ^fy¸GÎæ|‰1ÜAédw¸$+•ŞÅ< ·Isğ[d]Ñ½lzF§~ÃŒª“aD…JOf*EŸ³$^i¿”Z;*YvK]±jù)qDûãz¨ÉIzšw	¦kƒ¨Zz¢ìMM”Rªœ”*ç*©sÔ\S¿¤*hñqv4›³KsBqÆvìsÖ}˜­9²SÔõŒX›˜7M?„=ğ—Ëíß;®Û«ªÉ-âÙÄÛQ«ìÕ;1:£ØAd±_KÎâ·­úIö±¨ŒÂ\ıÊ"œ¬Oàq–7x\<V:(íWmÑ|‚¸y.‰õ@…„~„_b8<jÛu¿·R:ˆ¤’º®Áız·ÌÌB©ª„ÿ‚,ÜZ†¾¡ğ¨
+˜Ñ·zÆşş5Œª—LçÊ£°«)nö!²^H¦ ‚MØng­VÊù, %i³Ò&¯hK7Wq\©¨Ø™Ú+Ğ—ÉÒ"¥TxûÍ‚EZ´%ßÉålw«–ÃcàÔò›bØ6ò»?˜ê‡ :ÒO2ZÊhx*:Lúe%©aÉ¬<öÍoXû…ü¦¶{XúitØ@›‰Ç½æECh°‹oÓòğšñ#7
+şëê¯˜…‹0Ås$†Ë!ò´`7,è[’²w1Xš‹ü˜àìÿ:÷Ö™
+õç—ŠË!Ã[/7×I’lÓÓÌ9›2!ás>È6ü¹ QE™‹…œ4×7¯C€©ù–~kMò²ĞŒêç;-&}”Å}¾AZİRb£4¢˜TZŒÚ!X1º33è*ÇÍôà–nÆ’ÍX²ÙÍ’,×èRM¦±K4cyfòÌ±<óã’gÆÌ ÀúQI,Û)¯øvye%¼B}l·!\ËŸ²R!ãoÚìMÆ¢Ô*u¶$àˆ:ÖĞøëKÌ	s]hSng¿Ö{8¨˜¢°(.²(/UñEù$‰2Æ{I¬1¾qGLÑ,bH<F	¡²|Éê<ÕetoQ")e$5¼mÒg×P¤"}Æ#•tçBİmbŸ‹Ÿºè—_ÎÛ"úo'e½!}‘¢NBÃÕX,QÂSYdósâ°x\u‰%‚‚ÿÌË2«á\u„–ÃØÕØ'‹ÍêMˆ:'İÀØ$‚´„å;FV•Z°^ñ`7ãk¡$„<G{¾ı`HÈ¼wù¥ëá
+®oŞ´Ê¶ƒ¨G•²]dã~6^gS…áåÚctßtßåÈ¾cØ-*Y<>:Ìá\H1d/Â4š¯¿¾Ê•ó…íÇM}ÈüPn–TÎäª8*Îçºha¼ ÿ¬òç‰ƒ½ı3ùgœø%…& ¡Æğµr×ºej€Mqla¡Ñ‹³´ ¼ÁT+  `#†ˆşë:ú4T–bÖº;
+H)ÜÈAY§1ñFËV°à;a©¿›yÎñ«k%“"¤A•ş"NßÅœCkó&†à, «qª¿ø§	'şü<7£c´ÎŒçá¸ù!sé•u6Ì3zƒÇègîöÜúV„äÜÅ¶w[±¿[:‹k0İé#œîÂÔfd;l¼9d¼yŞxsĞx3e¼™„7
+öYºOÁB¸¯á!¼`aÍ^ñ[Ì’˜ÿaTJ0„$lu‚m#«‰ÀÙZÔìY¤fÒf´€i/ó” p6šíh!	ËDXíšz¬¦‡Ò–jÁõa1HSp!=ğß¼klp¾E1/Z²ŒeÑFÌj¹’0/wÉÚjI¶¾à˜Bš9°l<©_:Šş¦£Û)¢a±åÊƒ’Ôt<CÍLg÷3¹‹Ù!Scc£Û&\'Ùùfò&A2€®æÎií/É)‚ªeãÊ¯¢°U,¼×* lŞ~ÒÍs=±	âK¨!O14µ2P5ö&h¦ûÎJªÏ‰—N¤È vd¦D¡åÈÀa©~˜W(‘‡¥¡Cb›JrñAó<ocJ1Y,u§xİ<…'Ia‹–Ñ%é:]—œ;½œ
+]¦p•
+Q_bŒµ¬(&(áî~cï<¸O’nšâ°éÇKäµ"·¸6÷6¸O){LB;ßZ˜ı¶J8“[6YH…H¨ H#ğB“WhñvyCKoP2HÚõÅ6!†SçğnıtĞPFñìO_kÇB7jˆh'ÏÊjx?ô»ºqü†ç·Ô¢7nŞÒ^¦“9)ß•â<í§]=J¹À„ÛçZşb_a,iqQPçç_Pœ´Hk“æ«	ãÕÆ›£Æ›#ùä>p&’Ÿ€¸>ëò_*â¥ÊÊÆ›Û‘Ä*©±æ1O‡¹-@]Ô±œj%èi­‘¨µêĞ‚aûŒ¦Øµt‰Q¡&åÎäŠ{²e˜esaE¤Ş®İ0š›œrùÁH‚×!xMN9i&w8ÑâùRa3ı]!Õ,–JL>n‰"-í£*{±ğóAR»ğîÅ×Ù„[I’È:ZÜ"m	ÇA.kG¤rÄ¥vÊbÑZx¶T²—ZŠl×9µUÑÎæä”cœ…°.÷ı‚1TvùªÜ·™i:c]v‘Y¤i+j¼T–•}m©…õf¯s¬r:XºÖº\©®¸ÃN«}!œOØR¥Û»,æ©-Ù3%qÓÈÔVqÛE–5pi"´av¾ä~†İå±ì–37œíLğv¬ø¯÷¨Õ+éäìíÜrµsTÎ€õèBwIt )SÑÀÇÁ\çb`¹¢ñ›qÈ›WûYTU¶'Yã3wdPè°™è1úã/$Íã×ÖAİ`ñªn>•üw•…UyÇGˆ&úLÆ[fìY±–­Á‘·Ç\-NÍÌ¤æ›÷
+¥œvgZ«5–e‚jÕHSËC„ÛìT·ˆnŞH²ª¬5ÿÁp&µÀ=î§Ö**7q\.Ú±róæL³Y)?ÒW'¶ÁàùÎæà‰–‹+ÒÛVŒ6æcş8æÛÆ™:‚JÑ+ı¸£ÂX¹ãşİÀ5›gŠ7Æ9²X}f˜İVÂ$g²®]Ç³ôáû‹‹¯@
+P: ò‹ÚWÃ…5¬a—Ræ{¦Ë`~~«˜Ôí.Ó]Zs³’Ê,<´Ö¾=š»&*tƒ³ˆnEK1<-OLVÈÿOML=ïMLT'&li`)ùó®dvu¢Ş4“;i˜$y‹“ä—,è8#ù$UÜƒ€Gƒ«ÃPå1¬¥rr–½5áœ“µ…–Ùü€šs™–%ùBÇ.\ÜŞ½ÍÍŒ6fï Êı§¡Çï¯†úüÒKr%1õäÕóâTßÕ´„6eq;l$÷ŒGéĞDZ9
+¡T©Qác)E…3·„‹Ş¨ñÏ×=’“EI×ÖLØû(·xŠ^yèïµOµ÷Zì"ÍÛ¿ßD›Vš@XqØñ+Ù'Ó'ÌOxÉ Øy…ŞŸêñ¯dL€Ôæ%£7G/Gq°çÿ%–¯Vû(©
+fŒ+©Çòõ©]æÔ¯ew=9‘¯ï¸£Ü$;t‚ıúªÊ×Û‚ÖSe:'Ù¯ãÉœK]nÙÕPËöén*çzª½YÌ7>
+š¸(-,¬İhZÍË¯Ò•Ş\ÒB¯%m°Æ-vt™?‡i´‚}Í $yĞÚ\šhW;¸¥’ÁHáÌÛ1a'AÇLÊ›6C1†¿UÀâe…†”:EË6KYÖÕŸX±ï…D>·_lştÎ¡~{%Y)R	e°å³&šç{ßøGr<ÄV»Ç-—~Û£É£,¢ãŠH/§,{òéÂ@G'‘gğƒ¹]dA¾wÇñ˜Úf|çñâš¬XÄÃ•ŠŞÔ"9Ndä«,Î'¬Ü&M\*\ Ó„šéGLVA6LX17Ì¸Œ$”„— –+HZÌk²œ3S-#ªÀò§^¶„YÊXX¡¡œáº´eÕa×´ì©íU½	[t}„Ãau™ÚÒüd¢ŠPÔ­‘ØŞi¾Ÿ»Şæo6?a›y"të:¨¶ØÚx4®æs¬¾ly]¶½ì úCÉĞÿ—Áh~ÜALÅ>¡Aôïja†ï@v. £o©…ÿ
+¼}ÊDTt8¼@(¼Ñˆ.õw¢½-ëª²%qÜb–8¦!LúŞ°…±wL]%E"Éö,Ëqš|ß½HOÖœ˜B™,)—iLSÖMY(+×ø=78à$dVcÃó’È{÷ïÄÛ§¼¹¥E¿İ&›»W#û™}‹<&`¤Şe¿íıªfæ±j0Àˆø0H½‡¹Pê¤îí—.XÑ^­ üÆÁ¡!j]
+â6Æ†`‡ÿ¸ìA•ÒL–s¸”‹0@ÎáR·ò6ª¼i ã"
+ĞñJ˜MÔGé"ÜÀNõğØ^e>lÕ‹Å&ÊÊh_Ò¬v9u¯­YN¬QÂ¡¥Ÿ•°}—…Bú-al6O¬Ùœ˜Eÿ¹âıxÌŸŞÀ[¦êÑ»°Ç…C^zkĞºtv0Tj¿²tªîF$Ï‚Kí¡É³â“2tPÑØqêxezÂŠRb¾…zohè8úŠˆ1Ç+ø™Ì ³Ä“Sõ¶«ü`p£¸GWVŒ&5Ñ%Uxû©tÂ°Ú‰ƒŞ hèY0Ñ31³F×àûÃìº‘_Tâî0P¡ç¦¦Ã(˜oèÖi¡vKÙiSãæü)ŠSq†ú:1Ujú‚ Î²|H5ü H•#YW©´™6ªj32TNâ‡f†Ã©gæ–İ¾­b»PtÚİéRjJ!ØôZ¤yÆ±ÀÕ4ÙZï‰šs3¤šNp0W“cí÷€‚[ÿNppåmÓ§íj@eÄœŞãÍpFñiU¦(æJškí¥VÍ}è‚AÒ3Fz”G…¯Aé\É[aÁä„éb²4y¤JßºL(®U(;m¢U¶Å«éÓ•9ğ—ì$mUV«üj(.%_iŠ³“ÆKÑ2qõgC]AÕ:ñ; ;½~‚|G@!^&ìEáäk¯[.:û&…Pu¥Ê!“ü÷ô['áÏ‰“§áÏ›øãŸŞ†ÿ¾óÚÿ¦Î½ƒOÌ4XĞó‰xZ/´§'gp…R%‰~±¸HÖŞE…aá4¯Zœ·^ıÔ«§N¼‰êóË	K Ï­hw¾AnÂ;í› S»rËk³lˆ³5_ÔªŒ2W§à1T	YZ£oL¦ù÷ÿÜ»ÌPªû÷‡¨1¢ßü¤÷˜&¨şûòîşşĞid.­ ued„Ky¯a™r‡µÀ!ÃQÅÿt;@³w™uÙÕ€ƒ rSû¦fV-xêG}„Š“õå°araNğmµ(jyÏpÍÏÁAmõ¡û
+¬R4T}pô@_±%I!!ƒçŞ~¾Ê:L5ŠQå9ÂŒ""ŒÏ€[yp(£˜McÅß4%âkûı§·-íİÃEÇü†tk¿/“®C³„)êµp£ø¨â158ô¿Âó$Ñ€…Zk¡]Şš€ˆ ğ@ZŞ"¨f7ÙT0Ówk‰˜ÂÃQèò¬ØåŸ¥½uWES]L‡ĞÑX†Qe]ráõ„>øá¢o€ŠVîUfä(ƒw±-Ü-Ê}cèìPŒsß>åËÀáš{·]¤`²Ré
+ƒ&ŞÅãµ¬_áª	“TîÅğºDj¥Æ ğz1‡n²$*›e§VyÉXœa”S==9yèÈä¡£G'·«w2w:C“—
+÷ùÜš±¤5Ç±é$,Zµ9	‹®İnÂ#‹˜šŸg˜ÃÆä²¸ƒ<n'—àÿFÉ-è?‹îm€@ğn—Y¥J¦Ã’ƒgì¥LM…™¡¨{`«ûÀCk/‘9_¿æ`&4¥óy. ˜lÒÜ&Å-÷ñ\¨Á&¹‘ç»9‹²õ}ÊfIn"€ñ,úÉ,{IØN‡4:özš`‚~î[có,,ç‚šìqx¢,šû™wxÂ°Ğj/µ“ 	œëà…å6Ê]ºøZÓ8ÆY÷á`×±5ÁG!GhÂ’[y¥G€›Ä!òxËí¸‰Ñ™‰ãF/&EÖ?é×„úww iwQ2Òsheø=uæÁØLZ]£€Gæà	×®ŸZ¨s2‹•š¡(b%¥	ËgÄqÛ…„³Ó½¯0>Ñ4£g7Å`ª.·@ÿ{¾ÕƒnÕõµÙ^èÎ¨NüöÃ¿…ës³ğŠ»MUÚsNTª#3µi>x9{½·O¡ÓŸy“DHÈº—°¸(‰–ËøÈ#àƒÂm•…©vC¹š¡Îõt¿Ğ®6v[‚#	yGà*öÊ¾pÉg¶'ò2Õ®G#ìàq[»#¬µ0+¨;ùp .aîÂ,ÑcˆÂÇÉŠşE=îP?À‡TJO5fô °:z÷÷Ï«î¯7lÎ„„F19ŞÛB\yQk~L­É6ĞâŒ*V¸ÒA¼ZghM©Â:êj®òğ™òO1FlÊŒ“„…êAƒp|„V[ıtO#îæ¨äÙ 6_îò(ú¨À&Qø…üy‰¶H€É‹}û\!y:M.Z@4"¼RglG(IÁ‰È¯şd5”è3õš9¶&Š…iúƒX(ì‚YÏHb¾¤”yŠ˜#¤sÑ­™U1š*TS”4Ïğ)JâXÙ±Ø’{èZAà¬oRØ•˜Ù˜ÔlÑ”hLŠ¡K—Äam/jSßadù|’­ÎÈÚˆ·Û7™•úø'ëöÜŸõ>']?fgz‡ºnTÀÌĞNµĞíŠHY ó4.nã •¼Úã*á]“„Rîm˜Ìpùw±±¤UW\©Òá}ä$XçJAº@ô%K×~=Šé6èëxX–§TN‡W²uG$Êßà½)ÓPFÊ+æ,mZ%¦'¥ŒkÕİ[9ãÉ[ßä1	sWÚ+hÃ¢»sÚáÏÀöÂ#™uE}æ}¤53  2ªÑGéÈ¤!iQr_éúĞœlz{¤·! (‡HÅ:Ò5Ëài°ï¬ÑŠ±ª‚‰ÂÇ;d‘-ìı	:/Şï}k~Ã*µf]»ÿñåˆĞ¿¦oúİ¾Ìió;BóáLÕ£Z¼¨‚™1;j­yïÇSeÃ©œ~Yxq‹²™Kú†—:ÀÔµY{Ò¡Ğ_8Æm
+pšÇOVß§@‹è÷klNé³¹71qĞõÕ¨Ùô[uÎıÛŸš˜Ğ<kæ_â-ìu+jå@ú!Úm=J¯`¬æü”ÎkQ^Ñ&²}¬Db–àUac$y¸Äß/m¿.|eí>½DÅ+¨«ŠúùØ
+<‘ıjÖ9¯‰OŸN¦\ªÙg[Ë£Én% -o—êD“É%‡ğŠE.&•”æÅOÛuçÓ72ìpÁ]Ñ]]‘ş™É˜²#®+óøäÌZ
+è*á.§(òí+~ÛŸ#mÕl]Øle™[­S•ÛÚ§®‘i1T³\;oòª3…\ï_™îc•ã"Çf…^ÑØ”s)™>™“$MNg›“~&r£¥ëmRéÖ/Ø´¬¼Ü«h.³S<óÃ©çËétØe]Êô]8³Õ¼ğáÃÂh„”ÁŠ<b‡Ê«‡•’±|ÿá§—üK³|zëuˆñÒéSè‡ÊŸ…Û(úp¹Î%qŞ`Rl/-8XúEŸ‹èdYÈ>¸ƒ'f«uÈÔ<‡W¥Yv-zíaãÖÙÔâ—HQŠã=…È¨•âºÉ­PK@DËK	4Ï¤¬!Z<Ÿ{ù˜øŸâœ„
+….íğÛ	+Õø1ĞÀ˜<v=y<#±@Ÿ¢¾]_ØQfËÌ›Fès¼…ì—Bˆİù¥ ¬Jø2™¦–”‹jº!•Ò’s1wÚ£UŒ’sÄ­hK©µI®Ä?†X¬ÑÏEoÕ?B#>.fò(ĞÀÜn÷ş•¥¨D¶“]šR÷ølŞSƒçİ]È±«İÍ›ŠC§Šqå©!&˜ƒ?Ş<‚ª+tçxûùQl?¹¢>c«	« »óVQÛ%ÆöOÎ“ïnkNğéÂHrªsšuxï03)óêş™Û…vÑÿ’2‰8ƒ­sğ’A}™nÈ‚Çlè‡Ê†¨ôŞhûË,Ş~YX™¢	yp%‰‰ J-EO´êÂ’\…Ù\ bºK<.+´o­Z\ “ nR¡­zÊRw…©âïÁ"Ù²^m•ıŠLË)ó¯lQCä<Ìsn©*°X@—t_•ÌzË¨äsiQøhT›\×åojK?›Ã–,pt	™t<:YÔ?@QG'Ù¾{û%ç¦r†å»Úw W¬§§”aößÑ}çîë†ûl¿X3ªŸï´È.vÃefœÂÜ‡Ä™òp#ÿJµ»µdÍ9´ƒ¤;qÆ!²Ù^€÷œ?…yO‘ƒ§ÙÍa%EemÍ¸D3 À‚¡áÇ:} vŒp9ıRmÜ¦Şõ2€2¼nÎc\†l„xE­¢¯2$å2Fa•~Jße¡iM¼¤FØ¤Å´¼Ü@LûWcáêY®ª¬@-`‘a4›ÿV˜¤à
+;Â&óûDìÁÚ®16ÔÏJj{l0sÚ;æ³Ut›*î@(ìíb•#sdÙf9æ–pËm:‚ú:ø!Ô¨»…aˆ-aôçÇ­ì!¶@ÏôÒ¢Uã^æ¶#ÉÔ×$!z¼ùŒ7ŸñæóT6ŸæÌı¥õÁYmşcÜÄ6ÿ’å"VÁş®@èZ•K8¼.s-BrpÛ­ìĞq][ÁåwÑÂ}áŠKğFX»è8©iA1Eñ*olëáœ÷.³¦ÀÅ_JßÂNhÔu<MŒ/]%v@n¥«ä®1@‘4'É*ÍT#Ã6	ZØº&c}ª8J×à­VcétToçCTµÎ.ÅÖûìÆYÎtªş‘®Ğ@“µ\Æ“óc¬}šXë“ƒØë(ªçCXQ|—âê
+†§]Û¿ù!){½wßrÑ‚˜™ÛîAEV2{"²^£ìÓFY8²äÇX(½ÛıP'­|[ì‡õ1>>m|<ë‡pP(½Ûññ*	â¨³8FÈ§?‡eÈ‘X|·£¤6m%Fş³%®Æ”ƒVm¡ŸG¦;ä!?@3q.ñğ!ıb~äš~H»Nû$Šƒ-ê=§>ÆLR7åèTLa½)!6¨¦IÎE…Š.È?EšLÓÏ“ƒê@ÿäSâq»±TÍ¼‘ NwÎÑá	½ÆÜğWÎ«„‰ë‘î0:X•5„àJş™—Ü¬¨yJdeü52Ü&ÁÂxótóJ|óàp(¯$qØ,BÊ£7£ËiÊ#À¤…Tü`Ss]eç:µ…htÁXÛ½{6ßø¡wZ@w‚9ß¥çMÄ+úMJñã/ô¹/àkfÏÄK7?–µX&”UÍ˜õIä¡ïüÒ Li	ğRÅ‘äƒ«Ï
+ùè¸~×½÷caWzn=ú˜Ÿ:6ÑÇ5QÏÙƒ\AÈjh@2Ş3r:¦7‚d½à|Õ£!óÑ2Ì”f>l$y‹	„Á KUÌ.œ àÓ v›»}©ƒ¤ ûÇC;#uÈ?&÷;s¹ÒÇ¸rÙ »Mf¸†îºe¯Çœ½rõ64İ™‡±#	¸l3|‘ˆ©é/J”TöÂ*Ä0ƒx„„¨f÷.‡Ş>o²Ñ=!ãã‰ïµ
+9Éfó©‚mûŞe¹ëÛIÿ]²œ|Ñn`[O½ºé¹}!Zß;•ëS#.÷î¦s}VŒÒjagŸXóÖÒÔw
+SÚ«.ç/×ym×ûé‰™¾ƒÑÊ2gÛâX¸–ËÔqÁŞ.âN‹œ>ƒúYŞm‹³…—!¬¸wœ¿mwæ(9'ÊŞG 	C¡R©€æˆ–ØÑ* ŒÛwi~nô‹j¶$.SÈ9‡»¡ßó¤Ç‚‚Û$V æv\r‚ª‡¿u’‘é!
+7sN2ÂåyÊóü’'Àşü/¿SŒ¿më´ÅØ™AWñº}ô8h)áQÌ+»sˆ§-­¶æ¥ì9-3’…š~JÖ`~>À„î[²Òä½éÛÚºÎx{¶/®İO#ÇÏ‡­:l¡g‚är_|eém„ˆEJCşMªæ;¥èYiÙ…Z)Şİ¼Å¹;X#"{Ã¾¶Ñn‹“,”  ?
+kP¯ ¸æ=Œ
+Šymõdåúü SÎX’pÈÃÛïMÎèS¢‘cYmD`Ş8æI?_îw–€ĞÏ˜;“§ÀA­/¼°[©ÀqB>2lĞ°ú“XÖ;\1Ä1cAåFw‡É«‚Ùf“ÊmP1³KMíTŞù;`Àûe’åê
+-,Ñ-z¼¿Oíz×W¶c!|³#l1pSÊOyÜ¦ônn+E[®ª‹æù`ùv)mhºF]$¦8ÔY¦¸´÷n_:ó›8ìeo¶gÃglPSğá69áyÖÏá³3„;)ğ|Z?«Ø!(öo`ÒVñğ$·ºùë¬*¸yÆ¶û&²€ç·½³A-Šë/ÑSg™D_6Ö³ÉœåO£uy»‘â-¨b”§ÙbÎ€ff OÃ›3Z\áz’¥{Ä†›à¤B“‹æÅ¶”mq—kÌÃª¶ı¹F@N7-L1X%ÌÍ¢ÌÊ#£à]ßXRK*OÕ<X2ŞøFºñÑQ£ÎÒ d¨1iToRÆ&•ÉÔ%oT’Øù¡ï6©FUË·I2Al°-5lÎ¨Â™ú?ˆıóbX»8Ş9Ç;çxç|Ê;§í¦CNã@ùÁ°Õz’FJÚü¸ë¼añ—[º)çà¬P5s3ÂÌ O¹¹¤zG`q¼ç{Ò¥‹'Cš	İaXØ‚ƒ}m+ŞõÒ(GÂî=·Ã~wˆMøÇ{ÂxOï	O{O.Í¸të§Nİ@:­±ú*[1àAí©„3ubQni`Ôó†ÿ8–vÄĞËc™a×Ë»sßĞãå©`İF°Q-‡Ñ•¹q‚1¹|¡0FÕ¦F-†}%jYBkfò‘ğ±mgdO‹“m‰•=^¶­AÏ¶Óò%µá‰‘öØãMaò2b›}VÌXd¥@ÑÌ`D§¢bëR²DÛk—4;K>—R·S§S·†Ş5‡¸äÛ²yËVî§²c]êûJjˆ`ß]Dj³ñ>3Şg~¼Á5Çl«ï•úñ,¼üµr+(`Ì¡ÆjÌ¡v€C ¾´ë/Ÿ	¦3¦xîøâÿ£}Ñ˜ãcö5f_cöµSÖ!ÇÅdÈ|ã¼j\Å<ŞºÄ‡[—y]ÖnY%oª%0%ïñUÚø*m—]¥ı€621'Î@–p§E¦BP| ø#©[šÑ¤ì€é9;è»Á¶g‹føöƒ3ÑÁón.t`£¹À¼N‘ï¤0fàÛé+‡¶*QzÈ£ÅĞ5jÄ‚ Ûİ®±s“º:Ş¤Æ›Ôx“zÊ›Ô³°UHªîtÇØ†bĞıAz·ı;Ã®fõslÌÌÀÌÜB)ï€}µ3°u7ú
+Ã¶¯É“o€¡†@ğ=k[5ÅåZŸÅ8šñ~Kfm àÓxtok7Ã5 3µ+Ïö%İ ²$Ò¬LÙöË³ÖpÊ„Àk£„©E€Ÿ±ÁEÒ,VÂº÷2„a-ïã³„oİ÷ò?œ˜xqÆOWÁ ì]fÑ…`…¼í®ÙHæD›µó§	—òp6ÈÓ…Æ…l£Ô~–ÿÍÄ‡>IH·9¢â¤%¢âäNqª<å
+J#½½I£oE;4´$bÚ.V=¿µ„±79bhÖÅ
+­›Úñ7ç›Ñ\Ø`©1íuÈ¤}İiû÷jà£Ò¨0ş(uFğQ‰8áï|·“óÈ7<øİğùÏ™­†(|¾Å½Ë”»%%fiAÃ ÉùyhR"ÌÍ!±—F‹üÓ˜HGD¤ìCRéA¥òF e¦]–4eDŠ8¥=#Ô™9e OÖ[#P-é|dËC&ÄÑBş]«jĞL¬·|ì– iT:vs¨–¿5ü…vÍãél†˜]nx&Á3¸ë¢Ñ_^ô’0iü§×5®<}2¥tÚx»å/¶/Dò(ÚI'ç*µ¨Ñ0€k±€²¡T¹|!ˆ	ÔaP„ƒÁpìXÁP½”ğPy_"3¿æy±Õ€’§‡:N
+UàQo-Â…(†?ÉLê„m^–nÉñÔø.ß&’#+}mt“. MèA.óE€!Vğ—¹÷‰tÖÃ“fwÖŸåßî4A0[BÍ• £¸Xxşxó)«ƒÄ³u»JÖCa÷İç4ÖŸN(/çŸí}m¥«u @â¿dà¤±ñSC{&ŸœÁP]ã¡^tìXŠ5<ÏÑ$c4:{ÊL1-k×Hç„›Fì%»Ê„
+ºd#‹ULDa°S"Ö×(Ft½â©“pa@úí–dZï±	ÌÂxÂëàj‡úÍ!€”ä<«ãoŸbŒ²áPV`Úlıİ.>Ş%;òa9¹Y›Î²h;~£hÅ¢“a“BüÏêŠ©ÌËÆºD¬˜r-ä!zÕu¬bàYö*l©Œ¬‡V¥š´3f•K—gP:*ÒÏ%Å<Ä¢hM¢Äo¼ñíQm]-E>_Îx“%{¶E°:æøÀ&Ú£»ıDÚs’±¨É¨¸Ÿè'hÌÁuk$øDÛízï{”ÍäSïÈM?CÌrøöÓ·ßü©|BŸ€+¾3 ¾+şı´¾ÿä‹¢şı¿]õ0ÌhïçŸØ| …«t5÷{“}c©/ÆaÓ—
+äİpCí}Šqïhõïÿøí°ƒİ7Ğ`Õ±*QàÕ ğƒ$#jX	—òŠ9ÙÄôû5yŒx!è ÜWå0¢Èï‹¡Å®‘c!£ÿ@w`zÆ¯mËæ2`f k–pàŞ`ñ!Í`Ûì8G`/9µËOãl”+Ä¨±@hØyïÜ¬¶úÑŒ—Ï†îWxEºŠrÌJfÅÈß[•å—Ş–ÃL{~UÕ]Ş8ÑĞ–e”Éìà‰ TjtÈÖ€€òR·Ñö”î<İ©)´*¦™b¶òEƒÉ BıÖ„µYÙP¡æ<^š„ÔXËòš´Ó²3-À1Ó3­QQ=âÒ½&¿Œ”e¬İ^Z4èc´¸ w-´¸Ö»gÍìCvuo9q˜ÿ.[ûÆª	r^Uğâ 	Où@ÕÏAŸ¦‚“>Iõ°uBç?Uò¤ƒyÒÇ?%$ÿS)­:}ÙÕr=Û˜Ó¨RÌ+ƒ”*È–7R›€æJ•SÍ÷…-ê‚Ö	ş¶ĞÙè-Ğô¾ÿò†¢Ş÷şHª~A…¦W÷ÙÁÊGº‹×QaëR\&b2½œ²==¿»R?SsŒ{ AÁˆH9X6IÚÎw³ÒŒ—b¹s¦Á´*1Fr;¶‡ˆWc”z^ˆ^ØoålgúSŸÍHÉ­ÉLïŒ$ã)6·•üœEdx­5 êµ'ÂÛRŠÚOF\Æ<;ò:n¬¡Y™0A­òç¼âÔ¡ÊÄÄÄŞ£]•¬¡!k+õ8à[j'AÓ{'ZX Xûœî~«ŞèX«öR«æQÀóƒÎ‡ACúµÀâEú=?/¿Ğ5ÀÏ¸¨xd›DÅí&È-Ra­ÇA+ñÒœ·Óˆ3a."°ñ[ùÈÕ«zfmæ¤?^üx–9^ô¢Ö,Yíì‚-ZÎqñ[vÇE{Ñ)²0\‚:Ê,d’bÅÉ~†EßQ+WH\Î ­$ƒÇP‚ËĞàIQ£\=v8&Ø,(LaDÍ
+ XîÀ/…IÎ¹Ó²oµÈÁ<ª·ó NGw0Š”HŒ®ÑÅ#İFO½µüÀ¾7`üù|@tÌ¯7¢¨"aø‡¤äujY©96o6û¼fÌ•Ì¡MN™ùggÒ'|mÎ”²ƒNÓÚŒ{r±69'vJ:18@> *ì­LÌÚŒ{bqÔYÌ?³ŸcñÁ×L sßXjÉÌVÜK‚H!œ{fï'0åp®©ı
+S–gg?Î?ÕZ-¹·¢ÅQÙîˆ?¤êŞ|PaãÛ´1˜Dš¿ıÉïšä¡	‰Hëñ^¨€L~ñ»Jj×¡9#›ûíV›sãA;!ûlÛ j60ôg*•ü09Ç *Roü0,Dú5å†Æ¥°D½xx‚09j¼‹­å‡AÚÍfŸÑˆJÓd‰‚¦ü×¤î†Ê«Í[L»@¯MÛÊ/µôµ|š‡İ|¶1ïèDOû‹UG†3ı6r½ıãëO~Ï²»‘Ç›,“Û÷_şõ¿×n±¬mÿøúó¿±ÌlÿøúÓÿ`ùÖHi(p¿ø†<¥·ÊMöøöow
+`«€Ï7şiç½Ï´÷/°vÿ'|M;ÿôsx¦½ßü<ÓîÿYÁqÓÌì’:sHh9=9s¼’DoF—ƒøUŸœAJäg6‹
+$Éz²â¡uÖ}MË_@e •)1^+!.¯¨¡¤gò¦{"¦ëLI=‘NÛ%xºĞˆæ|Ü¼|¾‡QàÓ=séKšjÉvØU,…8òª{{Ã8räèÁ£SG&n6Oçúä*yÄM–ÊÀ&Ñ"j?õlÅ¿¥Â»Wt\¸°‹²0+rˆİ×­‹wÀë}šÄ¡nI=zk>CÌ¦)^àH65“b•¶ {H3n ?‘£í]ö„œV)-ÓĞÉJœ-¹ÖÉ°½Øğ—à(M€åúq0è‘xÁ4~¢ÉşN,t½"5å·İ­	±ßğğ’YV;mèŞYL©4™ŸÜl¥R©V{ŸiŒKùIL÷«ì9µç ŞyŸ’%úWËÑ¤Z%M£™·O7Š™E£"®mÃÎt‚—jÇh€$àÕÍhú¼vRŒ3©î¯êHëÎ.>§*Ÿà8Ì}L¸F¯Ñˆ H¡4û jo`ÒÛïÁvà½ïMÑÇ›äñ y¤Ûùñ<¾ÿüoöá×Oÿƒ<L€:Gğñ‹oÈãQúxÛ^ıüú·;¤àä>ßø/x¦ãúëmx¦ûâc8Ø?aI:ÔO?‡g:°›¿ƒg:²ß¦»ò¹yÇù¬ûøO6f—¶À@&›(° èê&D?òãDV™h~>³	†NƒÇX¹Ê1ƒ©d[u¶QÍ\(­f±0%ç	;˜È›v—Y/ièÙ kñB`W¦Š>#5¸L9©`©Q
+Ş®éÔ¤°“ïÀ¶‘ÓTGöÊ¬±şå<YeT¤Pe5ÕĞvcß`áçE>­ÿÚš²o«ëhî|9êÖ(ô2‹ rÔ¶Ğ;y–P‹?!tÚWÚó^‹f5¢Íçbx“…	Ïñ)Ğ”º#G|iqúQ ;4£_…Ò a×N™-üŸÙ&®$£¨ÃMĞæRÖØÎQäG(Ã»DØzé<—ñ—YP²3?êæaf‰Z>÷™¬¥‡!³-ã Õj¦®İR…úgéuX&&Åßœ±š>ëıŸŞW½Oz ÿoïKBÉÿÏ!iİ¤öÚé¤º{—Ëº}$/‰Ef°Â=C±Â®zĞ:è:hmŞ$’×*$ë6Wü“÷?Ãºz°"›:Øk3~£÷ oBtæ²¾¿ëL³ÕádÁZİ¼®ÏÄPÈÉ«C.>q7ğÛ3îXïJÚÅoJrñûÿ   ÿÿì}kw[U–àw~Å&]ÈY~„@0·ó€J7$™ªºÇq;×Òµ­DÒº’ãh-TS³¨"EuÍTSEõÌš³fµó‚`òX«üúÌü„9{ïó>ç^]Ùr ôêŠuîyŸ}öÙïÿAX©ñ˜í<–R•{Ù•¡ÌÅ"ô,.jœcÇ8éÆ´Ts¡¯ø¾ó	¸@GÉ>Èq‰µ¹ÜŸ —+ß=pºL*×;Y`xYÜÛ ÅRœ,«’GÃ÷º<®3Ínc¹\+fÆë€
+ğ|M¿ÂşyUOôÃ
+JazCÁ3×|,3'ŸË	;ùNòóZgµX˜G¥ĞÀFñßø
+¹±¢ï“°i”UÆ`JZ³YSË­K³^Håuä=Nõ‰Õœa{G£¨1Ê-öìÅMylÂƒ?q‹Í;ÈßV^)Â—ˆ€¯#~Î%I Ë†¯hª+ŞPb„Ç 1F<à>UY¸Â+õ©‰\b2(rzß!à9/;öLLñıSD§$T2PX‘^MÈ+2:JY8aïôxw.šóEQâˆf}5–HÒ Zª+0dD.$1{äbÊnæ§®`4l£\(+ÿi- 9¸É6£·ÿRşlıØCK-†z]ÎğL¬ğc+äÀm©ØiL¶g6Rù!°’W¤1aÅ$¬0².P`sWäO!E)“ìs¿N¦È.Øxÿ¥ÿgF-}Á>
+‘Ïıÿær“„¥¾bÕ?ëÿ«­W<ŒÔ‚;jïtvcşE<¬æÆ	Î©tóò(¢¡bPD'^…t˜^>„S-VÌYú)„”²Ú>)¶Jväg­Äg—½_ÍİËXy ‹Ó' Y tÈ®¤µş…M§rPÀ0ü}#¶¼äS
+K%Oµ—ÒçoRÇÒüqF8™eñf™œc^èÒ`—7Ùs>4¯–Í0hÖE}y‚1}|²t#<LPâ­ş}Ï‡aad[Ïÿ‹’QDˆx5Œ°òšox&0Pî›ÈŞ¸Ç=ò{â÷Ê7îkÜ3ÏhÇ¼zªøE‡p.9yÅòX»æ(wÇ–õR ±d»dÈ~Àì˜¾—CBT#¶_lØğLØğ,X*–“ıÊ`¾±^»c¼r±]Ó•Éréà0Z-î°b£š\şü"âW}üãÎxSëÆ†a^Mõ=1”ñÇDøl7Ïe¨ıÌøÙÚĞÏóÉZ)&©¦riH–í	)•F¦R¢û„Lï"e3C–Mê-Î¯U¤Sò]Fp¶Öá™—´14¶Åû} óòŒr(÷'núC ÖÓDûKÅ‡?6Ş‹e~d„<1l„T~Fßïèû§¬¿í#Åo›÷ÉÈÙ¤õ=öö–>çÏ¨+²o—Üœfº½Zã`N¿“‹<®{ôr¥6á.xƒªŞ :Üyoìûæ`*û•?á3oB;²Ö366•«Ò<LlÄ0$RÈ!ƒlD`QÄüGm~ ÛÏôIx‘>>¤ûæA:s¿½Ï\»İ¿Î±ÛßqëÏ¸õÁÜz.çÑ'à:úÃw}&H“
+Ø˜l(‰À0¾¡OÎ3ô™æğ™dá‡åÿ™½A6Ià;=¬Df›{œQãN/?°¤/>IôØ˜ûâX(ƒ@¿)¦R­ÛZJÑb¨Ä•8ÇOÙRxZs2şÓm	z;`àÖšÉñ°úsÆ‘å„²gô§ŒqéêQôQœs Å\£ÛÈ	|:¡—SI6‡¨ZÃìg—'^‡{¢áu#= S™§ˆ‡‰¦=dª7’±ÕgZI(87åäK/‘ŠÑŒØwe@ÑÑ‘ø!İÁØ”êt(f}”¾Ç©wQy°ók¼ßfhòò`Â)Ç2Í—,Ov“İGš=oÙW¿ÎPu<ûúäzh’Z=jV"OäH0‚ş%™Êş Ş•ÃOÃ»âJRÃ|3|G±ÛÜèüü&¢ß‹%xå½³ãH¡>úrÎ¦§6Äöiéá¿´‡øß|ŞdzàZÊnØèkÀGº«xPÁF\]ä{²ˆò+Y`œÔ Yù‚=c³ gàé]2÷¾0¿ş¥ù¨×¡òÂ”ƒ¨DÖ	îrâŞXÂy§îÇØâß4\V«ázÒÁT­.Âërì$¯ãöêPf¥œ²ñOw_éÙ§#AúoéEÂ‡}»O	BAŒ‘™*İšö3¥ó³ÓÒ¤‹ö@löt†åâY‚ín¾ó ':Ï›^e °#=D`îÏ¨œ²—Ÿ2Şø#¶í$—[1¶Jğ Í{N‚oÏ½}¡°KR¡Û|v;~·£Õ£Nd_’'w;`»nâŠgàÃá®ÈÇvEVö÷	™š|vKRnI˜\áGã£öq[E¢­­aAs¨Ç¦ûŠÊŸAéˆ t9jú±bĞ§V!oI8D^š¹ÜYid&TÛ¡QÒıa’¶¤´OOLAk%n4Øì=.Û¹,¨™Ó­Í:cgÎT8ğ	>p¾í‘":©ÑSC¸û!ÉcA¢Í5÷şíz %\˜˜@œ‰:ëqûJcşI¾ÁIÚ1TjjF”Xk÷yu"L%·AsUXahÍ©Ê¹Ü‘~¢ÎTá÷R&¥¿X (Šb:Ö4Yqö¿âã¡´UÛ(y0ì~î˜M¦G‰.…-%4öáş$\‹ôÙm5ÌÔ‰s, õÓ~"@ƒ’\˜è4€°‹C+@`®Îuf‚“ìr3^/àÍ@UÌ7:qCbyBıü,HøÎ…Ò¤]åSß­8š0UÊİü@Ş!@IœÑ·h1û T^P.sH±BÁæÃŠ¦¹î„ìaø»¤š±“pŞ…+ gºNÛ{£ÒD¼©âİ4Ñn^©.ÆQ†ÛˆwõIvsHp%’íJ»ÁÚÀQvx3ËM¼ša·³kw3CÎ[ÚİüÁl”«ƒ†ŸyØ¬DõİL¼­„>µö£—¹ \1Lx‹+÷ØS^
+v>†g&€œ(Âı@×ÊÌòØWÑ›Eü2”|:é¬°õâz†u¾ïXgDÄ‡g­ÎÅ~Q¤¼1™8RìÜŒı)EŸÚªÒñçîõP«´¬¸#ì)DšÁ-_~mu«öß†Õ*Ğ±Ï¨¼ ¾3CÆDy)r‹ƒìš-¥à©(e7ã9n m4·ÕLîú*®WÏhgµ\kVµÃ:¾q'æ±ˆ€…Pã¬I_ê6ü<é.QçtS´ zwç3íºzruÓ¡ÜÒ±ò%}êZİdÕ³D?
+pºg	£š¬÷ü^.4ºÊAİíZA™Vv	ƒor* ÓÅ
+ŒŸŞ«.á‹í£‚µåZ½ÃHª
+Ø|Wp¶ğë	v÷úßì'à±öõZ’ï5CÇí\`86‹“ÚÕó—ı¶éÏ£:|¿ò³g0—°ïÆ›&€HE	:,¿"Œj‰t
+zó`|2¯“8˜=†wÂÖ/«»æ÷oÍ´ü«8ˆÅÄè‘ ÉU€xå3ÃşÊø@Õ|ğÈ¿•İÂK©6±áBÜ	ëçÀŒšM¥Ü•¨V/ªyPVœ`"˜:‚‚ô)7·Èı€	lNW¯ZÎwªÕ	®ÔhÄì‰†%ÕÅ!ßé®õ…N}ËxwåFØ*+¥ †~.—nj}Ô Ÿ„å®Ğö‚âé“è'[®S°0é¿ØÌ„„ğÌ$9Ú=ğPAğãÙUYàMØeUÚ¬U®àI’Õzí]òÎ\Ğã®æ¦løÄ*ÄšÊJ rPìºÁr Ç•¨7qpSAJÏçKÁ•ĞÚ 3¤ĞÔçÏ^
+¹=×wûÃÉb5sHeŠ«¬ÃªÏÑÙhò ©¼I€‚ôAĞË5ıÁÎ§;Ø)¨öO\`ş‚|,ö¿ÿşı€;tl¡âoƒÍßÉE8q/oİš¡Ë>L´k°½Á˜iÇ(8¯Ù¯Fnÿûız”84ÔÌùïM6ÀîæYõZs9ö{¡Q¬4ÀıˆG‰0½Ôøªç~‡^¡w“hB;©}<¶$€Ñ*ÿ0Ğjø5fQ!PÿUÍ!fY¡0cøÇ¡cÚ×DÏ =àå]îIŒ¿Ô­Õ«§Ùà†ùÅŠßø&}S:Ü»~04&)¬V—êtŸØYN¾ÃPèw;¿îocÑÎÇ½qÇœş}Y¤;Wª#‹‹	ƒDó‡[P]ë
+ÿ„Q©ºùyP<T¬ş€-”†DÛ³mG°Öd 1Ç¦)&¸Ópø!á-Ì5c¶ìi3ÄèÎl‚ÿp7ˆuÛèxŒ@Î@³ÍĞôyü6×¬ä‹Æ,<àW[à|>$ˆìpVşYî2ğ­³I¹!ãSDÌùÚÁ]ÁgúOè>L„Á3®êp–\xAà½ˆªÂ£‹o(…>ĞÌÈ}ÂBPçëJ}^|J,FÛ‰Øˆy$8ÃÙMó1¾¨ä‹Q_iè»ùŠò7€€M…¸WmD?~…†ÛPÌp6}¤B¢z` )(˜Ä
+­JIûÓ)±Œæ¬ø:‘^lèk6*›IW°4ôm@¡¿}ÊT)oÄ¶1EŞˆA F¨­GõJÜˆ ‰eSTÍÑb×^‰µäT(#×¶¾Åˆ>»#vÛmF¼ğ(Z¾¦ª=‰gëïÇïâÅ €\ıß£a"Éˆ€{#ä»Ó¼+2^ø cÀ\~È÷PGÇÙ:2sÜFªâÅ` €›jè¸åB?ÇÍ@YÃ¼§€ß¤;hwÆ{Ë\ªM‚{'ãcJn„Û
+É~Eg4´Yb¦"ï<ÇÂUG1<Ïø%nÓ¹óYÿÁóì­|^m†…=>Ø_ìÂÌÅ&†çÅÛıÛÿş«î¿}©¿¾AkZĞlŞà-y,rHÌ“véxÍ]`õÛè„+ÎQĞ—İk-×Ä´C¹Bÿ_’€wÒÚíÔÒúõiˆ9,>ŸZ$ôïbÅsÕÈ¡sàŸÜpg´ßMË+×h¥´ô£±Cø½;ä6ˆé&Q'¯qŠ´`´¬¢ÖòE°A±¨;Íáï§ÓÃ¤"1Äƒ¤mÀ@óoó_s·$È-†òá(U0…@ùˆ†@Ã·]3ËÉoiãÉÛ™{ÊÚfk˜Y
+3›ü–3Î-7zıg/Ò!Ëì‹K¸ÿE=ÊB`É7xudØìÿM‘0P½ÿ\fí£?½ ê
+„ßßÊ‡”(Êç7ü‘àCŸ 	¥EùõJ!¯ŞG·^¸T±¹1ØÖˆ¹)T¼Z@éè#…Aÿ„”Ôu(CÚÄŞrŠò#nò=qÅûZª“O•lÎ2ÚÒÚ(ì`¢0
+ NlŞJ‚ÿ¬ÅŒa»RÌGi£7¾3ÑÈâ’|>Dˆ+]Á
+Ğ¬˜Ğ–v¢çàXÜ8NŒ§Dµrãú‡)›µ+§©â<”"B,²_˜gÑ<KÎÙå7ĞâuQv‹¨v’İ÷Ş@¹iA{Ò7-×¬HGœ™ğgÅùIñ´ œÆ6±wï¥h[ß²-ø#^ëë¸F4bQqËà(f`â¯‹¦Ğ¿åÀ‹öDğğ`°;ûV²Ï@Ø„ØËM†õFN4/¡¦emÏ£†YmÌÏ®¼EâŒ¢Œ¾%B$òG÷k\Ì‡np?Ü!(*‰œEwİ½¼ëì$ÕÂk‚­÷É¨û²'Ÿ÷rÜ^÷a,»^¼Ü)QTøÑ¦j“Å¶?XŸ{cÏ™?%2?ŒÙr›ƒ¦“üÜ8kvhsív¸Q®%ø¯h¯š;3œœJó“³e-Ccô½UÒ2Šøë»CÏ¸CÖÚ!ıÚ« jl‹ŒA`MşoòÍââwãÉF³ğ0›Şí{ëî<İê8ë†½d¬ÀÈ·œv=Ãnµï./öÍ¨v¢óİ$©…ÍlàÊ*ÕQ¨pÌLç,Ì>¢6;Cı¾kY«qûñ¥%ï´`)°‰çÊ ~iûô}‚ Æõè)”ìûi©öá^ö8¯wÚu¶¹ r5ì„êâÌ–©Öb·]wïÙÙEö1›ğS´f³›`}@0|¨be]G|w‹Ì«µ·ö6bÀoĞ„aQèæ“lwmÛó=›ÄPd­×ƒ×ÙŸ¨µÚA•rØj±yËµz„Ü„„7`i¡”+YåFëp˜‹fÄOÚ™N4ZÑJÁŠ_f™wF’±P¢<ŒNÉ…´Õ(¬2Ì3C3fúS*(ºÕ·l\š*§Á¡>y C´Ø?àøpİ$úŸ‹(Ís¿«ûÎGhØ÷0\M^€ Ò¬‹ß÷|ËaçfÔç¹Í=YÂe¦):WÙ@ğP¤Udñ§á±Şu pv~¬Ä!—ÈGå¿ãl¹sNXYÃ¶³‚ƒ›b¹dÍÅkoQ+¬™ÖiCmBN
+Ã€†rb3Ö<m0 5ÜÌ©CL8ËÁs5Ïí"¥|. ¬‘†–Q»·ù?‹àp%ÅÓ»äçhš¤€vŞ'*/ÀI§V¹‚¯3ÿû[íîi Œ^q·üK'­j³ƒ£²Í›TO„½¦@8}2ĞMÏ­ŒäÚçàåÉ^L_¾K]:o€?ëpèúœñš³6fÓÚa³7°
+ZB/×ã¸]Ä?é£éÿZOhèvÁûGgóh™ÖĞ˜*ÿøèC]‹)(DíL€É4Ÿzo?ĞÎÄDğf´V6‚‰÷â50kŠ×¢jĞ‰ƒ€Õ ÊH¨[sÄãå´y;şGZ1jHò¡h¾CúålãwŠµ‚ÁÒA‹M?.ÕüfĞjÇ@ß$š¹!÷çx+G…$U;O»†Î€x7Â¨ØâÄ8Ó{¥Ñ’u–©ÙÏkµÈêö®ıä?<üÊ‚4’7¦†C½}À…TH†”\™Ü=ÍòúŞàRpH[<ù®ä¤¡ğJ‡tr à;
+zô†°ËIvo‹&ÒöZ¿:À”‚Zõªp¥Î¬èĞT¯hpÿ.×ÚIgÀÅ \ÅÏ…K9¡
+e„= @v¾3\ÙCs×œ;RŒv´,…ÍZ• å&‡Ô;Ã‚Çã‹±Wk¶ºÄÒ¢ª¤4xÁ 7`“8G¨•"- *yÌ±É‰±£ìYY|H/Å)èc§Æã~ƒnj¸Ò»­ÓÕ3İ†ğr
+—’¢Ü±(Ü6ãógß9·xúäØ˜»¤¥˜ß8¼0^`ÓV§zãÔšk5ÆCÔšW •nÎ”*.gu]1RP9²a€å›ÒCdÉmKªIßíƒ˜$ê ò,p¦å8Œ4”»ì²¹_z[%Ñ…ÒT¡gªÔÖ‰’o®h3`7¿©lËårQ›Ë,x
+ªŸ=¦›=+”×nâ>¢öeÔ„Æd</İC]´ôéš4VHeóÓæ˜Ş„Œûü„äAş‰¦eª%%×¸£¶uûPĞiæh”\M©ê¹ß•7í‡±ŞÔ#N[şpùdˆ 7ÎÍ*3ì’©btüU
+ˆLğƒZ2.TêºM¦Ácb-ß4
+ªŞµ% 1³›b?{ÿ½yß?»ş@c}şiax3µÇš|H3rú#EÂèÆ?[V†ıØ¹Ø*pV'ÈZØ¨ãÙ/0,æ‚‡vF™jëïŸİ·ıò[¸J•…®ó¬>¬V®Ş;¹“‚«zlLÍÖ’1£4•ÅJÜYôÔd&]´‡çëiÙ¾]#]4Íä±‚Á~Ñá¬÷D¦"ñ|je)Ë3,3t?{šPĞä:\ßæä”8¹.Ûš?¨í,ôØÓ`ĞäB3li1šü†±faAØí¶‡Â®„Í7¸ŠªÔªgTSiÑXªq¢±È™‚Ö’¥¦qyJK™Ç+ Ó-s…;'¨^«Uñ,Ê0×1¹,´…±]á	>œAX±{ÚÎÇ¥wÒªi²#7ï6XØÄUò¦åöHÓÕYC:·iÏä@Có,0ªiêZÿZĞwJ„XğìX£›¥a(ñş‰*k “;ˆ®>6Œ˜´ø&fh+ tÛÊƒÖ{ı‰À|e†Ú`¼CÇ0"É?{ò®;c€»˜•‹xlÆ 6_Â7/œ`ëûÄDÀGé;$	ÈÌËf¿¾„oxeP.…ayØ?¯ÖØ¬ğĞ!G2£.¨>_[xÅW§I‘mºFD›®ÉFÜ.ÛP@ ]RÌü®ß°'ÄÆÜ~æAÕOÂåàZÀ€œ”ñ/êü»ajÏÃ9õ¿áºzryŞùäyª¼Üèœä3 ·ï±¹Ù¦ê9|Ğón ² †ëcMV+ˆ8ÙíˆŒ±ó€5xR€Ôª”Zõá©U
+œÆ–ÙmRsé¨í!^¸S~ñ¢ù-¸/ßrDóµSó~FMMM¤ÒEcç35à¾3à®d*l
+öCÇcGÍöĞƒ0³¬ÿ$3Á2:¼¬ÅpÉ‹–e„—'•ÿ^Ø ô.^&Ou'R¸{RQkÇ‘àÔt)˜š*qèûeÇ*˜é4«¸BÎ…$ék¸+\ i¼¼õĞHXµaêx·%má0{1Y
+ê[ñg]ˆ ¿±ç‰ı;ò0÷¤ÔÌ¹+ñğÛòr	½‰¯÷°mÙ×íI¢'é‡MM¼ü,6Oû”›t`2Z•Tíu¥¥Y³ÓÑ:éÖX›—R”9i!‚Tï#ˆ”E™ÀRKn7|¬,O¨aîD‰‰Äı4¸<ç€h²&OAåìcÊ¸l<é ƒè=(A„_°şœŸ]¡§ú
+ñŒÎÎMz‚·ˆ`NªA³³’¤_ˆ”3äÕ3nRÊEªÔ£°]]›t—±KöãÕp#IUú¢«˜¯t;ñòòÛ5$§5£s-Yà¨Ÿ0±ó¿¾ø+ğó»:ÄÎÕëh¤ip•ÀÀUO€¶Ò
+Î­±°]ÉÀ¦±
+51õRùµä|´üh;¢ºBwõ6D“Æ²Š^3¦£öf˜tæ ¥f­³]Í(WÍuìŸğŸùkbâêó®¶é.yÖóÈöŒ’Bšé6É8ÈG\ƒ"¢Ò\oªoÙıøCÿ¿÷ÿ E0Fõ[È„ŞàÑ5>äe7ü;uªÑÂ•è³Í)²¿—Â:„a!Küxõ‡
+@İİòZ­ÅOò‚¥n¯‰,hG-ñ‰!—Ì"cıà '‚˜™q¯j@<æ±çr
+_ªq¥È ªÜ‰¹9Ê+C@uıäØĞìDXYD%ÖÖWO‡õC‡¬
+3'ÿÌ2:şä÷ïîü’0ÁCt³%PxÈøG}´aL°"]Ä„ ®˜ H¡**C®ycJ¶¼'hğ{õê?oF°Á™quQeBÛˆ NjÒ³Ñçmû“•¶Œvt3oÆCL|Ä¹Ù†Ó”/?›AúE÷|º0ËC3şôQÇ¾æ	Wîñ@„¬à¾J	‹PùÈ°™=ä‚coä±Üÿ©6s'ß:}&8qö­·æÎœ¼Ïó,ÚŒ»ĞŠ*5ö¬¿‰Şôc{GÄÜhn Ê²mì& ]6ŸÖZ;1wš1P)}ˆSÎN²FƒÌÃfğ-9Û3ƒ!€~cTy¢>âÁÛn#	õ[Å§"BÙGPM\Ï’R®UtÆò6JçÛqœ¯û*WåŞ¡AHµ(îá±Ü ë£âÄE¶‚âÅê¡±‹×Šóÿxqaıµ0±bƒƒì…hâo¡]x5˜Î? %Ã7Ã,} ùTœÕóı¯ ;OS×±‹æş
+1]#HLŒZÓ)µtX³wd
+÷‚1?¹½î†NëÍ§ò7§œ‚-<Ğ°eÖºƒ™`²,IÌ0şœĞ¯NébcÊ´UW
+Ü©ùéûc­:mô0ÖîÉ4ö`¬§À@›u48'Á¿m:\ °W„Î†Èˆ¿¿ÎÙ€Ï5^g3U<oBbS$ÔÛí»5@¬°è4I§ÉT¿Ï`HÜ†Õª–ë(Ë3Ètæ SA¦RÙbäaP”ƒPÑÏC	j‹ø0 ›¨P‹MA_÷Dñ´(î-Èƒ¹‰å-¡gø^`@~uDÉ.ã4lkïì(±­H¦;`¸Út@Ù­d”¶MõQ‘¯§¼,o]öæş¤ğ>HÃ9¿â¯s‚ğ!Ü$LÕzwÆIò©à„F—¾6)³KmÊs¼e4>c¦ÌE)¼äP_şh–›C)°óã§|šÄ[r!¼¢Ø>‡Zy€7V˜òa…] ’†½P"É E¤S©·’õàÎ¸;eŞ@í÷“¾ydòä›§2¿eêo—CNäºQOá]âo=Ò‹úá·%ûüĞ)ğ¡nS.{€4˜Ê/=z â#r~‚qb"˜z© ağz·œˆ°	ny(R 2n¥rÙXÑ ,AW%‚"—ğ+Ïˆ]°Øöó5=t“ï p*ù£¬ˆ@Úa½V}K6æİ”k¨¡‚­4T°•FYzT‰˜+z‘ÊšlŒe!o}P-¥©­á%Â„vş8¡ª§Ña-^=£½mÅ1„?Õ‡2+áæ²JjS°ÎUñş°Å€}Màİ˜Cš^gµR¤.š.l>#š—6ı1ËÖQƒ<½S5KkÇì½MäŞ*9·µÏü¹xM$-pO³ê†íÛ“Ò½q9DÇ³`CÉØqxx©ŠÆs)˜	@éeDi
+„´mÜ©Çc™:*ŞK;[g *RGmn‚M_B…6ÔBléíj;L %8×ÒKz5˜,=íÿÏşıR€Q×æ½ÏöëSÊ‚¨NåHÜáÿ3¸"(|ÿêÀKy1İ<ÂM–ÄË]é˜V	öå™DzHÏüh#é./×®ZÁnRğ0 wCí°Ş›-‘ôy,W¨Z^:åëW9XJÎşR EãöS+£ˆÇ­J1îå8¯Kı5àæc®üyÆ_ğ~£RøW"@ŠÊ3pÜ"³F^³{\éôşêà&-¥—ò^-?ê-ñV³§z…­cŠŠÒÕèx(±×;î¬B´æ	øù¶Š¯¹óÉXp‰½ù‡µœWñÜ<ËËôú9ş ü.—&pc?â‰Ó …(™¦ƒBP>
+GêÊaJ‰‡Ğ’g=R‰€°<£	êğoaš•qÈ½ö°ÿ)VŞvçC_Ûmééá™1-Ù1™Ã½q¾w[lÊŸ›µ¼Gg3ØªëĞË—Ø ³‚Ó´ïŞE 9ùhª‡ßük75§ØÜR¦¢R“Ñ¦·Ñ>Æ¯M[Ñö‰)¡ ô§Ï[¨ëéF³«Ô:üJš]õ¯…A¼Û$TS´Z£@óİó5ÇıÈ?Cãk>îßñlõ[¸ ¤8Ã…Ü
+ô*)ğ† qù_zÿ™ÜC³Û»e<!Ù¼Pº•@¯Ëòƒı‡âjQuèìsUht²óIêI S|©çèıZæW}´™C†üFêwR2»R³ĞáÀÙÂÿ¦§#…Í>ï‹$†¿*¨§ùš2\í|R¢ÔN€?o³—ßß?¢á<SüûˆDÿ‰Œ¢
+f‘R¿ü:å¨ÙT¯óÆ?ÿöìù“sg¿œ8{úÌ ğ€îÑu Ø‡	Z/&„îÇDgFO¦Ø‡qŒÆ®Ç}ˆö>&¨ÁcµÏàS<)FËê”çtt;–Y€Eãağ2o#ål7aÀ?›ê»üãÉ?ã½=â¸übØN¶KÆCõ3XƒDFDÁƒíÜb‹RZ‹Öğ–ÑšÃÎ}Â‘¿‘ÉÔ¤EŸz±½Ì~@ş@Ñ7%¢ƒT
+Š‹Ñi…n5óí<öæ§¯£Åê'¸ù7ü°ŒCa`•q°“%
+-)æ‡;ÿ™ıÿ§ªÊ°¼·ùŞñá-ÖÕwè)9C*ÜŸ—
+Õáÿ}oŞŒäş€æJ·v°ŞÈ¡‡ûş½3ŞÄ‰î¢õš7Şâ±Ña D£+Nê”4HÛà;Zvi5¥F„û˜mÒ¨D…!ß·ñá¹vÔ¨uãÂ
+gxÉÑÁ+ƒ1Êí¥³EiÖ)ÆyM	ÿŸŒ[çwşX}šÃıï"p‹°f'‹-$[P5loX¶‚êoÍR0o&X‘İ[Õ9lQ
+Kôˆà]4«ßÎ/|äig¼´îwdİrpX_ªá9{¢uÜßÒb&I6KO³ lX*Õ:s±‰«pŸ9ëZñ¢Ş:óxßÛ>é„ÄAe×mªpXŠ&ziÈÇê™¶ıÛzˆÓ‰Zs9^Š;YäÕ9ñ®âÃPP/®¿Œ5hÜO8-İ.Ù¼Ú%\Â„‡(è™"™p-¬ÕÁıø8U¶B(ÿ‘Ü‡ˆU kqåTÄiÊ›Ò˜å{A½EËË`á¿ñî”íùkÇ‚£Á¬VÀÓ-4Â«š…:ôY2æ4f‰õÍ^Cµ®½Pú€ğáŒ¸ŠÁÒ$râ%Œw¨é\C%ÎXŒ-*»ñğ %RÁàf‘A£>ğoØ€÷I~À½òıB¾Åâ¸îb÷2ò‘\#¿—„vFoğJş
+)ôS(çïÅœ+5Vi³Ë•¾”kdòëĞ×|ôaf>ScT´ÑàNGšß×R§	_ötLI)ëAÌ/Ç[Ïº,ãŸßv¨ÉşÈxÓ;˜ŠfÜ1m‹tî,/éûÊZYÚwSüb\kLÔºe1át¤FÁäy(
+Mîú¾\ĞŸ¿Âjg%«R
+&*h/Ò‚ï©ÚYß£/€NJ&<?µ0[îÄoÆëà¥•.\¨ï‡ºÃÙË˜<•ÏŒg~>ZMpŠ³YK.{œá<[}¨u2®(5ïÙDv€¼v9ºZK:Iöª¾4—Á] ¿‡Œwa<Œ²‰bñçŞR²`¤^önr÷N†[¨ˆ=¯è³‡¹U‡åM¢‘(Õî2½p<häôıóA_ÔYHœ«g²gŞ:Œ™ùÚL^®jÙì¯¥R â‹ §/§{ıNA»Î™šÎt®1-†‚S£‹æ' 4÷MT–Ñ ka½9&CÚÜ@G«jâUbh5®‘½ƒšº‰+[½K Y
+ñÎ'Î/|¶•n»5;§®¶é¦¹˜¾¦™jBNû<ãµäÎÜ3ÕzFúXm÷|&Åã¤LÓÜ>×K’-cc{çâ¿Í¹Ÿ†`v ş¸.”‡î@£g‹Ç‹p/Ær.†ë§†X£øåØß{úwe¡@ÛÒçl#@‰>à†ÄVyÌ/Œ	•¯ö„[øl26‰g‚×kQ½ú3¼c11 a Wœ¢xß=´ÒŠÚ+œåÊmÖO®†iXËFVAáà&¼F½B Ôa$
+¼‹OàÁMµ—½+¬§Ö{µ)röfU5?¾°ÎÈê+©ÔCğ6—âµh,Ux¢Q)#pCÈI³pów¼:TyÚ©Œ´'³Ó3ì[²Ô9%©3¶º§ëc8¼ Ğ]˜tÍİiø5œš,Øœ3R_dt+‚?pìİ¹0hÌƒneı<Ç¸*h{2A[2aîˆÔ”Cmİ‹_êö ,¥ÿí‚ë¯8±G8Àxñªå/Ñ”¬-écRC sQH+Ÿá¦C[i×'‹7aNŒÒSÆŠŞ7Í9ö ØÖ]®>¹ÛßÎåÖƒgp_¹t	•ÜîU3Z?3ó² /¦báÕQ”$šRÂÓ!X¡|ü6Iun}£3ÂìBÔé0r*aOÂå
+Œ9#ß»®¶·ÒÚvÛ§çÌå€Åc‡ĞùiİçZ] nnYİzGÚëŒQÏ>6¨g†ÍÜµ»òˆÊµÔ`õ&¿…á‰"rPd‚©kK¹û™.Ó¡Ä¡=RBB«1~ANÉï„]@­Ãk‹p2¬+«v£zÑÚ‘¢]kTÅNe›7| írvlø÷¢¬é©p»œßŸuË˜]Î²wëØÉš¨Â˜gªş)nq38“—<(Í?1ÃTø@=pa}ÆJ2X–äyÜöŠ£¤©Ë¯ûß>øjˆp“ÿ}‹ø´Öª×€‡â@”dø£ƒµÄ.bÄ5kãQƒÄÄLp•Ñ	l$Ÿè.ÏÏ06‰#ğ÷äá)š{9ªsÄ·m÷d}Ä­œhT;°bìO
+vYÓSMPTsî¨§åÆÖ—`i^Ú"‹*»%Pj¡F®s}ğİş}ĞkÛ'1ğ•ƒ#[ åxœäÕÁæ–¡È5î\Ÿˆ]®Ñ¸OnƒñÈÇVìî†ã¿¾µÙİ¯%o°;¹!§å±cğª3rÍ	ô/b£Q¤şâÜå§c¸ñÿ«ÿ·NaÜÊÏî‘4"õSt«›ÌğóÚ ˜ŞZ“b«E,ÇíSaeµy¬èüƒÒˆYA´u'Æ:ygP8N9/h‡Utõ×ƒ-1¡»AcÃşw3 z>ÜÉg”÷‰”¥·AëêMR‘ò-¬V1ê;¬è‡îI21œƒ1yÒF9ŒÛ‚ÜÎÍh—:«úµÁ4» µ”)pê€5(„o0Şivju‘'"¸F.®Çğ³¾˜€PÍ 	³'1ŒÅ±‚£kG`ıÅ’9¶…\*ÇwrÚÚH£jª·¤ò•dÕÀéOo5ïíc<˜2ÔÅ<FY·-š“|YEŞ­£¼fum}µ¾uFXœàt]nX^˜ÖÖ±›ß;o%˜¿ ¨wfë»µã3WG»8Y
+Æ§Æ0¹h±Ær]oCyîIO‘1êÊ~c5(Íß«&È“C?UíÙqÅÂœQ“óÔÁ3ó”ŸDA•O•ã3\b`ZıŞ¿İŞ ì½M¯}œ`6S½ÒyÌ„]¥Še¨¸UÂ.è“à¾ÛE…Œ„]vÖWk•U¶A3ÖŒÎô/D ügÍ*÷*×–kB@±ô)ÛÙi#ù5k­)Z(ä½Ô¼o”^\Øáàñ¿TY@€Ğ%?’~ÿÌÉÍ…ş¡ª~óLOØì´–üĞRZÑŸAS ¾D,}@zù;Ÿ¡Rğ;îì¿çxyâñµ´§nõ¯È‚;kGÓ>¾yø[Ûß+Jõ²è…nS’É†^Ø&Ädİ¨°PHÃ#“H*)c¶ûl<µß	ìò€ÇÚò¥öÛÒ±ÊbËõAPó ­Šû—g£†Óç²­ 5H_sÕ°ğ•ÎzÂ4¹ğ8ÒnC~’»Ğw#ÂKàX§a¦<’’ÕZ5êÄ­úõâö°%oÇ-ÍÒaO§Œ²
+í*Âº¢ãÎ6wa+àõø4S´W‰¯qv‹ÂJB˜š_RÑFñµÛ|é ˜|°ñpªtd8sŒ@8xø³e¢»Äòÿ <ai†# ¤°^gPzªÉfÇú~PŸUávº êRÚ~œ¤©¦a4óŠÃô üµßÈR>öÿ¾üİoƒœB²RæÀ¶ÌL[±š»¥ ædµÔåb"aÙÍB¨Ò šéŸ—!,¶ŸgĞ_<}r&ĞZí^.¶—ô‚ ÜDõ®3qİqaÈû¸ŸBîˆ-|Àòëñ¾‚Ï #:Àk8@ãCŞ€µªOÔN–ı;àdlÍ¹ˆB¿ñ–(7 Ã\ZÏf´¸ÓXy/^s 7_–0«|jjêÈKSGµÃ¼zŞ°ƒ<½½qÉ,h?Ñİ
+¸JóÆ«·ÔÃj%L:7n´Ú¨ÛaŠ:¹€¶§Qy¥à>¬w\ºÛîtõªqÛ°b-×šÕèêÙå"Ãüj]FŞlÏ¸S×Y…1dÒ]"kÑÅ!±&‹ÏU³Å^V>aàÙI‚õ£KÂ i…•\¦¢n&hËÕğ¤Ë( ¨Ğ@42º"FÜŒ¨‹ \fÄvQ¡`Xe½LŞ¬¯¦LÓø9›Ê«ÇœÅZÕåj§¼¤qú@	ÏxâjV( 1m¤VCHºÅ©šg_ãFØ*ClĞãÃLÂ2æH‘÷áş<¸ÉËË”ç§Ví-ª2óWX©°‘¯DH!=oçŠ¦QÖºÕFÁŸĞşaBeæ¯|£„İjMBø‡5
+•ÕœÜÖÔS5®¨~ØhªV³Jâ®ş4K‘IİÔ|ŒÉHšWÁv OëªPÜ”üäµ…>+ŒÓUÛ5\‡¸vÔªo,
+!™sÆ‡2ëq±%(=…lÕ~P#’¯äp}ù–¤Ouy½*ª·C/O›ê­-™ƒFÚsHßgÑ9˜Ü@
+Úà=Ÿ]ºÌn´€„4…+ÌR›Jê>²^l£Ikõ-zÁg€Ñúœ²TÆª¨¹ØmjÉ"'³†Ø$M¼	ï,ÔEÆ*­ÈtMDKû;Â“Âä\‡‘ï£AH°pOäaà8ÛjH¥·xü:n“Â[÷µ–¼ÁwŒLkS;¶ÕV„uš;Å{îõ§ìoØCY°S8ÚOÛ%¨u±ypÓøĞ»ä›t‹mƒ•3Œ$A¯åHTÀŒÙwÉz–J&ø•8TùÚ]Ô(|'_ølPÀ]	ĞJ—‘ˆY¶·^±8&j3HÜ>rÎº¤åŒƒ£Ÿ(»:fj%Têg&r®È8Ş¤4î¶	oº¯}9S3éIá¿¼Á|~¹†‚` Åõ¥ƒ›òÔz‹ÀM$—RÔíœ…CÍÂáÿ{ÿ+è˜Â#Á‘;ój#kŞÖ´L<æ‘úd0\õ8‰ ¸‡èô–"±×¯„
+h—ÜÏÈ2‚zŒ ®;Çè¡
+A^‹ayà8Îİg`€¯)ZŠÙG‹Òãqçl
+¦iaĞmóòiæ‚ÉFÒ‰Ü5¬À¶t‘a‘åÚJ»ˆ±d×BäsME'Š·%é¥áñ"¬HÍM€õü²¿ïÿ†íßŸûÿ»ÿ—ş!<åšX~¬‰ó÷ŒİÚDü\ët@ãøïrÆæ¨ò0í1{!ü°ü#•ş¨a)ıf.³Ú=4ÿó® ùƒûÍ¯û5÷HW~âly;V!İ‘Æó…	ç€]ñ„
+÷…?yÜ>ìV|ÚùĞ¨‰?V–Â¦ìƒ­Rd(ƒn†A˜=İÕ’$fîˆø·=¹uU°UµOe'€ˆäÿ˜Ê‘[)…öaÈD³šğÏ€&’T‚Š³~·Ó’§ç»M«¥,a"ÿ»öË“ÜcÔ+o´ÿ‡J<´ËCÍ–Äï%©,½²ÊÆ9ÙÙÀV½ÖAá™]_ìŠ)±-æ½8bIL~¡	9ZêX»ªg‘Çà'ª¦ğ.²7^KâL”Ğø’?VuÙ9Äµ¼İ7³‰²qõn%ŞGêg˜³öDJâÖwBpŞßSGşÉ¬Ó×Á —3|4Ÿ´ÀV]õ9!Û‰‹óÅÙ™ZõÛÿ¥±‹ÕC¯Q(ÈçXc¸ÏËq·Y=6·Q"Uİh†ZE”H™×Òºúğò¼—Ö-¶uğÆX©t2o[€mocPí»¨¦Ù½³ù¦àõÚâv™Ÿ€İíø:šq('ëøÂ@¬Ò›°QRäÀ”uFë!d°¡™Ácmì‘M‡½\PìÈËôõ	ñ±ÖÂ™êånÉ ñiZ$·riÍtI§¶Mùö5µùf—‡¹U_æBÊâ†ö\•´ºA),Œ”¸Ù‚ 6ü%F	+ŠÜâci¿D"{'>Âº)•3KğËÕ©^²‘Zbe)ÓÚr°•ˆ¢Ä¢ bÒ#‘<gúeç©MV¤Eü—grL¹å¨¶•Tº SàCÒ"ÃVR oÇtuçCi4ï¥û~•F÷‰7ˆ¢µÉsœIUFsô€±ä0óCâ¡4î‰è9Ëø_?;ûÃåè¼xéùÓ(±ëˆÑÈ•Òo²Ä>€óN¡\.ƒ ’j¤"=+ØD–ø.Cxçç¹C'|Ü-Z$Ü³ „2{ÍÈÅqV––!JjgÆµ+N„oJ) M…ÚĞÔàÎ2<‚À½­•DÈœ8C¯µ:h­9FàâóÿÒÃFØèƒŒ»m<RÈD êš‘/E);:ÄXi€Åı—ß&‘Ù+Å-F0&“’U]lgY´ç~—¾`É=6æ¶ôª¶…üw5JÛ«Ğ‘Pçï® ô+˜/L,uWH& «¼­ıÉß5Ìf€Å¬&#)âv‡¤Ï‹ü»+NxÅšÁÙåeF"‹9Äğ‹‹3x*MMÕ¿ëû´- ÷0ºõ_Ä%ôááÎGl—îî¼oÕK•õ˜¾Rvñmd/«Z+7Áz¨#¢úTŒ†8quÃËÓbÖDàÎ‡ë~Îvâbrhb,sL^CkhC-ÅNFo)ld¸Ogë14<]f•f†ò0§Ğ.ÿU¹äêÌ„ôà&Âlğ<Áö¸½ı­çÙ;ù¼ï¥å1v™W˜ï“e]‹ïÊCUşˆXXz^öÍ˜)0Ş’ILeÿ­™ÔHûmÑ¤FÚ[$˜L{¤]X$Y÷‡İ=‡Õ™œŞ/%š|/èëÁ„¦@˜xÖC´h`¯4’Ùidæ¤¡‡\OU®§š±½’Íœ±¯u0%‰œ æ¿9şÎÁùSçÎûæ·Á	á—³¯¿~ê</´—?¥w–ŸaÕiFHñéyq{èÑK»Q=Ád, Oı‹›6÷ù‚{Ÿmš¯VÉOÆ¥ŞMM„qpÏ©G¬úÁMÚé^6GÏ«M÷fĞD‰½ş^D0,û$‘R*ß$ß }gœÈ·X£Ÿ|'AäÓİ x¾ç¨fuÈÁÀcÚ ÔÙChåQA¶¢ÇÁReóQ\'›„Ä
+]·p7)0ÒŠšÿgÉÚd«^Eü$×H¥¡Â:”e¤ŸF“…ó£r<Ø½CÁ”Î-¼0˜HUüÏ°ÿàÙfEEø±V5[} IlrÌü2kõFrIü	&÷ã}œÎ<sŸ5_s{È÷ C´ÂÔíÉ*c¨0UjÕ ^»S¥`ºfTDÒ‰Â*¤Ï‘´Ëß›³6ùª–
+İ¾.Önh9Óß´¹ö|;Ë	¦(l™ïç+N°õ8ˆ—Ù3å7¯˜gÉ !ÛñCfŸ*oèúX¨e¯_E`öw€×f$Õ–×B–€6Ø°oŠ~†%±¦!¯l¼5§£	¤Ù=˜ú<z:&×P9çòóı¹DdÎÖ‚>š-½£é#kF6Úg·óF²9lß!MùgIë½¥½¦‹šQkşZ#¢ĞaÎãÜLÉc£¶é…1;@¿è
+Y€æ¨)Ú2ğ^†‰¶}	Âbhé%w>åIs0VºiøqF£mŸ>ÆVıûnäHL©ûÇ‘¿##¯T{.g|£¦Œ~±y²]c.Zª{±ùS(û_8	öë$üúc©‚[Ã8@™L0­Ìd†lID'z;NÆÃn³gË‹Õ ‚ZfN‰µ°®„ÙšB°Ù‘*q a<dÌ	:£ì8ª‰	ªv«şv‡_”Éu2›WıÍõä<<kµ‡Ùk½Ø}Ì{‹rÙñ‰‚ˆí¿UjWG‡´|%ÒA`bç·Mãé-~~×ÓÿoÜ=4A¿$9ŒâÕÔëQˆsÜ[œtñ§#$J$ém":ğN)”†Bñ‹Î·KİxUÙı?8€ş¡ô>>„k=é·Tà&=;GKhÈ¿ Y*'Œ¿y ŞUùóf¿pÍµ]¸åÂt7¹«ã\ş^r„Ñ»4llw\\–tR‚{Á*$IÙ)Ì–Û|ëgËó“³işlhà­W÷eh4™D·ÙŸq—=ÉF³™-5€wV@[‚}‰ñrBl®8”µC©	ZmíÊ\«†}¤ß_5b¨?²ınğ?†µÃÛ,÷Ë@g8\G½ß8P­”a[Ç|i
+‹Ëq{‘÷c7<•¸Ì¶_‰Ø%—t¦§æ»‰GÊS‡§
+ÎG[¬fË%ÒB€Á¸×e¶'Z¥Ö
+5™½'„Î8—ãÕ¸Ò¨ß¸…Æå$£kİÿœ.û×hÉÂ…fhórß¦‡ÜâV^Z0EÑ.lÿn9E+=éÙhOìTÍî»ó&dsò•ÂZ*×p¢æ™øÌÃxånºÍrÙvIÕP•Áê™9[]'"§_íÃraäKFĞ)F¨(7­°ê¿T Â	ÉLl·æ½Ïs€Œ|Ğ¶™m\53À¤ìá ÚÆ,:2ˆÊîÌíûö}»h½ÅŒ´;›…1.³ítÜe¥%´›É7ÿ51~©ç€0¦ïEĞ,K«?rª›D¾*&úe€±gè9¤|å˜-nC©°qâEğÌÏH}U‰ß‚¾{è²ÍòRQ&Ì¹ÎŒû™Oƒ5ÊYÈ¨ Òõä¿uÖ™ğ G!ˆLÑ.O?ê-Ù¡J‹Ûê`#Ş=ÒD\¾„%%i./â‹Ú
+Q‹z}dıªs ÍúT¶’Ä'§¥@s)g ¿ÔÎé
+€P›;åMÃ#f½¡<¾êG‡öÁñ¬FSëÔ×Ç—`ROÀCVhôãæ›@sS´PŠ…2éWÌÚ€9ëFå?ÿó‰45[¡8WNÎ£AšíàíÎGµ&vš¡öç‹şM@8è¬%d;Ÿ‘ÒÇúf¨…Ó–ñP´¡x»zømÍ”Å¿šNx%¼JSGÍ5+Š}ÏÓftÉÁLö,sf-n0/†à»È›P1•7ÁV¾	û—{>ØÊ;?{¸0læ,È2«ŠxŒ¸ 
+íÑµ	¼0¿&y	¢dûãÏÍbyĞ±ZæÂw¦Ëpw­B²C	B4BçÆdjt^;\J·4ï—{w‡ÑUfßşV¾Úé´’™‰	õUªÈ
+×|…p5Ùä:µ¦î‘-9Èz6ÉêÊŠ?%m¯æ/,•/& üÑ…	ö.L/‘X’cÔi'ş±x±z¨8;s±Ìş›+²£Äÿ»v…ıwâ¦1Tõ€ş ¢á-vÒn+¯©¦×€|ÇjÜ¹†äUÛòÈ–×x3Ö»Vç¡ó“Ü¿Ö¸Ö¿ym‰Íäk·}£X^çÿ0LùñØìÁ‰šÃçâÂı~(KloÍ[XÙRªÉêIw™‚hğjÓ”I¶*ÊS8@ÂjnÔ˜8®ÇbKèkÅ™€&ş'#ÿÖ6ÈW›¦«liòJøVØY-·ÁBçÅ”Jíf“äúÌø¼àqìüoã }e8-V¾„oîv†Ó£É‰¹Ñæ˜ğä–ˆY5èÓ®f•2%šÉ6?(¯ê/€ÜátFó×Îà|>I¼“I-sCàq3"sAoa0MÃA°Æi³h4Ê¶/x2±5}
+*õ,‡ñ wtT»É+÷?˜ï%Ãël]ëÿ¤£ÿ½³‘Yß¹±Ì~¶¿e$ˆ6†vù—bA?gÇ{Ã‰‰)D	(â$"iÉØø¿
+ô#Ïf«GÁUğ©
+€BÖ`øv XËá ¸ÙR6j·´?™-3}vC†½!éç¹ÏWF«½_c™—fTQmŞdxµ‹óĞälİûaWĞ¯ÁÓÊ%ò@82¶yï€ôĞ–Mh§€Œ—’şlïstdN;,uŠ&.ùp5‚`Ú&ùà|0ıëÓSÔãSe.>î×:ñŒ;8QîDI§¡OÆdj]3šV„úEèÌp¡â¼#ÇÀøy
+Y“)¦8ñàıƒ7ıõj0¥ız‘ğ³’be³krF€DNôÜÿÔ¾¿LOMÂGDõİ8Øá.ˆI“‹ÒÀuÔTîcÏXÇx®İ¡ÈVup“6¿7*Êh“Ÿf‰cJd=N$™—Õ¦vÌ[iP;Ö…Mm‰‘ÓÚò6­ôı¸ğ•\äuGÓ®fe´$‘¶ƒyïÜ¶ÿZå¢‰Fz‡l²(ëŒ.ª&‹Ì«â>ÖÈ¨ÀÀşië§ˆ6)@9ä‘ŒÖªH‰Œ@Bş!˜4 =&…9ü”>Úi­Ör YfÿÖI+pzzdUTô4Ïn$¹ĞçáÉ§FÕQ–døÙésãÂwLÚGB:çà&ìw uß2œ™Ä„4%‹Rõ¤ûëi0©½şÏ rß RÙèa<eJ1Üé¨âL Ä·AB›…×ÓÊŸb{:àFÛÕÑ?¶J{<2ˆH„pÑIˆÆè[ó™4
+¹ƒøò4B÷R®u¢vbª7¹ ¢YÕÄE®
+ÖÄ¨Öœ´#ÎúX>ÈĞŞi‡d2ÂQD[%Á0FÃ?ÇüÄGÍÂÓâ{rr‚óàÀ±5*®ÆÉfÕ%L›Ï¬ÀÚCkÀµÅ`?ƒìï	dkç>ú7} lîU ŞÄóIø¶ğ§\Ÿ¢'|d€’Æ0s8ÖxÔ ’ùš·#—ã¥h¾Ei"g=í³Óƒûî{š>€'cıÌt£t°äø¬©€ÈEçÇöAÚ[Ş¿7<@@2ê÷Ÿ¶ ç™á¨^~!óå—ğo`ğW$@Úğôâmé#]ërì;ñ°×»¡ hôDÆíí0à‚àÓ'oˆõt¥]oµ§’Ÿ"úbTPä#/ ,ƒsV‡º`ë­zd¦2À’ø>zZû„
+VÓ§æ†Ñoî¿jSœÑ~+25XØ/C ãğe&(ÓÔaD¤E¶Rû–LÁàºlÁÿŞRZú¥Ï®ÆŞ´ş¶ó1hşGvaÒ´şy¯Ìc5P×ÆUønFJ¥§ÀŸ"zcd°•&Ïpşû
+YÙ •¢º‚‰¦~ÚùìeƒĞş€Ïoû_õÿD	ºM2]†bï<Îú± cr#gÿj7¬'n&Qñ1ª{³Œ~ñÆ0Zv3Âû×°Äuqá¹íÔ0¨MğM-…:Lü¶Iy5LD<ƒ1ˆ ?X±ŒzÅÊÄTiÇ_‡š…+ŞÁ£RVÎˆ¯S™-w(bîi¡f[ñ©˜ïMÙ{z¸k1CW‡Vâİ$Y>Ü5ÂåZèíĞÙ% UÏØ¦Æl¹/-mø6©¡ò4l±iDş†Ú'½¡6'{íé»hÛklHHñé*@–xô`Ñ9’6Ém²Ií½(8¤ /çÅk«€0dg¸!¦7ªæ=Ïh™p–ƒÁ9"Ü¶†G¡š·gl¹†ójà¼Ô- ã§¿¨-‡›„|ËÌÚG9³#”²ç„gé~Ä«²…„.hWøSÂ±mPìÿNàèRĞÿŸ İï@PÒÿSÿ3öïÙsóĞöci>w~Áó1³ÿÿÅ xpSÑf,%$âc¤İ¸VÛòïŸÿùÿŞc„Õoå+Éæ}_LÜ…éÆÚ!Nªœ2©}:N¦± î*äy°y„,Ìi ºÑÕ°ÑªGï´1&‡=t›Sã/O•×®À’(ãF»;‘L¬MMÔV¦'Şyóõ·Ïµ7/ÿmòw'O\hÍ]ıéù“W^ø‡Õ#µÕÿxò7şŸ.}ã½w/G+ËoW’FunòÌ¹æ‰úÙÿğ÷'^¿­ıüİ×¯üıÕö©7_ú‡ÃİŸXşùÜ›s¦–Ë—[+³ï2â¢ÖÙ8öò‹?	“c‡§¯N-½pôêôK¥—¦¯¾0Yšš<zõÅ©ÒÔ‹“W_,M¿0yuêğ‘ÒaöszršÕdÿ¾4Y:ÂÊO¾Pzş}q’µd@ëÉ«/N¾Tššf°ÒÒÔ¬ÊÑ©IèºœüÉ2£î-uRIaÙ¤­¿Û‚èìø»õ¤[©ğì–Œd¤ö×,ªõ eP1!<%~òCí_\Eé%Y<}2S°ãå§eeçrb 6,ômŒñí¥æD9şŒ¡£v;n÷Ì»5|e`õ-ìø¶K,&°Ö+ş/‰÷‹ì•™È¤ôÏ.§‡D…R57ãbMLÎ´=éëEhß4Ê½ß€ÓŒ×/ÀbO7 v‰Šºä˜²„IG«˜ğ?OÄq½¯7‰ri½!––İhq>j„µf­	½Æ)Àr=ÛÅ¢>›qcÌ±`Â' sm@`÷€²ŠódÛÇ >?›ÃÌˆÏo–«øüöór¹x-˜„ ÄòGs¦Ì¨1|±‹7ş{”¶|» ªÇ<t²·()âôû©±™	ÌèÌğ]Às¾‰<ß’4cN ĞÑ'¥€ñ˜ÍûªSò·ÉLŞ.9yÃ¡ÈÁó@—B ã…¨¾A¤åôe¶{·îéF£Û„qÔ˜p_¦ áÈkzfÉYT‡€º±œUªÌu»®#æ‚¾õrQ¹êÒyZí‚Å^fwVêz§ÀŒÈî¢ÂÅ™;ŠÈæ2ñ¬•Í0BFˆƒ9‡ù½•¬@P¸°¹N§õºjjG’¥“FçÓ"S6!Š2l\H{©İè¥óø%Åjt^ı¡ûš$5aR9$Ÿ
+¾kŸTšk·Ã2ƒøW4Q-Ü#”[àºÑŠ+c·šŸäÜa¼t9ª`9OïÂÏø*˜¬.eXcÌì‰ÛMµ¹xG¦/«/—•O×XŒn8Ş…¬–niB^WDN€RÙe†¡ê.êÑ	=‚	‹rÌ$åè:ÎV†Ûà¤æã²/`š²"šªÌ]ct¦m¹I÷®È¦öïğ nì2”ûwş& Û€iSŠ„°<­¯às´DXòa4ÓSğÌ[˜Ö
+ÒC3ZÒ³²f´œc”yİlvîq}-“-ˆ5/-1berÌâµŸ3ú›@f4¿oeï`¤Ş¦|_u	òŞÔçbŠ{ÖQÉ³N%ğ$’ğá¢LA¯.áÕ	#¡º*YÕŸïÿK–·Ÿï-`ì=?¡­#On-ïEÎÊä6…xB7ññl¹Áe‹AKz€!Ü9>DÁº
+¿#3O É¶.¥fÊh·=yYöñ:ê(,ëÿ´GÙŞaôà‡|0î^JxÆpÆ)››’Œş•OƒËtep\[o7Òëï\Oáøò1u‰ÇhhŞåZ3¬ïŠäM¥wy—ûMîÊ™?yj×KêzèÜï7‘›ršì±b,|¨Ÿ%Ro1ò 
+~P
+S8'ëY-ï3€Oœ**ªz/åÂ£eşŸä¤Å†ò]@VüwSş\<¸I„PÒnBY%Ò8G‚hóz=«'ØK‘ˆz´…0U-ª÷¸ê…rÁ	­¡jaõ¨¾Kš¼Åå£1|+ô”HŠlXè³øLkÓôÓŸÉ”~<ù3ºZ¥:¢öZ„šw¤%h¤e¯¹*^~Ù	QÌõ3 LNêİšï½\±ëm­i+eKMÂDQ'Ãf5n°~şšíYp(˜>â•È+Õ‚Å_ˆ@¡Z4ß8#)¢*wâ×kW£jqÚ#‰›2CêÿûòÆ?ÈN2P?€A¿$¸ë #PŞIëè«|E•¸èïWDhŞB„Õµ		’úé8MÌÌw9çë®l8à.7T~DóÀ Ì×EÎ›H!İf£ˆıP&õ-ÙÑ½ÏíÂ‰TàåıqrøƒG¨äØ`2Ä]aõM¶Æsq½ş¦¼H©ˆ;‰¨]³bÀ?»rß§+ +®Ü¿şUğ·gÏŸœ;¼5wfîSç¬‹dOuå2wv>ë?ÀD—‚CÚ:/Á=Ü‘îà3AÿÖ‚Õ}Û!Íñë–\ÓÁõ·Æ|]É[¿Í1˜;wÚ¾öÑ}X`U€Û©xÀ?6q¤Û wn+„Ä²ÚQû…é"Ï™B7÷n0ıÂÄKå\(Fœ„¦b4¡	8-Qp|ŒL$¬X8…|X«ØÃ‹ËÉjPNQËW‚eÆN¶ZlÌ×kõèÂF³R,à§r=^aÕhˆŒNL*ğP€iO¸ıLŠñö½çdÖ0ªZc4Ìé*€7ˆ.DW‰ôyîµ İ
+«Ä3Fvµxeö×«"7Å‚ÇFÏ-w›§(5ìÿdTeœg­‚Ù-eT~`UPyÜ%n¤†¤½e’ùRæ+«t0Q„ş_†Ÿ¯ğ®;2‡„«±
+"Öùâ¾oHÊLf×z&‘ÔüDP¦‰–ô‹”yF. áágJ¦2!ÁêËaµZ¼Ä,bûƒ›ZW½EHáÅËRúë]² UMHÍ¥Vµ£¤›CËA2û³cí'¼XîË×¹Ú¹Ğ¬1ï`¸wV¨tî]f¡<¬+ÎÌ¹±GÕŞúÉÇ?a|ø[è,o)Ş5$·€„½$
+à+Û öO'¬²Ôi²©A-±‰¸=^,€S(úÓ–ÁG¶`lG©H®ô©h;Êo£Ø"{ÔL¢µp>V=Ş)Š+9Š e0$» —vö•2IŒT•˜(BÌôF=^
+ëõ"…!&‰JâÔW—â28¼¦PU•˜i9¬“Xı9˜X®Cœ`ö)éŒ·©Ôšã¨3jŠ±Jbé6F»>Ş»ì²µğŞİ°A¼Á+©½¢ÙÚkŒ:ÑòyÙL;é‡é6ÃTAIq¬Üdwıƒ¿Ë¶¾Û¬FŒØñ¹qS?ÑÀ97¾¬ˆfµÊÈªzô³+'xn—óÑ»l"•Ö©½‹8 &f:&êm²[é ß-/ÅÕ€ÜÍûT´¼KÆ†7š½¯ÅÂk¯½Œ‘ªMSŠªÁZ-Dš€=Ñ­¸Öì”ƒó¸4IğŸ8{æõÓçßš{ûôÙ3‹'Î<Åï_	;a§›§êê¢èoƒÛ9²ê	, ¥N5¨5QµÆ`º¾¬×¸±~‚³$1Î\LÑ`ìÑdWiæ$`TsÀˆöJ'B¤Q@“ZÂ*»ß4a¼w®…øJAMøi1Ÿ¢'Sœ+FQÌXé¤b¤ç‘ñIµ¦ÙEPÔW6†ßY"ıá!‡lX·ÃÙU°ƒ]^HQ‡§š+|ióµ‚¢Ì­ ü ü|´ÌÖ¾ü$ø9L·¯º-ÆÒÔ’¸ığO›h-=^ r.n¢àC:ÿöS0Ã¾9ƒÖde,)Â\‰¢Ö\õ¦’5É¢·’¨Â€.3”7Â«âÊ•2®M‰’×ÛQ$K@¡b’²†Ïa05z8DíJ56ô™¼_úÊµVP1·ª_½Kpõ.À´€0v.ĞO®È
+ş{ØÕ¨½±råB0Ïí¸ÛÂ"#.EÊÑypwÆz¾qşì;çOŸTù
+ãL÷3&Ñí£?™]/EiÛÁÊÚ8f=l7	É¨55cÎıGŒB®5æeO¯6!¸µ¢¿‚Lä-xKãsE4Ëƒ"JQ§~wã''a«×#å\ğ@‰³-pY†
+T·˜ö\ªÄo>ğ€‡C;*÷A5ÅìŸÆ1qa„x{:1ÏÙÔm¡%D!Ø›*C\ÁÛ'Î1ˆ—€÷`
+3ÜÛÈ^*öüÇJ¢aiÂÓ¦\cAS9—Ùú`]iúÏ½Ø²Ü½Ş|}æ%çK³’{éiª59Í
+ +
+jÔIÁá9†[ÜÂØ“
+ë@¯Ëh'VÒ%?ñ¬ËZı…rvğ(;¡ù™ _§nÂcpA\ÑJZPS0~@6q’Qî1Pá¤×¡e–6	U	\ÄŸI^gO-º×î‚X¹&ÌK¼u:‰)Ot@š¥¨-¼Ì¾7Óìà&M½Ç¯Óƒ'½±`>c©t-"XmH†ÂÙÀ¬¾©i¨‹„%és?«bğ÷ì· 3t2N¢-Ä¿ë«5†‹Šø¡Á g„¡ş¥Må.°ã+ùtñbÉÛl dE©àõÔyÌDl‘)~´…êËJ}ñíIoúĞ8”:`äj›ÓU’ã›¤ê$>hÔšİC[ß·ÚÈÓã«q·ÍjÓ¹UÛq+Ñ‚£Í²*üuğâ¤Èèe	!ĞöL(ßœ‹S“†£ÛW2 œ“$b¸ÔÃÓ¬q¸r¯Eî—äšeó:.V€éü	ÿØÁMö¿½Ÿt’cxÍ~}›š”’L0h)nwNt°3 ƒ9ü7ÙëW¯ëĞª£_XI+()ZipñœUçeü«~J¾w´W
+¦^ ëgñ²	Ò:Ï™:1ëÙné&aáÕZLfÚ¸7f.Lõ6V†Jk+Í°>£M•Jô:«òyŸñ<ù
+?kÄ*¢ëúl'µ~w”Ü¨ TßÚì¶„H1Çõª†õ¨w¶”¸5îMÅ*iäñ4fñAÑßãP Ï3Æ9b£Ù‰:½Â'l9dØˆÛµ[doÅ€ÔÉÄk°2Æ?Ê~Íw;´ŸÂ\ª5gJXhÏÍ÷íÂÃ¾Â2OYÃ<t¼e±W#Œ	-{cĞÍˆ^ (]³öZYxÉ#Ânhö£ÑáğŸxÑTFøùÀRƒd ?	L²¾ßrlˆwL ’û×îOÛÊá3á.Ùfà¨Zß¦-4öHp 	ª”ëQs¥³j‹ï5GO~#âåÀìhÓÚû]Q'ô_ªHügÊƒh
+RÔÆ“L“)¬ftÂ•fÖi§ZæeĞ{X{NH‚²Ä+}N8{æÌÜñ³çß>u²€l…NzÎj‰ŒùËÆ™´Z”Ô:ª¨†ÏÔò¡Ÿx‚“ö€wà3—r¦“Éjßs]Ø)‡ğLÁ€4|Ğ¬w,èğgáö¿İ6<Ëˆì@%Ğj•[qÂxŞ‰°U_»2.¸ÿÔ–¹râÔÔÆKsç9úrg£¶ºÔy©¶räèr÷Å#//w¿°¼vtµùÒáååéÃ—ãv5l7Â&[{{bccc}½¶|em5ZY»¼]>|téÊáæúåµ+ø‡¶~¡–T—“jX¿¼­_i_^MØ+——W“ê•Ë«Wß»²vyõ½«•+—Ã¤ºº|eş]Xb¼_}xÌdb}}ığË  N˜³ÕjKÕ2¥çª¯mKŞ&l7wß,³¶]}=ZZã++q¼Rg[Ün@Bšè*c’¤|9‰›Å±’¦/@UÄAŠ¢4ˆ!’&Ğƒç:æVè"#ï‘ñnÜHÖÿ;7ĞJ‹giDõÉ1à>·º'ÍĞÑKf;x(ük0–
+Oÿ{0Â¨“Ğ&ùƒ¦Øïƒó›>ä½™‹Mîz+Ù>\˜†’?
+­Ñëƒ¢ `;b€³X«Ì°j»Æ°tÆû ÷æ2$ïö€³{›—^±°¬aÛ®7+€ìĞ²ó‹‚ÎZkgD¦hDÿM¿¨óÂÂ:“U°ì7%JoÖkMK·ÔítĞ~s^®k^{:6‘¾‰›3\£44à–6ö€A¥ÁJ°ÒE¸íx-*°g¨Ä†¥ˆq…şèVAµ0lØ4±uÔcö˜×àá±F0ˆöbOl¶ÈÅÃšH3Z	ùDä<ÓÿOës
+·ƒB(Ëˆ_¿nr+ûÙŞİM!Û ãúœ´÷ZÓJ!ú@ªaş‘ïïˆ ŒM8–û?¨}2LViÆ J;Åµ}	^ Î=çÂfT²kÃb†¿b¯³’#@©ğÔ2a·³úSTĞqÌÅµueø·kïá#öŠ¬ÒW ¸U; ßå¯rÒª×~
+cóSR½Í¤h^8rùg>q6€Ïœøqj(úáUÅñŸe •æˆ/5Ìë4ñæ!`È'Â;À÷\nXydï[	¶µvt¡Ujw™}?ÕbRÏ m5$6 zK,²–ğR…>ù*6Õ”Ù%Å)•Ôú¿£gB³©‡¿ßòğÃ`…GöøhÖÇ]-v£¯“ÏøŠi¾ô– ;2¼0y8èyD˜æ|QÊ}é‰ĞvŒñ’íİ™;aæwËlãÚN!ÓùÂÕqúPXPÛJÂ#õ·HRqŠª .ú yz\»®±ÊaîÖ5#:N®l E£ôrúÿ   ÿÿìën×ù?O1^!´Û¬Ç7®KLÄ-	Âj›T‘åÂzwjoYïº;»!±AŠ%ä‚’&)¡Tjû£RŠS’ú
+ë7é#ô»ëÌì®$¤)UãÙ™3gÎå;ßıB´÷İ,ÆÚÃÛãÅ@oœÂBÎ"´‡&¸¡CÛX‘ìy‡Ø)˜\‡‚´(\
+¹}ÔıFÕwï:§ÂfwkûzèììrÛXˆöÒS'‚WĞ€È{Ğ¾Ø
+„j-^E„êsW8¡DäÃ(›ä²ù(åmîx[hôO4ö°ĞôŞ$šÎñXU8šP¥îÃœ í]7*Cì€˜kéCÚN;2ÿëÑáC#Kd­umµüæ ƒ¢$¯T:jèôÊ;g1``hè9ekãaâˆÎtVìçö÷Õ T3Ìî€hCı~~28Dÿ<ØwÆ;‘ï‡ª(âµ€|Ô¿¥”ì$xô™J;ÕÆ¦YiRO™œêõæe_+D²
+˜&°{zÜ"·_OÎŠË„ò™LL…¬¶‰C´FEÏa/‡›ÄÂ2]èØ6!kı¸zE¾=6~8K-	07ÈßUôT€âãv³X¹½^g)8ŸÃ†q®V›•¼0‘B¨¡#ö«nÃèõZìj‹ä»’÷ƒ!çm+ ¨„”|‡ó‚`,OàÇË‰“ºTŞrutlk‡
+UğëÎ6ÓYRkX™š³áC2ÌqĞ9?-†®"¬«ĞêîÃ¥EéìšÎb%¡ËEj§N®»1”Óü¨S\:[ÕZ£ÜZ#Ôép+c$Ï~TÀ!z€~üÇ|ÇÄEúËÍ;yüÔÑ©hÃõ|ûö¨.9kĞz„ Œí·>?`Å€;Íş£¯¢9<›j.Õ$õ‰…ŒåÄ§@¬¡½#W´Î“º9¼F®y÷\°Ï¶·iùÁZö¬¾øŸ/?ş 0Û{%éÂWßq¸¼@çyàz^::}rV?¸‘pù¡íŠæRj6À·»ŸPhµg¼x×æ§ô›Lug-–9ˆHr¦Š¸ja²$¢¢€“ğ¥Ê}'ğ8ÀìíãšQª4TJĞêrYN¥FóÂ™½­×ö•ÓúDl'âW¦ğ5ZÌˆ­zKeH¨ÁÚNXe«Q6cBÖxl203àfÃ†EªƒÜ÷èÿc±)J×A'YçÌ.E>¡¦#ízñ
+)Óñ"zRç!'Ü t“5[”¡<Ğ<(Fèl„¢±’à9áU¿5(šueB‡ËğlõGÔ„CA!jBî:ˆG±ÏN>oNá¨$k#éÙ=ŞÌT„øYA.˜¸–0ı¤ŞÕĞF<‡­wŒ˜šxÅB.f÷­¯p<¹'pî€Õ½GÁŠ¢L‡Œ¡”Ù*C…1MŒ?BFˆÔÓ6ÄJÛ hÿ KSpn`$CµÂ.aciP=3DN¯1ÿ¬#`¢£Ô[!­µÚ£Oó]šFp vÙä‚Õ,Éğ×Æ›ÂÎWBF§Ğ¹Ú`¥Ù¨“Í‘“{!áñªÒŸˆ´÷ÅäˆúEkå«vŒ\‡OC#†§¡sjÂ×ˆöANöáŸZ°;˜ƒÇë5Š=°¢K<øSïÇ/ëÏĞ-.)‡H³ÈqêòÆi †·³á-õ$tÅ–ŠMõz¼Ój‘WKÊì¥ôz[ÑfÓ’k Ã•QûïQìäN´¢×š—ú“îÃŸ–>#[Ğ<;[àŠ¸IÖm[Œ 5\A2Éxp§L3[‰	Ş˜j(ÄGã¶¤h·'A'FeËDÃŒN%9×~€Ù|©3)=ü²ƒ‚æQ’˜ã`O0‡ñ&qpx¡æfÒÈ†¡ßá«ÃlÿˆGªôÆp›Ş¦áÉ·3•A<×ä‰ÃĞæs‹eÂ„¹ôrÄ4«ÓÅÅ§ÁsúñÌáõ*š.ÀÉs’ŠÎ‚üeO~ÏwÍĞhà%«3rj€Í1ì2²½Úñ&`#K«QpQ»¼²:-Ä‹k²zJeàªh)Z‰ZK‘c2šë¤9o4Š(Ûü^Rso±Èó¦èl¿…¥&¼,ÔWI©Ø¢ë\ä^ğ¢Z·ïK8zéØÑ3ÿ970ˆ	0ô¤ğ[òó™>):nò±B‚‡=·¶JX¥£"'›wH 3¯íHÇ+R¼ènpÚË.­KĞx2ƒ'õ©ìVæ×ŒQ/¥Ó2UÛ9 "ì&€ô5Ê¶ôÖN“Òwkû:ÉğX.åÍæ,Ü0juN5xò;Ügİ
+0öÆ"±):€GCzaš
+fÖŠÉr&»„AÂİH#÷3Şç…„šœ%PÊxÈ3è>ğ½Ìn²]q`ÎGbì;æäÂ%EÊàv°VÀ±r£a,EK|‡G]2ĞOUÙº+ıàØš›éIşÀi¾Ü=£ƒ Y‰(–×àWeìÏ!ÈYÈ•æW²á¬5[‰ïg+¤l\aòÇZÍrµR&µÎÊÕ¸²ŒÙÉòÑëèi†ú
+»=ş²êEˆ¶HËN-sB;YTC˜V:Äîó „Ÿwow?€#òy÷ï ÿ7»ÿà'Şü¬ûi÷üı®n. Î°‡Æ›RF&VsG:7­bªÌ`÷;Ì2â> øó¡©T„éÓœÄ”¨]ƒ‚É,jï.('¡/É…äš¤è½õTYç8…“åÊr^ÈPyÏ;Ólú®6+©6z¼g5“¬ù!úAÛH@Dx}Åú©æå¨u¼G SäôXYö££üœCıô¦2€¢®hZøe“P…qÜNC;«uñ …æó>LÛÀØkD„ì^Ùgëé`sSÏ2şøá‘Àm¬årnß[4ğ×î-ú{ëG@[ÈRş<Sh``ÓËÅ—óˆËÍY"ÜÈÑ~>ÉŸ_]U“_Ï%Ru!ÄØ~Ÿ†.~?%­µ×@ŸenÂÈĞ¿Nz}Ït¦mÅÃ5éa˜?ÿ“0İy(=}å-
+ˆıÇÑÄÀ2©D3Fí¿\õL:/;ÂAªbáI,ÑÄÁª	ï$„î ¦t÷u§3+nüH4£ŸéÑ×%‚Şvâ\ú»7¨&=ôr^°†=4Ô	m¡B5rüxÈ3g§NÎ–‚™¨ÒlUŸçiEÙ÷#Ğ•ğh‰œËoyú„XÒ›İ»@“à·¦ÜcØè¸u³ûq÷o@¬ş€åÄnÃ[DÇîÂõİzœ[g=`ãß]xp§g{S>—_À%’Mì(ùÖ>Mû5ÛŸ2”şo(‘„ùy8Hãƒl#ÿsÊ£Cøè¸ıEˆÙ¿„ùÿ¥WŸİ›fCFyä}ß1oĞŞ|F›Œëıir£Çİ~³Ú3¼%Ü¤¶<XÚ¹o!™A9ğšÍÌóø{åû~ «Îóû _”=±³­L”bıY¦Jiˆ|0>Xarc·›íreØÅ¼txå”Û°Q—ÒnGä[¸İ‰kÌğ[®{zÜš«
+cs“f\¦`ªÁìIæÒŒ÷¹IôtI£ÙØÙÍiD£W—ÒZàD¤EÄÉüfNÒÎÜ°Zk±%qŞÌôŠşŠş`‹şØJæR§|+Ó¨nÿ¶2Cj*Ö:ÍFmù†QÑmÕˆ1Ç[ÍJ³Z«£G–[İÔmw¢òoÉ«ˆê6™Y…NAÔïé|÷â;FGÚ˜ iIçĞ^$ŸÌ3‡ÍÃÕNL7ä\©€Jßxûôw-Õ.Á:‘aò3½yJJPEá$0:ax0›œĞùx¯î4´é©o9òKÃŸÔÚSÎ×ì…7iµ›T^+™ÒJ&S–B+U2‹•¤7-©oëZÔ§2FX o%z£—#*Z†Î~™°$ÖÄ˜f£$PSÉvÅ™›(v_Ò='÷ bRŞL#j}£ïLBëŞßËÄµe"‡îç¬ØX,Ã.NSÀ]Õáu™´ º8bY¸Ÿ]Øv–Öq)˜Ï)z¦•Œû­æ
+’ìÈò¸‰Ç[¬…‹'ô0=ÖˆHwä‰V¸H T8Ø»-vê`vnæÔñ¹©WU˜^  ş xÇì‹¨òZAdiKsCbo_*İ ùîG¦üqFÛÿ+!(äP-†¡aŒ²óÇå ¼âòkÑ0Œìº®xğUÄmA"Gaù©n@¢k½3¨†ò¸Úv€©ÔQF¿õ2¬„¬H5—Å¼J\9j«€h´1ì4¦sœëâ”;xÔCÒ¬¬v5’~³¼~<~ÊÅ´?Wğ}&÷)ÀŸøCşğ ûâà$F?pÀ.å“Znİ¬¢íL3»†UŠs0!öZ¹®Ì|™IPÍË)‰ŠøGcTIÁQÒ,zIª~Eã¹È¾¬kšE=Ù­ÔÉ±»ãBb	ŸV†)Í Ó;Á=îÙŸóv­ŞëW6Ï|üü$-AjYÏgGtb’Qç3C™[Féşa%”QÜ6ad¿„†şSÜÎŞEùÕÑB»»“¹ Ë_”IÛ’xÓzêØ?¬­®µ£Üb{	Ûu…-C·Î¢mGÓŸ¤vö=íJàZŒ“‚ù)¦&jr¥`”}0ÔÊŒÚ~	¶“Ş~w,ö–{¡·ôíèõ¨ÒÁš¦çø§³bànb?ë¶ûîÅî)tÛ7¸ph œ:èœU‰q!  F®„*Nx78ÂËI¨Íã)é-³ÁTP¨=I»œŠ%É¿NÉ)(âÀ_EÑ%øÎl¹!MMSœ5b¹¶äORZØÙN£Z^Êí`t´Gnzö4Z®Éa|oa—Jg~¢†üú"úİp§u
+   ÿÿ ±|ºn

@@ -331,6 +331,17 @@ class FirestoreWrapper {
   collection(path: string) {
     return new CollectionReferenceWrapper(path);
   }
+
+  async runTransaction(cb: (transaction: any) => Promise<any>) {
+    await ensureReady();
+    const transaction = {
+      get: async (docRef: DocumentReferenceWrapper) => await docRef.get(),
+      set: async (docRef: DocumentReferenceWrapper, data: any) => await docRef.set(data),
+      update: async (docRef: DocumentReferenceWrapper, data: any) => await docRef.update(data),
+      delete: async (docRef: DocumentReferenceWrapper) => await docRef.delete()
+    };
+    return await cb(transaction);
+  }
 }
 
 class DocumentSnapshot {

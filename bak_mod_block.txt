@@ -412,7 +412,6 @@
          try {
            await axios.get(`https://api.vk.com/method/messages.unpin`, {
              params: { access_token: VK_TOKEN, v: "5.199", peer_id: peerId }
-                });
            });
          } catch (e: any) {}
          return await sendResponse("Вы открепили сообщение");
@@ -746,5 +745,9 @@
                try {
                  await axios.get(`https://api.vk.com/method/messages.removeChatUser`, {
                    params: { access_token: VK_TOKEN, v: "5.199", chat_id: c.id - 2000000000, member_id: parsed.targetId }
- 
+                  });
                } catch(e) {}
+            }
+         }
+         return await sendResponse();
+      }

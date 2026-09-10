@@ -1,41 +1,21 @@
-const payload1 = {
-  "type": "message_new",
-  "event_id": "webhook_event_1",
-  "object": {
-    "message": {
-      "id": 100,
-      "peer_id": 2000000001,
-      "conversation_message_id": 1234
-    }
-  }
-};
-const payload2 = {
-  "type": "message_new",
-  "object": {
-    "message": {
-      "id": 100,
-      "peer_id": 2000000001,
-      "conversation_message_id": 1234
-    }
-  }
-};
-
-function getEventDeduplicationKey(payload) {
-  if (!payload) return null;
-
-  if (payload.type === "message_new" || payload.type === "message_reply") {
+function getEventDeduplicationKeys(payload) {
+  if (!payload) return [];
+  const keys = new Set();
+  const type = payload.type;
+  if (type === "message_new" || type === "message_reply") {
     const msg = payload.object?.message || payload.object;
     if (msg) {
-      if (msg.conversation_message_id && msg.peer_id) {
-        return `msg_${msg.peer_id}_${msg.conversation_message_id}`;
+      if (msg.peer_id && msg.conversation_message_id) {
+        keys.add(`msg_${msg.peer_id}_${msg.conversation_message_id}`);
       }
-      if (msg.id && msg.id > 0) {
-        return `msg_id_${msg.id}`;
+      if (msg.id && Number(msg.id) > 0) {
+        keys.add(`msg_id_${msg.id}`);
+      }
+      if (msg.peer_id && msg.from_id && msg.date) {
+        keys.add(`msg_${msg.peer_id}_${msg.from_id}_${msg.date}`);
       }
     }
   }
-  return null;
+  return Array.from(keys);
 }
-
-console.log("Webhook:", getEventDeduplicationKey(payload1));
-console.log("LongPoll:", getEventDeduplicationKey(payload2));
+console.log(getEventDeduplicationKeys({ type: "message_new", object: { message: { peer_id: 1, conversation_message_id: 2, from_id: 3, date: 4 } } }));

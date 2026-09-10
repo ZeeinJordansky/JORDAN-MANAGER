@@ -17,6 +17,15 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
     headers,
   });
 
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`Ошибка сервера (${response.status}): ${text.slice(0, 100)}`);
+    }
+    throw new Error('Сервер вернул ответ в некорректном формате (ожидался JSON)');
+  }
+
   const data = await response.json();
   if (!response.ok) {
     throw new Error(data.error || 'Ошибка запроса к серверу');
@@ -25,6 +34,23 @@ async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise
 }
 
 export const panelApi = {
+  // VK ID OneTap login
+  loginWithVkId: async (data: { code?: string; deviceId?: string; user?: any; vkId?: number; accessToken?: string }) => {
+    return fetchApi<{
+      success: boolean;
+      token: string;
+      isRoot: boolean;
+      login: string;
+      ip: string;
+      provider: string;
+      city: string;
+      expiresAt: number;
+    }>('/api/panel/auth/vkid', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   // Step 1: Pre-check VK ID & captcha
   checkVkId: async (vkId: string, captchaResponse: string) => {
     return fetchApi<{ success: boolean; requiresCredentials: boolean; ip: string; city: string; provider: string }>(

@@ -1,26 +1,20 @@
-const admin = require("firebase-admin");
-const serviceAccount = require("./firebase-applet-config.json");
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
-}
-const db = admin.firestore();
+import { initializeApp } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+
+initializeApp();
+const db = getFirestore();
 
 async function test() {
-  const docId = "test_event_id_" + Date.now();
+  const ref = db.collection("test_dedup").doc("key2");
   try {
-    await db.collection("test_dedup").doc(docId).create({ time: Date.now() });
-    console.log("First create succeeded");
+    await ref.create({ ts: Date.now() });
+    console.log("Created!");
+    
+    // try again
+    await ref.create({ ts: Date.now() });
+    console.log("Created again!");
   } catch (e) {
-    console.log("First create failed", e.code);
-  }
-  
-  try {
-    await db.collection("test_dedup").doc(docId).create({ time: Date.now() });
-    console.log("Second create succeeded");
-  } catch (e) {
-    console.log("Second create failed with code:", e.code);
+    console.log("Error:", e.code, e.message);
   }
 }
-test().then(() => process.exit(0));
+test();
