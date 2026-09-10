@@ -1,6 +1,6 @@
 {
-  "name": "VK Bot Dashboard",
-  "description": "A VK chatbot with a management dashboard to view community messages and bot status.",
+  "name": "Orion | Чат-менеджер",
+  "description": "Orion — это высокопроизводительный игровой чат-менеджер ВКонтакте, обеспечивающий моментальную реакцию на команды и стабильную работу в любых беседах.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
