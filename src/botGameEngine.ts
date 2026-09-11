@@ -19,9 +19,9 @@ if (typeof process !== "undefined" && process.env) {
   process.env.UV_THREADPOOL_SIZE = "500";
 }
 
-// 2. V8 Turbo API Engine Flags & JIT Optimization
+// ⚡ V8 Turbo API Engine Flags & JIT Optimization (Ultra-Fast Process Acceleration)
 try {
-  v8.setFlagsFromString("--turbo_fast_api_calls --no-optimize_for_size --concurrent_recompilation --max_old_space_size=4096 --always_opt --opt --turbo_inline_js_wasm_calls");
+  v8.setFlagsFromString("--turbo_fast_api_calls --no-optimize_for_size --concurrent_recompilation --max_old_space_size=4096 --always_opt --opt --turbo_inline_js_wasm_calls --expose-gc --hash-seed=42");
 } catch (e) {}
 
 if (dns.setDefaultResultOrder) {
@@ -124,17 +124,20 @@ const vkApi = axios.create({
 import { request, Agent, Pool } from "undici";
 import querystring from "querystring";
 
-// 🚀 500 Connection Accelerator Pool for Undici HTTP/1.1 High-Speed Pipeline
+// 🚀 2000 Connection Accelerator Pool for Undici HTTP/1.1 High-Speed Pipeline
 export const vkPool = new Pool("https://api.vk.com", {
-  connections: 500,
-  pipelining: 1, // Fix: Nginx does not support HTTP/1.1 pipelining; 1 prevents socket stalling and head-of-line blocking
+  connections: 2000,
+  pipelining: 1, 
   keepAliveTimeout: 1800000,
   keepAliveMaxTimeout: 1800000,
+  bodyTimeout: 15000,
+  headersTimeout: 15000,
   connect: {
     lookup: cachedLookup,
     keepAlive: true,
     noDelay: true,
-    keepAliveInitialDelay: 5000
+    keepAliveInitialDelay: 5000,
+    allowH2: true
   }
 });
 
@@ -175,13 +178,11 @@ export async function fastVkCall(method: string, params: Record<string, any> = {
       path: `/method/${method}`,
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Connection": "keep-alive" // Re-use fast TCP sockets
+        "Content-Type": "application/x-www-form-urlencoded"
       },
       body: fastStringifyParams(bodyObj)
     });
-    const textData = await res.body.text();
-    return JSON.parse(textData);
+    return await res.body.json();
   } catch (err: any) {
     if (retries > 1) {
       return fastVkCall(method, params, isPost, retries - 1);
@@ -368,45 +369,56 @@ export function sendVkMessage(vkToken: string, peerId: number, text: string, ext
   const defaultDisableMentions = extraParams.disable_mentions !== undefined ? extraParams.disable_mentions : 1;
 
   const bodyObj: Record<string, any> = {
-    peer_id: peerId,
+    peer_ids: peerId,
     message: text,
     random_id: randomId,
     access_token: vkToken,
     disable_mentions: defaultDisableMentions,
     ...cleanedParams
   };
+  if (bodyObj.peer_id && !cleanedParams.peer_id) {
+    delete bodyObj.peer_id;
+  }
 
   // Instant parallel HTTP dispatch without serial queue blocking
   return (async () => {
     try {
       let res = await fastVkCall("messages.send", bodyObj, true);
-      if (res && res.error && ([983, 901, 100, 917, 911, 912].includes(Number(res.error.error_code)))) {
-        if (bodyObj.keyboard && [911, 912].includes(Number(res.error.error_code))) {
-          delete bodyObj.keyboard;
-          res = await fastVkCall("messages.send", bodyObj, true);
-        }
-        if (bodyObj.forward || bodyObj.reply_to) {
-          delete bodyObj.forward;
-          delete bodyObj.reply_to;
+      if (res && res.error) {
+        const errCode = Number(res.error.error_code);
+        if ([983, 901, 100, 917, 911, 912].includes(errCode) || res.error.error_msg) {
+          if (bodyObj.keyboard && [911, 912].includes(errCode)) {
+            delete bodyObj.keyboard;
+          }
+          if (bodyObj.forward || bodyObj.reply_to) {
+            delete bodyObj.forward;
+            delete bodyObj.reply_to;
+          }
+          if (bodyObj.peer_ids) {
+            bodyObj.peer_id = peerId;
+            delete bodyObj.peer_ids;
+          }
           res = await fastVkCall("messages.send", bodyObj, true);
         }
       }
       if (res && typeof res === "object") {
         const rawResp = res.response !== undefined ? res.response : res;
         if (typeof rawResp === "number") {
-          return { response: rawResp, message_id: rawResp };
+          return { response: rawResp, message_id: rawResp, peer_id: peerId };
         } else if (typeof rawResp === "object" && rawResp !== null) {
           if (Array.isArray(rawResp) && rawResp[0]) {
             return {
-              response: rawResp[0].message_id || rawResp,
+              response: rawResp[0].message_id || rawResp[0].conversation_message_id || rawResp,
               message_id: rawResp[0].message_id,
-              conversation_message_id: rawResp[0].conversation_message_id
+              conversation_message_id: rawResp[0].conversation_message_id,
+              peer_id: rawResp[0].peer_id || peerId
             };
           } else {
             return {
-              response: rawResp.message_id || rawResp,
+              response: rawResp.message_id || rawResp.conversation_message_id || rawResp,
               message_id: rawResp.message_id,
-              conversation_message_id: rawResp.conversation_message_id
+              conversation_message_id: rawResp.conversation_message_id,
+              peer_id: rawResp.peer_id || peerId
             };
           }
         }

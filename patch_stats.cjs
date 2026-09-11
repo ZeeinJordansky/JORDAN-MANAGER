@@ -1,104 +1,132 @@
 const fs = require('fs');
 let code = fs.readFileSync('server.ts', 'utf8');
 
-const searchRegex = /const getStatsMainPage = async [\s\S]*?return \{ text: statsStr, keyboard \};\n\};\n/m;
+const target1 = `            let attachmentStr = undefined;
+            try {
+              const chartBuf = await generateChatStatsChartBuffer(resData.metrics, "за сегодня");
+              const upRes = await uploadPhoto(peerId, chartBuf, 2);
+              if (upRes?.attachment) attachmentStr = upRes.attachment;
+            } catch (e) {
+              console.error("[/chatstats] Chart error:", e);
+            }
 
-const replacement = `function formatAmPmDate(ms: number) {
-  const d = new Date(ms);
-  d.setHours(d.getUTCHours() + 3);
-  const dd = String(d.getUTCDate()).padStart(2, '0');
-  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const yyyy = d.getUTCFullYear();
-  let hr = d.getUTCHours();
-  const ampm = hr >= 12 ? 'PM' : 'AM';
-  hr = hr % 12;
-  if (hr === 0) hr = 12;
-  const hh = String(hr).padStart(2, '0');
-  const min = String(d.getUTCMinutes()).padStart(2, '0');
-  const sec = String(d.getUTCSeconds()).padStart(2, '0');
-  return \`\${hh}:\${min}:\${sec} \${ampm} | \${dd}.\${mm}.\${yyyy}\`;
+            return await sendResponse(resData.text, {
+              keyboard: JSON.stringify(resData.keyboard),
+              attachment: attachmentStr
+            });`;
+
+const replacement1 = `            const sentMsg = await sendResponse(resData.text, {
+              keyboard: JSON.stringify(resData.keyboard)
+            });
+
+            if (sentMsg) {
+              (async () => {
+                try {
+                  const chartBuf = await generateChatStatsChartBuffer(resData.metrics, "за сегодня");
+                  const upRes = await uploadPhoto(peerId, chartBuf, 2);
+                  if (upRes?.attachment) {
+                    await editVkMessage(VK_TOKEN, peerId, sentMsg, resData.text, {
+                      keyboard: JSON.stringify(resData.keyboard),
+                      attachment: upRes.attachment,
+                      disable_mentions: 1
+                    });
+                  }
+                } catch (e) {
+                  console.error("[/chatstats] Background upload error:", e);
+                }
+              })();
+            }
+            return sentMsg;`;
+
+if (code.includes(target1)) {
+  code = code.replace(target1, replacement1);
+  console.log("Patched chat stats response");
 }
 
-const getStatsMainPage = async (targetId: number, currentPeerId: number, viewerUserId?: number) => {
-  const targetUser = await getOrCreateUser(targetId);
-  const targetName = targetUser.fullName || targetUser.nick || \`id\${targetId}\`;
-  
-  const currentMskStr = getMskDateStr();
-  const chatTodayMsgsMap = targetUser.chatTodayMsgs || {};
-  const chatLastMsgDateMap = targetUser.chatLastMsgDateStr || {};
-  const todayMsgs = (chatLastMsgDateMap[currentPeerId] === currentMskStr)
-    ? (chatTodayMsgsMap[currentPeerId] || 0)
-    : 0;
-    
-  const chatNicks = targetUser.chatNicks || {};
-  const nickStr = chatNicks[currentPeerId] || "отсутствует";
-  const dispRole = await getRole(currentPeerId, targetId);
-  const roleStr = getRoleDisplayName(dispRole);
-  
-  const hasChatBans = !!(targetUser.chatBans && Object.keys(targetUser.chatBans).length > 0);
-  const chatBansCount = targetUser.chatBans ? Object.keys(targetUser.chatBans).length : 0;
-  
-  let statsStr = \`Статистика [id\${targetId}|\${targetName}]\\n\`;
-  statsStr += \`| VK ID — \${targetId}\\n\`;
-  statsStr += \`| Дата Регистрации в ВК: [https://vk.com/foaf.php?id=\${targetId}|Узнать дату]\\n\`;
-  statsStr += \`| Должность: \${roleStr}\\n\`;
-  
-  const userStatus = targetUser.customStatus || targetUser.statusText;
-  if (userStatus) {
-    statsStr += \`| Статус: \${userStatus}\\n\`;
-  }
-  
-  statsStr += \`| Nick_Name — \${nickStr}\\n\`;
-  statsStr += \`| Блокировки в беседах: \${hasChatBans ? "да" : "нет"} (\${chatBansCount})\\n\`;
-  
-  const isMuted = targetUser.muteUntil && targetUser.muteUntil > Date.now();
-  if (isMuted) {
-    const timeLeft = formatTimeRemaining(targetUser.muteUntil - Date.now());
-    statsStr += \`| Активная блокировка чата: да (\${timeLeft})\\n\`;
-  } else {
-    statsStr += \`| Активная блокировка чата: нет\\n\`;
-  }
-  
-  const warnsCount = targetUser.warnings || 0;
-  statsStr += \`| Активные предупреждения: \${warnsCount > 0 ? "да" : "нет"}\\n\`;
-  statsStr += \`| Кол-во предупреждений: \${warnsCount}\\n\`;
-  
-  const totalMsgs = targetUser.chatTotalMsgs?.[currentPeerId] || targetUser.chatTodayMsgs?.[currentPeerId] || 0;
-  statsStr += \`| Сообщений за сегодня: \${todayMsgs}\\n\`;
-  statsStr += \`| Сообщений за всё время: \${totalMsgs}\\n\`;
-  
-  const rawAct = getValidLastMessageTimestamp(targetUser, currentPeerId);
-  if (rawAct > 0) {
-    statsStr += \`| Последнее сообщение в беседе: \${formatAmPmDate(rawAct)}\\n\`;
-  } else {
-    statsStr += \`| Последнее сообщение в беседе: отсутствует\\n\`;
-  }
+const target2 = `          let attachmentStr = undefined;
+          try {
+            const dayLabels: string[] = [];
+            const dayCounts: number[] = [];
+            const todayCount = resData.todayMsgs || 0;
+            const now = new Date();
+            const targetU = await getOrCreateUser(targetId);
+            
+            for (let i = 6; i >= 0; i--) {
+              const d = new Date(now.getTime() - i * 86400000);
+              const dayStr = String(d.getDate()).padStart(2, "0");
+              const monthStr = String(d.getMonth() + 1).padStart(2, "0");
+              dayLabels.push(\`\${dayStr}.\${monthStr}\`);
+              if (i === 0) {
+                dayCounts.push(todayCount);
+              } else {
+                const histVal = targetU?.chatDailyMsgs?.[peerId]?.[d.toISOString().slice(0, 10)];
+                dayCounts.push(typeof histVal === "number" ? histVal : 0);
+              }
+            }
 
-  const buttons: any[] = [
-    [
-      { action: { type: "callback", label: "Информация о блокировке чата", payload: JSON.stringify({ cmd: "stats_warns", targetId }) }, color: "secondary" }
-    ],
-    [
-      { action: { type: "callback", label: "Предупреждения", payload: JSON.stringify({ cmd: "stats_warns", targetId }) }, color: "secondary" },
-      { action: { type: "callback", label: "Все блокировки", payload: JSON.stringify({ cmd: "stats_bans", targetId }) }, color: "secondary" }
-    ],
-    [
-      { action: { type: "callback", label: "Игровой Профиль", payload: JSON.stringify({ cmd: "stats_game", targetId }) }, color: "positive" }
-    ]
-  ];
-  
-  const keyboard = {
-    inline: true,
-    buttons
-  };
-  return { text: statsStr, keyboard, todayMsgs, totalMsgs };
-};
-`;
+            const chartBuf = await generateUserDailyStatsChartBuffer(dayLabels, dayCounts, {
+              todayMsgs: resData.todayMsgs || 0,
+              totalMsgs: resData.totalMsgs || 0
+            }, resData.userInfo);
+            const upRes = await uploadPhoto(peerId, chartBuf, 2);
+            if (upRes?.attachment) attachmentStr = upRes.attachment;
+          } catch (e) {
+            console.error("[/stats] Chart error:", e);
+          }
 
-if (searchRegex.test(code)) {
-  code = code.replace(searchRegex, replacement);
-  fs.writeFileSync('server.ts', code);
-  console.log("Patched getStatsMainPage successfully!");
-} else {
-  console.log("Could not find getStatsMainPage!");
+          return await sendResponse(resData.text, {
+            keyboard: JSON.stringify(resData.keyboard),
+            attachment: attachmentStr
+          });`;
+
+const replacement2 = `          const sentMsg = await sendResponse(resData.text, {
+            keyboard: JSON.stringify(resData.keyboard)
+          });
+
+          if (sentMsg) {
+            (async () => {
+              try {
+                const dayLabels: string[] = [];
+                const dayCounts: number[] = [];
+                const todayCount = resData.todayMsgs || 0;
+                const now = new Date();
+                const targetU = await getOrCreateUser(targetId);
+                
+                for (let i = 6; i >= 0; i--) {
+                  const d = new Date(now.getTime() - i * 86400000);
+                  const dayStr = String(d.getDate()).padStart(2, "0");
+                  const monthStr = String(d.getMonth() + 1).padStart(2, "0");
+                  dayLabels.push(\`\${dayStr}.\${monthStr}\`);
+                  if (i === 0) {
+                    dayCounts.push(todayCount);
+                  } else {
+                    const histVal = targetU?.chatDailyMsgs?.[peerId]?.[d.toISOString().slice(0, 10)];
+                    dayCounts.push(typeof histVal === "number" ? histVal : 0);
+                  }
+                }
+
+                const chartBuf = await generateUserDailyStatsChartBuffer(dayLabels, dayCounts, {
+                  todayMsgs: resData.todayMsgs || 0,
+                  totalMsgs: resData.totalMsgs || 0
+                }, resData.userInfo);
+                const upRes = await uploadPhoto(peerId, chartBuf, 2);
+                if (upRes?.attachment) {
+                  await editVkMessage(VK_TOKEN, peerId, sentMsg, resData.text, {
+                    keyboard: JSON.stringify(resData.keyboard),
+                    attachment: upRes.attachment,
+                    disable_mentions: 1
+                  });
+                }
+              } catch (e) {
+                console.error("[/stats] Background upload error:", e);
+              }
+            })();
+          }
+          return sentMsg;`;
+
+if (code.includes(target2)) {
+  code = code.replace(target2, replacement2);
+  console.log("Patched user stats response");
 }
+
+fs.writeFileSync('server.ts', code);
