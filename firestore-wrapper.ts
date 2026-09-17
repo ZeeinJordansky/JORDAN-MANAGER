@@ -2,21 +2,80 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import axios from "axios";
-import { uploadFiles } from "@huggingface/hub";
+import { uploadFiles, downloadFile } from "@huggingface/hub";
 import sqlite3 from "sqlite3";
 
 // Промисифицированный SQLite клиент
 class SqlitePromiseDb {
   db: sqlite3.Database;
+  filename: string;
+
   constructor(filename: string) {
+    this.filename = filename;
     this.db = new sqlite3.Database(filename);
+    this.initPragmas();
+  }
+
+  private initPragmas() {
+    this.db.run("PRAGMA journal_mode = WAL;");
+    this.db.run("PRAGMA synchronous = NORMAL;");
+    this.db.run("PRAGMA cache_size = -64000;");
+    this.db.run("PRAGMA temp_store = MEMORY;");
+    this.db.run("PRAGMA foreign_keys = ON;");
+  }
+
+  recreateDb() {
+    try {
+      this.db.close(() => {});
+    } catch (e) {}
+    try {
+      // Защита: не удаляем существующую базу данных если её размер больше 50 Кб!
+      if (fs.existsSync(this.filename)) {
+        const sz = fs.statSync(this.filename).size;
+        if (sz < 50000) {
+          fs.unlinkSync(this.filename);
+          if (fs.existsSync(this.filename + "-wal")) fs.unlinkSync(this.filename + "-wal");
+          if (fs.existsSync(this.filename + "-shm")) fs.unlinkSync(this.filename + "-shm");
+        } else {
+          console.warn(`>>> [SQLite] Защита от сброса: Файл ${this.filename} имеет размер ${sz} байт, не удаляем.`);
+        }
+      }
+    } catch (e) {}
+    this.db = new sqlite3.Database(this.filename);
+    this.initPragmas();
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS firestore_collections (
+        collection TEXT,
+        id TEXT,
+        data TEXT,
+        PRIMARY KEY (collection, id)
+      )
+    `);
+    console.log(`>>> [SQLite] Recreated database structure: ${this.filename}`);
+  }
+
+  private isCorruptError(err: any): boolean {
+    if (!err) return false;
+    const msg = String(err.message || err);
+    return msg.includes("malformed") || msg.includes("CORRUPT") || msg.includes("disk image");
   }
 
   run(sql: string, params: any[] = []): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function(err) {
-        if (err) reject(err);
-        else resolve();
+      this.db.run(sql, params, (err) => {
+        if (err) {
+          if (this.isCorruptError(err)) {
+            console.error(`>>> [SQLite Error] ${this.filename} is corrupt (${err.message}). Recreating database...`);
+            try {
+              this.recreateDb();
+              this.db.run(sql, params, () => resolve());
+            } catch (rErr) {
+              resolve();
+            }
+            return;
+          }
+          reject(err);
+        } else resolve();
       });
     });
   }
@@ -24,8 +83,17 @@ class SqlitePromiseDb {
   get(sql: string, params: any[] = []): Promise<any> {
     return new Promise((resolve, reject) => {
       this.db.get(sql, params, (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
+        if (err) {
+          if (this.isCorruptError(err)) {
+            console.error(`>>> [SQLite Error] ${this.filename} is corrupt (${err.message}). Recreating database...`);
+            try {
+              this.recreateDb();
+            } catch (rErr) {}
+            resolve(null);
+            return;
+          }
+          reject(err);
+        } else resolve(row);
       });
     });
   }
@@ -33,8 +101,17 @@ class SqlitePromiseDb {
   all(sql: string, params: any[] = []): Promise<any[]> {
     return new Promise((resolve, reject) => {
       this.db.all(sql, params, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows || []);
+        if (err) {
+          if (this.isCorruptError(err)) {
+            console.error(`>>> [SQLite Error] ${this.filename} is corrupt (${err.message}). Recreating database...`);
+            try {
+              this.recreateDb();
+            } catch (rErr) {}
+            resolve([]);
+            return;
+          }
+          reject(err);
+        } else resolve(rows || []);
       });
     });
   }
@@ -42,8 +119,7 @@ class SqlitePromiseDb {
   close(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.db.close((err) => {
-        if (err) reject(err);
-        else resolve();
+        resolve();
       });
     });
   }
@@ -60,10 +136,14 @@ export class FieldValue {
   static arrayUnion(...elements: any[]) { return new FieldValue('arrayUnion', elements); }
   static arrayRemove(...elements: any[]) { return new FieldValue('arrayRemove', elements); }
   static serverTimestamp() { return new FieldValue('serverTimestamp', null); }
+  static delete() { return new FieldValue('delete', null); }
 }
 
 function applyFieldValue(targetValue: any, operation: any): any {
   if (operation instanceof FieldValue) {
+    if (operation.type === 'delete') {
+      return undefined;
+    }
     if (operation.type === 'increment') {
       const base = typeof targetValue === 'number' ? targetValue : 0;
       return base + operation.value;
@@ -132,34 +212,44 @@ function getNestedValue(obj: any, pathStr: string): any {
 }
 
 // Глобальное состояние SQLite
-let sqliteDb: SqlitePromiseDb | null = null;
+export let sqliteDb: SqlitePromiseDb | null = null;
+export let logsDb: SqlitePromiseDb | null = null;
+
+const LOGS_COLLECTIONS = ["bot_logs", "botlogs", "reports", "bot_logs_test"];
+
 const docStore = new Map<string, Map<string, any>>();
 let readyPromise: Promise<void> | null = null;
 let isReady = false;
 
 let isDirty = false;
+let isLogsDirty = false;
 let isSyncing = false;
+let isLogsSyncing = false;
 let hfRateLimitedUntil = 0;
 
-function scheduleSync() {
-  isDirty = true;
+export function scheduleSync(collectionName?: string) {
+  if (collectionName && LOGS_COLLECTIONS.includes(collectionName)) {
+    isLogsDirty = true;
+  } else {
+    isDirty = true;
+  }
 }
 
-// Фоновый интервал отправки в HuggingFace раз в 2 минуты
+// Фоновый интервал отправки в HuggingFace раз в 15 минут
 setInterval(() => {
   if (isDirty && !isSyncing) {
     performHFSync().catch(() => {});
   }
-}, 2 * 60 * 1000);
+  if (isLogsDirty && !isLogsSyncing) {
+    performLogsSync().catch(() => {});
+  }
+}, 15 * 60 * 1000);
 
-async function performHFSync() {
+export async function performHFSync() {
   if (!isDirty || isSyncing) return;
   
   const now = Date.now();
-  if (now < hfRateLimitedUntil) {
-    // Еще действует таймаут ограничения скорости от Hugging Face
-    return;
-  }
+  if (now < hfRateLimitedUntil) return;
 
   isSyncing = true;
 
@@ -171,34 +261,134 @@ async function performHFSync() {
     }
 
     console.log(">>> [HuggingFace Sync] Отправка bot_database.db в Hugging Face...");
-    const fileContent = fs.readFileSync(dbPath);
+    
+    if (sqliteDb) {
+      try {
+        await sqliteDb.run("PRAGMA wal_checkpoint(TRUNCATE);");
+        await sqliteDb.run("VACUUM;");
+      } catch (vErr) {
+        console.error(">>> [HuggingFace Sync] Ошибка при WAL checkpoint / VACUUM:", vErr);
+      }
+    }
+
+    const fileContent = await fs.promises.readFile(dbPath);
+    if (fileContent.byteLength < 50000) {
+      console.warn(`>>> [HuggingFace Sync] Предупреждение: Отмена отправки, размер локальной базы (${fileContent.byteLength} B) слишком мал.`);
+      isSyncing = false;
+      return;
+    }
+
+    const blob = new Blob([fileContent]);
+
+    // 1. Попытка отправки в основной Bucket (RomanJordansky/DATABASE-ORION-MANAGER)
+    let uploadedSuccessfully = false;
+    try {
+      await uploadFiles({
+        accessToken: "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",
+        repo: {
+          type: "bucket",
+          name: "RomanJordansky/DATABASE-ORION-MANAGER",
+        },
+        files: [
+          {
+            path: "bot_data/bot_database.db",
+            content: blob,
+          },
+        ],
+      });
+      console.log(">>> [HuggingFace Sync] Файл bot_database.db успешно сохранен в основной Bucket (DATABASE-ORION-MANAGER)!");
+      uploadedSuccessfully = true;
+    } catch (bErr: any) {
+      console.warn(">>> [HuggingFace Sync] Ошибка записи в основной Bucket, пробую резервный Dataset:", bErr.message);
+    }
+
+    // 2. Резервная отправка в Dataset (ТОЛЬКО если к основному бакету подключиться не удалось)
+    if (!uploadedSuccessfully) {
+      try {
+        await uploadFiles({
+          accessToken: "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",
+          repo: {
+            type: "dataset",
+            name: "RomanJordansky/BOT_JORDANS-storage",
+          },
+          files: [
+            {
+              path: "bot_data/bot_database.db",
+              content: blob,
+            },
+          ],
+        });
+        console.log(">>> [HuggingFace Sync] Файл bot_database.db сохранен в резервный Dataset BOT_JORDANS-storage!");
+      } catch (dErr: any) {
+        console.warn(">>> [HuggingFace Sync] Ошибка сохранения в резервный Dataset:", dErr.message);
+      }
+    }
+
+    isDirty = false;
+  } catch (err: any) {
+    handleHFError(err);
+  } finally {
+    isSyncing = false;
+  }
+}
+
+export async function performLogsSync() {
+  if (!isLogsDirty || isLogsSyncing) return;
+  
+  const now = Date.now();
+  if (now < hfRateLimitedUntil) return;
+
+  isLogsSyncing = true;
+
+  try {
+    const dbPath = path.join(process.cwd(), "bot_logs.db");
+    if (!fs.existsSync(dbPath)) {
+      isLogsSyncing = false;
+      return;
+    }
+
+    console.log(">>> [HuggingFace Logs Sync] Отправка bot_logs.db в Hugging Face (LOGSBASE)...");
+    
+    if (logsDb) {
+      try {
+        await logsDb.run("VACUUM;");
+      } catch (vErr) {
+        console.error(">>> [HuggingFace Logs Sync] Ошибка при VACUUM:", vErr);
+      }
+    }
+
+    const fileContent = await fs.promises.readFile(dbPath);
     const blob = new Blob([fileContent]);
 
     await uploadFiles({
-      accessToken: "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",
+      accessToken: "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",
       repo: {
         type: "dataset",
-        name: "RomanJordansky/BOT_JORDANS-storage",
+        name: "RomanJordansky/LOGSBASE",
       },
       files: [
         {
-          path: "bot_data/bot_database.db",
+          path: "bot_logs/bot_logs.db",
           content: blob,
         },
       ],
     });
-    console.log(">>> [HuggingFace Sync] Файл bot_database.db успешно сохранен в Hugging Face!");
-    isDirty = false; // Успешно выгружено
+    console.log(">>> [HuggingFace Logs Sync] Файл bot_logs.db успешно сохранен в LOGSBASE!");
+    isLogsDirty = false;
   } catch (err: any) {
-    const msg = err?.message || String(err);
-    if (msg.includes("rate limit") || msg.includes("128 per hour") || msg.includes("429")) {
-      hfRateLimitedUntil = Date.now() + 30 * 60 * 1000; // Пауза на 30 минут
-      console.warn(">>> [HuggingFace Sync] Превышен лимит коммитов Hugging Face (128/час). Пауза синхронизации на 30 минут.");
-    } else {
-      console.error(">>> [HuggingFace Sync] Ошибка отправки в Hugging Face:", msg);
-    }
+    handleHFError(err);
   } finally {
-    isSyncing = false;
+    isLogsSyncing = false;
+  }
+}
+
+function handleHFError(err: any) {
+  const msg = err?.message || String(err);
+  if (msg.includes("rate limit") || msg.includes("128 per hour") || msg.includes("429")) {
+    hfRateLimitedUntil = Date.now() + 30 * 60 * 1000;
+    console.warn(">>> [HuggingFace Sync] Превышен лимит коммитов Hugging Face (128/час). Пауза синхронизации на 30 минут.");
+  } else {
+    console.error(">>> [HuggingFace Sync] Ошибка отправки в Hugging Face:", msg);
   }
 }
 
@@ -222,103 +412,130 @@ async function ensureReady() {
   await readyPromise;
 }
 
+function isValidSqliteBuffer(buf: Buffer | null): boolean {
+  if (!buf || buf.byteLength < 50000) return false;
+  try {
+    const header = buf.toString("utf8", 0, 16);
+    return header.startsWith("SQLite format 3");
+  } catch (e) {
+    return false;
+  }
+}
+
 async function initDatabase() {
   const dbPath = path.join(process.cwd(), "bot_database.db");
+  const logsPath = path.join(process.cwd(), "bot_logs.db");
   
-  // 1. Скачивание базы данных из HF
+  // 1. Скачивание базы данных из HF Bucket (Primary Source: DATABASE-ORION-MANAGER)
+  let downloadedBuf: Buffer | null = null;
   try {
-    console.log(">>> [Database] Загрузка bot_database.db из Hugging Face...");
-    const url = "https://huggingface.co/datasets/RomanJordansky/BOT_JORDANS-storage/resolve/main/bot_data/bot_database.db";
-    const res = await axios.get(url, {
-      headers: {
-        Authorization: "Bearer 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",
-      },
-      responseType: "arraybuffer",
+    console.log(">>> [Database] Загрузка bot_database.db из Hugging Face Bucket (DATABASE-ORION-MANAGER)...");
+    const bucketFile = await downloadFile({
+      accessToken: "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",
+      repo: { type: "bucket", name: "RomanJordansky/DATABASE-ORION-MANAGER" },
+      path: "bot_data/bot_database.db",
     });
-    fs.writeFileSync(dbPath, Buffer.from(res.data));
-    console.log(">>> [Database] Успешно загружен bot_database.db!");
-  } catch (err: any) {
-    console.warn(">>> [Database] Предупреждение: Не удалось загрузить базу данных из Hugging Face (проверяем или создаем локальный файл):", err.message);
+    if (bucketFile) {
+      const arrayBuf = await bucketFile.arrayBuffer();
+      const tempBuf = Buffer.from(arrayBuf);
+      if (isValidSqliteBuffer(tempBuf)) {
+        downloadedBuf = tempBuf;
+        console.log(`>>> [Database] Скачано из Bucket (валидный SQLite): ${downloadedBuf.byteLength} байт.`);
+      } else {
+        console.warn(`>>> [Database] Файл из Bucket поврежден или не является валидным SQLite (${tempBuf.byteLength} B), пробую Dataset...`);
+      }
+    }
+  } catch (bErr: any) {
+    console.warn(">>> [Database] Ошибка скачивания из Bucket, пробуем Dataset:", bErr.message);
   }
 
-  // 2. Открытие базы данных Sqlite
-  sqliteDb = new SqlitePromiseDb(dbPath);
+  if (!downloadedBuf) {
+    try {
+      console.log(">>> [Database] Загрузка bot_database.db из Hugging Face Dataset (BOT_JORDANS-storage)...");
+      const url = "https://huggingface.co/datasets/RomanJordansky/BOT_JORDANS-storage/resolve/main/bot_data/bot_database.db";
+      const res = await axios.get(url, {
+        headers: { Authorization: "Bearer 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" },
+        responseType: "arraybuffer",
+        timeout: 20000,
+      });
+      if (res.data) {
+        const tempBuf = Buffer.from(res.data);
+        if (isValidSqliteBuffer(tempBuf)) {
+          downloadedBuf = tempBuf;
+          console.log(`>>> [Database] Скачано из Dataset (валидный SQLite): ${downloadedBuf.byteLength} байт.`);
+        } else {
+          console.warn(">>> [Database] Файл из Dataset не прошел валидацию SQLite.");
+        }
+      }
+    } catch (err: any) {
+      console.error(">>> [Database] Ошибка загрузки базы из Dataset:", err.message);
+    }
+  }
 
-  // 3. Создание таблицы, если она не существует
-  await sqliteDb.run(`
+  const downloadedSize = downloadedBuf ? downloadedBuf.byteLength : 0;
+  const localSize = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0;
+  
+  if (downloadedBuf && downloadedSize > 50000) {
+    if (fs.existsSync(dbPath + "-wal")) try { fs.unlinkSync(dbPath + "-wal"); } catch (e) {}
+    if (fs.existsSync(dbPath + "-shm")) try { fs.unlinkSync(dbPath + "-shm"); } catch (e) {}
+    fs.writeFileSync(dbPath, downloadedBuf);
+    console.log(`>>> [Database] Успешно загружена и применена база с HF (${downloadedSize} байт)!`);
+  } else if (localSize > 50000) {
+    console.log(`>>> [Database] Используется локальный файл базы данных (${localSize} байт).`);
+  } else {
+    console.warn(">>> [Database] ВНИМАНИЕ: Не удалось загрузить базу данных ни из HF, ни из локального файла!");
+  }
+
+  // 1b. Скачивание базы данных логов из HF (LOGSBASE Dataset)
+  try {
+    console.log(">>> [Database] Загрузка bot_logs.db из Hugging Face Dataset (LOGSBASE)...");
+    const url = "https://huggingface.co/datasets/RomanJordansky/LOGSBASE/resolve/main/bot_logs/bot_logs.db";
+    const res = await axios.get(url, {
+      headers: { Authorization: "Bearer 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" },
+      responseType: "arraybuffer",
+    });
+    if (res.data && res.data.byteLength > 1000) {
+      if (fs.existsSync(logsPath + "-wal")) fs.unlinkSync(logsPath + "-wal");
+      if (fs.existsSync(logsPath + "-shm")) fs.unlinkSync(logsPath + "-shm");
+      fs.writeFileSync(logsPath, Buffer.from(res.data));
+      console.log(`>>> [Database] Успешно загружен bot_logs.db (${res.data.byteLength} байт)!`);
+    }
+  } catch (err: any) {
+    console.warn(">>> [Database] Предупреждение: Не удалось загрузить базу данных логов из Hugging Face.");
+  }
+
+  // 2. Открытие баз данных Sqlite
+  sqliteDb = new SqlitePromiseDb(dbPath);
+  logsDb = new SqlitePromiseDb(logsPath);
+
+  // 3. Создание таблиц
+  const createTableSql = `
     CREATE TABLE IF NOT EXISTS firestore_collections (
       collection TEXT,
       id TEXT,
       data TEXT,
       PRIMARY KEY (collection, id)
     )
-  `);
+  `;
+  await sqliteDb.run(createTableSql);
+  await logsDb.run(createTableSql);
 
-  // 4. Одноразовая проверка миграции
+  // 4. Инициализация таблиц завершена (база работает полностью на SQLite + Hugging Face)
   const countRow = await sqliteDb.get("SELECT count(*) as count FROM firestore_collections");
-  if (!countRow || countRow.count === 0) {
-    console.log(">>> [Database] Таблица SQLite firestore_collections пуста. Запускаем миграцию из Firestore...");
-    try {
-      const { initializeApp: fbInit } = await import("firebase/app");
-      const { getFirestore: fbGet, collection: fbCol, getDocs: fbGetDocs } = await import("firebase/firestore");
-      
-      const config = JSON.parse(fs.readFileSync("./firebase-applet-config.json", "utf-8"));
-      const fbApp = fbInit(config);
-      const fbDatabase = fbGet(fbApp, config.firestoreDatabaseId);
+  const logsCountRow = await logsDb.get("SELECT count(*) as count FROM firestore_collections");
+  console.log(`>>> [Database] Загружены SQLite таблицы. Записей в основной БД: ${countRow?.count || 0}, записей в логах: ${logsCountRow?.count || 0}`);
 
-      const collectionsToMigrate = ["users", "chats", "clans", "settings", "bot_settings", "networks"];
-      for (const colName of collectionsToMigrate) {
-        console.log(`>>> [Migration] Извлечение и миграция "${colName}" из Firestore...`);
-        try {
-          const snap = await fbGetDocs(fbCol(fbDatabase, colName));
-          let colCount = 0;
-          for (const doc of snap.docs) {
-            const docId = doc.id;
-            const docData = doc.data();
-            await sqliteDb.run(
-              "INSERT OR REPLACE INTO firestore_collections (collection, id, data) VALUES (?, ?, ?)",
-              [colName, docId, JSON.stringify(docData)]
-            );
-            colCount++;
-          }
-          console.log(`>>> [Migration] Мигрировано документов для "${colName}": ${colCount}`);
-        } catch (colErr: any) {
-          console.error(`>>> [Migration] Не удалось мигрировать "${colName}":`, colErr.message);
-        }
+  // 5. Загрузка данных из ОБОИХ SQLite в кэш-память docStore
+  const dbs = [sqliteDb, logsDb];
+  for (const db of dbs) {
+    const rows = await db!.all("SELECT collection, id, data FROM firestore_collections");
+    for (const row of rows) {
+      if (!docStore.has(row.collection)) {
+        docStore.set(row.collection, new Map());
       }
-      
-      // Немедленная выгрузка мигрированной базы данных
-      console.log(">>> [Migration] Отправка мигрированной базы данных в Hugging Face...");
-      const fileContent = fs.readFileSync(dbPath);
-      const blob = new Blob([fileContent]);
-      await uploadFiles({
-        accessToken: "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",
-        repo: {
-          type: "dataset",
-          name: "RomanJordansky/BOT_JORDANS-storage",
-        },
-        files: [
-          {
-            path: "bot_data/bot_database.db",
-            content: blob,
-          },
-        ],
-      });
-      console.log(">>> [Migration] Мигрированная база данных успешно сохранена в Hugging Face!");
-    } catch (migErr: any) {
-      console.error(">>> [Migration] Одноразовая миграция из Firestore не удалась или была пропущена:", migErr.message);
+      docStore.get(row.collection)!.set(row.id, JSON.parse(row.data));
     }
   }
-
-  // 5. Загрузка данных из SQLite в кэш-память docStore
-  const rows = await sqliteDb.all("SELECT collection, id, data FROM firestore_collections");
-  for (const row of rows) {
-    if (!docStore.has(row.collection)) {
-      docStore.set(row.collection, new Map());
-    }
-    docStore.get(row.collection)!.set(row.id, JSON.parse(row.data));
-  }
-  console.log(`>>> [Database] Загружено документов из SQLite: ${rows.length}`);
   
   isReady = true;
 }
@@ -506,15 +723,17 @@ class DocumentReferenceWrapper {
     docStore.get(this.collectionName)!.set(this.id, updated);
 
     // Сохранение локально в SQLite
-    if (sqliteDb) {
-      await sqliteDb.run(
+    const targetDb = LOGS_COLLECTIONS.includes(this.collectionName) ? logsDb : sqliteDb;
+    if (targetDb) {
+      await targetDb.run(
         "INSERT OR REPLACE INTO firestore_collections (collection, id, data) VALUES (?, ?, ?)",
         [this.collectionName, this.id, JSON.stringify(updated)]
       );
+      await targetDb.run("PRAGMA wal_checkpoint(TRUNCATE);").catch(() => {});
     }
 
     // Запуск фоновой синхронизации с Hugging Face
-    scheduleSync();
+    scheduleSync(this.collectionName);
   }
 
   async update(data: any) {
@@ -529,15 +748,17 @@ class DocumentReferenceWrapper {
     docStore.get(this.collectionName)!.set(this.id, updated);
 
     // Сохранение локально в SQLite
-    if (sqliteDb) {
-      await sqliteDb.run(
+    const targetDb = LOGS_COLLECTIONS.includes(this.collectionName) ? logsDb : sqliteDb;
+    if (targetDb) {
+      await targetDb.run(
         "INSERT OR REPLACE INTO firestore_collections (collection, id, data) VALUES (?, ?, ?)",
         [this.collectionName, this.id, JSON.stringify(updated)]
       );
+      await targetDb.run("PRAGMA wal_checkpoint(TRUNCATE);").catch(() => {});
     }
 
     // Запуск фоновой синхронизации с Hugging Face
-    scheduleSync();
+    scheduleSync(this.collectionName);
   }
 
   async delete() {
@@ -547,14 +768,16 @@ class DocumentReferenceWrapper {
     }
 
     // Удаление локально в SQLite
-    if (sqliteDb) {
-      await sqliteDb.run(
+    const targetDb = LOGS_COLLECTIONS.includes(this.collectionName) ? logsDb : sqliteDb;
+    if (targetDb) {
+      await targetDb.run(
         "DELETE FROM firestore_collections WHERE collection = ? AND id = ?",
         [this.collectionName, this.id]
       );
+      await targetDb.run("PRAGMA wal_checkpoint(TRUNCATE);").catch(() => {});
     }
 
     // Запуск фоновой синхронизации с Hugging Face
-    scheduleSync();
+    scheduleSync(this.collectionName);
   }
 }

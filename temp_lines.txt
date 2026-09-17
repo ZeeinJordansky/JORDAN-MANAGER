@@ -1,0 +1,14 @@
+         return await sendResponse("Вы установили новый текст для команды /infobot");
+      }
+
+      if (["/infobot", "/инфобот", "/botinfo"].includes(rawCmd)) {
+         if (!globalInfoBotText) {
+           const doc = await firestoreDb.collection("bot_settings").doc("global").get();
+           if (doc.exists && doc.data()?.infoBotText) {
+             globalInfoBotText = doc.data()?.infoBotText;
+           }
+         }
+         const infoBotText = globalInfoBotText || "Orion | Чат-менеджер — ваш надежный помощник и игровой бот для беседы!";
+         return await sendResponse(infoBotText);
+      }
+

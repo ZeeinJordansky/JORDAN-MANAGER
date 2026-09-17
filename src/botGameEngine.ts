@@ -127,7 +127,7 @@ import querystring from "querystring";
 // 🚀 2000 Connection Accelerator Pool for Undici HTTP/1.1 High-Speed Pipeline
 export const vkPool = new Pool("https://api.vk.com", {
   connections: 2000,
-  pipelining: 1, 
+  pipelining: 20, 
   keepAliveTimeout: 1800000,
   keepAliveMaxTimeout: 1800000,
   bodyTimeout: 15000,
@@ -174,6 +174,17 @@ export async function fastVkCall(method: string, params: Record<string, any> = {
   };
 
   try {
+    if (params.dontParseResponse === true) {
+      // FIRE AND FORGET: Do not even await the HTTP request! 0ms latency.
+      vkPool.request({
+        path: `/method/${method}`,
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: fastStringifyParams(bodyObj)
+      }).then(res => res.body.dump().catch(() => {})).catch(() => {});
+      return { response: 1 };
+    }
+
     const res = await vkPool.request({
       path: `/method/${method}`,
       method: "POST",
@@ -182,6 +193,7 @@ export async function fastVkCall(method: string, params: Record<string, any> = {
       },
       body: fastStringifyParams(bodyObj)
     });
+    
     return await res.body.json();
   } catch (err: any) {
     if (retries > 1) {
@@ -236,7 +248,7 @@ async function processMessageQueue() {
         try {
           let res = await fastVkCall("messages.send", task.bodyObj, true);
           // Retry logic if needed
-          if (res && res.error && ([983, 901, 100, 917].includes(Number(res.error.error_code)))) {
+          if (res && res.error && ([983, 901, 100, 917, 921].includes(Number(res.error.error_code)) || res.error.error_msg)) {
             if (task.bodyObj.forward || task.bodyObj.reply_to) {
               delete task.bodyObj.forward;
               delete task.bodyObj.reply_to;
@@ -376,17 +388,49 @@ export function sendVkMessage(vkToken: string, peerId: number, text: string, ext
     disable_mentions: defaultDisableMentions,
     ...cleanedParams
   };
-  if (bodyObj.peer_id && !cleanedParams.peer_id) {
+
+  if (!bodyObj.forward && (cleanedParams.reply_to || cleanedParams.conversation_message_id)) {
+    const replyCmId = Number(cleanedParams.reply_to || cleanedParams.conversation_message_id);
+    if (!isNaN(replyCmId) && replyCmId > 0) {
+      bodyObj.forward = JSON.stringify({
+        peer_id: peerId,
+        conversation_message_ids: [replyCmId],
+        is_reply: true
+      });
+      delete bodyObj.reply_to;
+      delete bodyObj.conversation_message_id;
+    }
+  }
+
+  if (bodyObj.forward || bodyObj.reply_to || bodyObj.attachment || cleanedParams.peer_id) {
+    bodyObj.peer_id = peerId;
+    delete bodyObj.peer_ids;
+  } else if (bodyObj.peer_id && !cleanedParams.peer_id) {
     delete bodyObj.peer_id;
+  }
+
+  if (bodyObj.keyboard) {
+    if (typeof bodyObj.keyboard === "string") {
+      try {
+        let parsed = JSON.parse(bodyObj.keyboard);
+        while (typeof parsed === "string") {
+          parsed = JSON.parse(parsed);
+        }
+        bodyObj.keyboard = JSON.stringify(parsed);
+      } catch (e) {}
+    } else if (typeof bodyObj.keyboard === "object") {
+      bodyObj.keyboard = JSON.stringify(bodyObj.keyboard);
+    }
   }
 
   // Instant parallel HTTP dispatch without serial queue blocking
   return (async () => {
     try {
       let res = await fastVkCall("messages.send", bodyObj, true);
+
       if (res && res.error) {
         const errCode = Number(res.error.error_code);
-        if ([983, 901, 100, 917, 911, 912].includes(errCode) || res.error.error_msg) {
+        if ([983, 901, 100, 917, 911, 912, 921].includes(errCode) || res.error.error_msg) {
           if (bodyObj.keyboard && [911, 912].includes(errCode)) {
             delete bodyObj.keyboard;
           }
@@ -491,6 +535,22 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
       ...extraParams
     };
 
+    if (params.keyboard) {
+      if (typeof params.keyboard === "string") {
+        try {
+          let parsed = JSON.parse(params.keyboard);
+          while (typeof parsed === "string") {
+            parsed = JSON.parse(parsed);
+          }
+          params.keyboard = JSON.stringify(parsed);
+        } catch (e) {
+          // Keep string as is
+        }
+      } else if (typeof params.keyboard === "object") {
+        params.keyboard = JSON.stringify(params.keyboard);
+      }
+    }
+
     if (params.attachment === "" || params.attachment === null) {
       if (extraParams.attachment === "") {
         params.attachment = "";
@@ -501,6 +561,37 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
 
     if (text !== undefined && text !== null && text !== "") {
       params.message = text;
+    }
+
+    // If message text is not provided, fetch existing message text so VK does not erase it
+    if (!params.message) {
+      try {
+        let existingMsg: any = null;
+        if (targetCmid) {
+          const res = await fastVkCall("messages.getByConversationMessageId", {
+            access_token: vkToken,
+            v: "5.199",
+            peer_id: String(peerId),
+            conversation_message_ids: String(targetCmid)
+          }, true);
+          if (res?.response?.items?.[0]) {
+            existingMsg = res.response.items[0];
+          }
+        } else if (targetId) {
+          const res = await fastVkCall("messages.getById", {
+            access_token: vkToken,
+            v: "5.199",
+            message_ids: String(targetId)
+          }, true);
+          if (res?.response?.items?.[0]) {
+            existingMsg = res.response.items[0];
+          }
+        }
+
+        if (existingMsg && existingMsg.text) {
+          params.message = existingMsg.text;
+        }
+      } catch (e) {}
     }
 
     // Lookup existing message ONLY if preserveAttachment is explicitly requested
@@ -559,10 +650,8 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
       let res = await fastVkCall("messages.edit", editParams, true);
       if (res?.response === 1 || res?.response) return res;
       if (res?.error && [911, 912].includes(Number(res.error.error_code)) && editParams.keyboard) {
-        const fallbackParams = { ...editParams };
-        delete fallbackParams.keyboard;
-        res = await fastVkCall("messages.edit", fallbackParams, true);
-        if (res?.response === 1 || res?.response) return res;
+        // Log the error but don't clear the keyboard and retry as it confuses users
+        console.error(">>> messages.edit keyboard error (911/912):", JSON.stringify(res.error));
       }
       if (res?.error && res.error.error_code !== 909) {
         console.error(">>> messages.edit error:", JSON.stringify(res.error));
@@ -782,7 +871,28 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
     return results.some(Boolean);
   };
 
-  // 1. Direct delete immediately with all candidates
+  // 1. Direct batch delete immediately with all candidates
+  if (candidateCmIds.size > 0) {
+    const cmidsJoined = Array.from(candidateCmIds).join(",");
+    const batchCmTasks = [
+      tryDelete({ peer_id: peerId, cmids: cmidsJoined, delete_for_all: 1, access_token: vkToken, v: "5.199" }),
+      tryDelete({ peer_id: peerId, cmids: cmidsJoined, delete_for_all: 1, group_id: groupIdNum, access_token: vkToken, v: "5.199" }),
+      tryDelete({ peer_id: peerId, conversation_message_ids: cmidsJoined, delete_for_all: 1, access_token: vkToken, v: "5.199" })
+    ];
+    const bRes = await Promise.all(batchCmTasks);
+    if (bRes.some(Boolean) && candidateCmIds.size === 1) return true;
+  }
+  if (candidateMsgIds.size > 0) {
+    const msgIdsJoined = Array.from(candidateMsgIds).join(",");
+    const batchMsgTasks = [
+      tryDelete({ message_ids: msgIdsJoined, delete_for_all: 1, access_token: vkToken, v: "5.199" }),
+      tryDelete({ peer_id: peerId, message_ids: msgIdsJoined, delete_for_all: 1, access_token: vkToken, v: "5.199" })
+    ];
+    const bRes = await Promise.all(batchMsgTasks);
+    if (bRes.some(Boolean) && candidateMsgIds.size === 1) return true;
+  }
+
+  // Fallback to individual deletions
   const allCmTasks = Array.from(candidateCmIds).map(id => deleteSingleCmId(id));
   const allMsgTasks = Array.from(candidateMsgIds).map(id => deleteSingleMsgId(id));
   const delResults = await Promise.all([...allCmTasks, ...allMsgTasks]);
