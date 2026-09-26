@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, MessageSquare, Zap, Coins, Radio, MonitorSmartphone, Users, Bot, LogOut } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Zap, Coins, Radio, MonitorSmartphone, Users, Bot, LogOut, Database } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -15,6 +15,7 @@ export default function Sidebar({ activeTab, setActiveTab, isRoot, login, onLogo
     { id: 'chats', label: 'Беседы с чат-менеджером', icon: MessageSquare },
     { id: 'actions', label: 'Быстрые действия', icon: Zap },
     ...(isRoot ? [
+      { id: 'database', label: 'Управление базой данных', icon: Database },
       { id: 'economy', label: 'Управление экономикой', icon: Coins },
       { id: 'broadcasts', label: 'Управление рассылками', icon: Radio },
       { id: 'sessions', label: 'Сессии', icon: MonitorSmartphone },

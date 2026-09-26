@@ -12,6 +12,7 @@ export default function DatabaseTab({ secret }: DatabaseTabProps) {
   });
 
   const [selectedCollection, setSelectedCollection] = useState<string>('users');
+  const [allTables, setAllTables] = useState<string[]>(['users', 'chats', 'messages', 'promocodes', 'bans', 'mutes', 'warns', 'panel_logs']);
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -30,16 +31,116 @@ export default function DatabaseTab({ secret }: DatabaseTabProps) {
   const [docJson, setDocJson] = useState<string>('');
   const [jsonError, setJsonError] = useState<string | null>(null);
 
-  const collections = [
-    { id: 'users', label: 'Пользователи (users)' },
-    { id: 'chats', label: 'Беседы (chats)' },
-    { id: 'messages', label: 'Сообщения (messages)' },
-    { id: 'promocodes', label: 'Промокоды (promocodes)' },
-    { id: 'bans', label: 'Баны (bans)' },
-    { id: 'mutes', label: 'Муты (mutes)' },
-    { id: 'warns', label: 'Варны (warns)' },
-    { id: 'panel_logs', label: 'Логи Панели (panel_logs)' }
-  ];
+  // PostgreSQL state
+  const [pgStatus, setPgStatus] = useState<any>(null);
+  const [pgLoading, setPgLoading] = useState<boolean>(false);
+  const [vacuumLoading, setVacuumLoading] = useState<boolean>(false);
+  const [syncLoading, setSyncLoading] = useState<boolean>(false);
+  
+  const fetchTables = async () => {
+    try {
+      const res = await fetch('/api/panel/db/tables', {
+        headers: { 'Authorization': `Bearer ${secret}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.length > 0) {
+          // Merge with core firestore-style collections for better UX
+          const core = ['users', 'chats', 'messages', 'promocodes', 'bans', 'mutes', 'warns', 'panel_logs'];
+          const combined = Array.from(new Set([...core, ...data]));
+          setAllTables(combined.sort());
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchPgStatus = async () => {
+    setPgLoading(true);
+    try {
+      const res = await fetch('/api/panel/dashboard/postgres/status', {
+        headers: { 'Authorization': `Bearer ${secret}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPgStatus(data);
+      }
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setPgLoading(false);
+    }
+  };
+
+  const handleSyncToPostgres = async () => {
+    if (!confirm('Вы действительно хотите перенести ВСЕ данные из SQLite в PostgreSQL? Это создаст полную копию таблиц.')) {
+      return;
+    }
+    setSyncLoading(true);
+    try {
+      const res = await fetch('/api/panel/dashboard/postgres/sync_from_sqlite', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${secret}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(`Синхронизация завершена! Скопировано ${data.totalRowsCopied} записей в ${data.syncedTables.length} таблиц.`);
+        fetchPgStatus();
+      } else {
+        showToast(data.error || 'Ошибка при синхронизации данных', 'error');
+      }
+    } catch (e: any) {
+      showToast(`Ошибка: ${e.message}`, 'error');
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
+  const handleSyncFromOrionBucket = async () => {
+    if (!confirm('Вы действительно хотите скачать базу из бакета DATABASE-ORION-MANAGER и перенести её в PostgreSQL?')) {
+      return;
+    }
+    setSyncLoading(true);
+    try {
+      const res = await fetch('/api/panel/dashboard/postgres/sync_from_hf_bucket', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${secret}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(`Синхронизация из бакета завершена! Скопировано ${data.totalRowsCopied} записей в ${data.syncedTables.length} таблиц.`);
+        fetchPgStatus();
+      } else {
+        showToast(data.error || 'Ошибка при синхронизации из бакета', 'error');
+      }
+    } catch (e: any) {
+      showToast(`Ошибка: ${e.message}`, 'error');
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
+  const handleRunPgVacuum = async () => {
+    setVacuumLoading(true);
+    try {
+      const res = await fetch('/api/panel/dashboard/postgres/vacuum', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${secret}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(`Сжатие PostgreSQL завершено! Освобождено ${data.freedMb} МБ. Новый размер: ${data.formattedSize}`);
+        fetchPgStatus();
+      } else {
+        showToast(data.error || 'Ошибка при выполнении сжатия', 'error');
+      }
+    } catch (e: any) {
+      showToast(`Ошибка: ${e.message}`, 'error');
+    } finally {
+      setVacuumLoading(false);
+    }
+  };
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -68,7 +169,9 @@ export default function DatabaseTab({ secret }: DatabaseTabProps) {
   };
 
   useEffect(() => {
+    fetchTables();
     fetchDocuments(selectedCollection);
+    fetchPgStatus();
   }, [selectedCollection, isSpecial]);
 
   const handleUnlockDatabase = async (e: React.FormEvent) => {
@@ -311,20 +414,100 @@ export default function DatabaseTab({ secret }: DatabaseTabProps) {
         </div>
       </div>
 
+      {/* PostgreSQL Status & Bucket Storage Card */}
+      <div className="bg-[#121824] rounded-xl border border-indigo-500/20 p-4 space-y-3 relative overflow-hidden shadow-lg shadow-indigo-950/20">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/30 rounded-xl text-indigo-400 font-bold text-lg">
+              🐘
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-bold text-sm text-white">PostgreSQL 16 (Hugging Face)</h4>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                  pgStatus?.online 
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' 
+                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                }`}>
+                  {pgLoading ? 'Проверка...' : pgStatus?.online ? '🟢 Онлайн (HTTPS Proxy)' : '🟡 В фоновом режиме'}
+                </span>
+              </div>
+              <p className="text-xs text-text-muted mt-0.5">
+                Хранилище: <span className="text-indigo-300 font-mono font-bold">{pgStatus?.formattedSize || '16 MB'}</span> | Таблиц: <span className="text-white font-mono">{pgStatus?.tableCount || 1}</span> | Активный движок бота: <span className="text-sky-400 font-bold">SQLite</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={fetchPgStatus}
+              disabled={pgLoading}
+              className="px-3 py-2 bg-[#0b0e14] hover:bg-white/5 border border-border-dim rounded-xl text-xs font-semibold text-text-muted flex items-center gap-1.5 transition-colors"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${pgLoading ? 'animate-spin' : ''}`} />
+              Статус
+            </button>
+            <button
+              onClick={handleSyncToPostgres}
+              disabled={syncLoading}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-emerald-900/40 transition-colors uppercase tracking-wider"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? 'animate-spin' : ''}`} />
+              {syncLoading ? 'Копирование...' : 'Синхронизация (Все локальные .db → Postgres)'}
+            </button>
+            <button
+              onClick={handleSyncFromOrionBucket}
+              disabled={syncLoading}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-amber-900/40 transition-colors uppercase tracking-wider"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? 'animate-spin' : ''}`} />
+              {syncLoading ? 'Копирование...' : 'Миграция из DATABASE-ORION-MANAGER'}
+            </button>
+            <button
+              onClick={handleRunPgVacuum}
+              disabled={vacuumLoading}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-indigo-900/40 transition-colors uppercase tracking-wider"
+            >
+              <Database className="w-4 h-4" />
+              {vacuumLoading ? 'Сжатие...' : 'Вакуум & Сжатие (Postgres)'}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1 border-t border-white/5 text-[11px]">
+          <div className="bg-black/30 rounded-lg p-2 border border-white/5 flex items-center justify-between">
+            <span className="text-text-muted">HF Space:</span>
+            <a href="https://huggingface.co/spaces/RomanJordansky/BOT_JORDANS" target="_blank" rel="noreferrer" className="text-sky-400 font-mono font-semibold hover:underline truncate max-w-[160px]">
+              RomanJordansky/BOT_JORDANS
+            </a>
+          </div>
+          <div className="bg-black/30 rounded-lg p-2 border border-white/5 flex items-center justify-between">
+            <span className="text-text-muted">Привязанный Бакет:</span>
+            <a href="https://huggingface.co/buckets/RomanJordansky/postre" target="_blank" rel="noreferrer" className="text-indigo-400 font-mono font-semibold hover:underline truncate max-w-[160px]">
+              RomanJordansky/postre
+            </a>
+          </div>
+          <div className="bg-black/30 rounded-lg p-2 border border-white/5 flex items-center justify-between sm:col-span-2 lg:col-span-1">
+            <span className="text-text-muted">Режим подключения:</span>
+            <span className="text-emerald-400 font-bold font-mono">HTTPS REST API Proxy (443)</span>
+          </div>
+        </div>
+      </div>
+
       {/* Collection tabs & Search */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-thin">
-          {collections.map((coll) => (
+          {allTables.map((tblId) => (
             <button
-              key={coll.id}
-              onClick={() => setSelectedCollection(coll.id)}
+              key={tblId}
+              onClick={() => setSelectedCollection(tblId)}
               className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
-                selectedCollection === coll.id
+                selectedCollection === tblId
                   ? 'bg-sky-500/10 border-[#00BFFF] text-[#00E5FF] shadow-sm shadow-blue-950/20'
                   : 'bg-bg-card border-border-dim text-text-muted hover:border-white/10'
               }`}
             >
-              {coll.label}
+              {tblId}
             </button>
           ))}
         </div>

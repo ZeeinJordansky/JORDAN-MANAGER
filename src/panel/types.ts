@@ -19,6 +19,22 @@ export interface PanelSession {
   isCurrent?: boolean;
 }
 
+export interface DatabaseInfo {
+  mainDbSize: number;
+  mainDbFormatted: string;
+  walSize: number;
+  walFormatted: string;
+  totalSize: number;
+  totalFormatted: string;
+  logsDbSize: number;
+  logsDbFormatted: string;
+  walEnabled: boolean;
+  journalMode: string;
+  autoVacuum: number;
+  pageCount: number;
+  pageSize: number;
+}
+
 export interface DashboardStats {
   totalEconomy: number;
   activeChatMutesCount: number;
@@ -35,6 +51,7 @@ export interface DashboardStats {
   totalUsersCount: number;
   totalChatsCount: number;
   uptimeSeconds: number;
+  database?: DatabaseInfo;
 }
 
 export interface ChatItem {

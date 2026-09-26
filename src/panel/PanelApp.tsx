@@ -11,6 +11,7 @@ import EconomyPage from './pages/EconomyPage';
 import BroadcastsPage from './pages/BroadcastsPage';
 import SessionsPage from './pages/SessionsPage';
 import UsersPage from './pages/UsersPage';
+import DatabasePage from './pages/DatabasePage';
 
 export default function PanelApp() {
   const [session, setSession] = useState<{ token: string; isRoot: boolean; login: string } | null>(null);
@@ -78,6 +79,7 @@ export default function PanelApp() {
           {activeTab === 'broadcasts' && session.isRoot && <BroadcastsPage />}
           {activeTab === 'sessions' && session.isRoot && <SessionsPage />}
           {activeTab === 'users' && session.isRoot && <UsersPage />}
+          {activeTab === 'database' && session.isRoot && <DatabasePage />}
         </main>
       </div>
     </div>

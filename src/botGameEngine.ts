@@ -259,17 +259,20 @@ async function processMessageQueue() {
           if (res && typeof res === "object") {
             const rawResp = res.response !== undefined ? res.response : res;
             if (typeof rawResp === "number") {
-              task.resolve({ response: rawResp, message_id: rawResp });
+              task.resolve({ response: rawResp, message_id: rawResp, conversation_message_id: rawResp });
             } else if (typeof rawResp === "object" && rawResp !== null) {
               if (Array.isArray(rawResp) && rawResp[0]) {
+                const item = rawResp[0];
+                const resVal = item.conversation_message_id || item.message_id || item;
                 task.resolve({
-                  response: rawResp[0].message_id || rawResp,
-                  message_id: rawResp[0].message_id,
-                  conversation_message_id: rawResp[0].conversation_message_id
+                  response: resVal,
+                  message_id: item.message_id,
+                  conversation_message_id: item.conversation_message_id
                 });
               } else {
+                const resVal = rawResp.conversation_message_id || rawResp.message_id || rawResp;
                 task.resolve({
-                  response: rawResp.message_id || rawResp,
+                  response: resVal,
                   message_id: rawResp.message_id,
                   conversation_message_id: rawResp.conversation_message_id
                 });
@@ -295,17 +298,20 @@ async function processMessageQueue() {
 
 export const requestContext = new AsyncLocalStorage<any>();
 
-const recentSentMessages = new LRUCache<string, number>({ max: 10000, ttl: 5000 });
-const repliedTargetMessages = new LRUCache<string, number>({ max: 10000, ttl: 15000 });
+const recentSentMessages = new LRUCache<string, number>({ max: 10000, ttl: 60000 });
+const repliedTargetMessages = new LRUCache<string, number>({ max: 10000, ttl: 30000 });
 
 export function sendVkMessage(vkToken: string, peerId: number, text: string, extraParams: any = {}): Promise<any> {
   text = formatVkText(text);
 
-  // Deduplicate exact same message to same peer within 1200ms
-  const sendKey = `${peerId}_${(text || "").trim().slice(0, 100)}`;
+  // Deduplicate exact same message to same peer
+  const sendKey = `${peerId}_${(text || "").trim().slice(0, 150)}_${extraParams.attachment || ""}`;
   const now = Date.now();
   const lastSent = recentSentMessages.get(sendKey);
-  if (!extraParams.forceSend && lastSent && (now - lastSent < 1200)) {
+  const isSystemNotice = text && (text.includes("#VACUUM") || text.includes("#NAMES") || text.includes("#PRUNE") || text.includes("зарплата") || text.includes("Х2 режим"));
+  const dedupThreshold = isSystemNotice ? 60000 : 5000;
+  if (!extraParams.forceSend && lastSent && (now - lastSent < dedupThreshold)) {
+    console.log(`[DEDUP] Dropping duplicate message to peer ${peerId}: ${text.slice(0, 60)}...`);
     return Promise.resolve(null);
   }
   recentSentMessages.set(sendKey, now);
@@ -351,30 +357,8 @@ export function sendVkMessage(vkToken: string, peerId: number, text: string, ext
   }
 
   let randomId = extraParams.random_id;
-  if (!randomId && !extraParams.dedup_key) {
-    const ctx = requestContext.getStore();
-    if (ctx && ctx.msgId) {
-      extraParams.dedup_key = `${ctx.msgId}_${ctx.seq++}`;
-    }
-  }
-  if (!randomId && extraParams.dedup_key) {
-    let hash = 0;
-    const str = String(extraParams.dedup_key);
-    for (let i = 0; i < str.length; i++) {
-      hash = ((hash << 5) - hash) + str.charCodeAt(i);
-      hash |= 0;
-    }
-    randomId = (Math.abs(hash) % 2000000000) + 1;
-  }
   if (!randomId) {
-    const timeBucket = Math.floor(Date.now() / 2000);
-    const str = `${peerId}_${text.trim()}_${timeBucket}`;
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = ((hash << 5) - hash) + str.charCodeAt(i);
-      hash |= 0;
-    }
-    randomId = (Math.abs(hash) % 2000000000) + 1;
+    randomId = Math.floor(Math.random() * 1000000000) + Math.floor(Math.random() * 1000000000) + 1;
   }
   const { dedup_key, forceSend, ...cleanedParams } = extraParams;
 
@@ -402,11 +386,12 @@ export function sendVkMessage(vkToken: string, peerId: number, text: string, ext
     }
   }
 
-  if (bodyObj.forward || bodyObj.reply_to || bodyObj.attachment || cleanedParams.peer_id) {
-    bodyObj.peer_id = peerId;
-    delete bodyObj.peer_ids;
-  } else if (bodyObj.peer_id && !cleanedParams.peer_id) {
+  // Use peer_ids to get conversation_message_id in the response for chats
+  if (peerId > 2000000000 && !bodyObj.peer_ids && !cleanedParams?.peer_id) {
+    bodyObj.peer_ids = String(peerId);
     delete bodyObj.peer_id;
+  } else if (!bodyObj.peer_ids) {
+    bodyObj.peer_id = peerId;
   }
 
   if (bodyObj.keyboard) {
@@ -447,24 +432,26 @@ export function sendVkMessage(vkToken: string, peerId: number, text: string, ext
       }
       if (res && typeof res === "object") {
         const rawResp = res.response !== undefined ? res.response : res;
+        
+        // Handle array response from peer_ids
+        if (Array.isArray(rawResp) && rawResp[0]) {
+          return {
+            response: rawResp[0].message_id || rawResp[0].conversation_message_id || rawResp[0],
+            message_id: rawResp[0].message_id,
+            conversation_message_id: rawResp[0].conversation_message_id,
+            peer_id: rawResp[0].peer_id || peerId
+          };
+        }
+        
         if (typeof rawResp === "number") {
           return { response: rawResp, message_id: rawResp, peer_id: peerId };
         } else if (typeof rawResp === "object" && rawResp !== null) {
-          if (Array.isArray(rawResp) && rawResp[0]) {
-            return {
-              response: rawResp[0].message_id || rawResp[0].conversation_message_id || rawResp,
-              message_id: rawResp[0].message_id,
-              conversation_message_id: rawResp[0].conversation_message_id,
-              peer_id: rawResp[0].peer_id || peerId
-            };
-          } else {
-            return {
-              response: rawResp.message_id || rawResp.conversation_message_id || rawResp,
-              message_id: rawResp.message_id,
-              conversation_message_id: rawResp.conversation_message_id,
-              peer_id: rawResp.peer_id || peerId
-            };
-          }
+          return {
+            response: rawResp.message_id || rawResp.conversation_message_id || rawResp,
+            message_id: rawResp.message_id,
+            conversation_message_id: rawResp.conversation_message_id,
+            peer_id: rawResp.peer_id || peerId
+          };
         }
       }
       return res;
@@ -526,13 +513,68 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
       } catch (e) {}
     }
 
+    const shouldPreserve = extraParams.preserveAttachment === true || (extraParams.attachment === undefined && !extraParams.deleteAttachment);
+    let originalText = "";
+    let originalAttachments: string[] = [];
+    if (shouldPreserve) {
+      try {
+        let msgRes: any = null;
+        if (targetCmid && peerId > 2000000000) {
+          msgRes = await fastVkCall("messages.getByConversationMessageId", {
+            access_token: vkToken,
+            v: "5.199",
+            peer_id: peerId,
+            conversation_message_ids: String(targetCmid)
+          }, true);
+          if (!msgRes?.response?.items?.[0]) {
+            const hist = await fastVkCall("messages.getHistory", {
+              access_token: vkToken,
+              v: "5.199",
+              peer_id: peerId,
+              count: 20
+            }, true);
+            const found = hist?.response?.items?.find((m: any) => m.conversation_message_id === targetCmid || m.id === targetId);
+            if (found) {
+              msgRes = { response: { items: [found] } };
+            }
+          }
+        } else if (targetId) {
+          msgRes = await fastVkCall("messages.getById", {
+            access_token: vkToken,
+            v: "5.199",
+            message_ids: String(targetId)
+          }, true);
+        }
+        const origMsg = msgRes?.response?.items?.[0];
+        if (origMsg) {
+          if (text === undefined || text === null) {
+            originalText = origMsg.text || "";
+          }
+          if (Array.isArray(origMsg.attachments)) {
+            for (const att of origMsg.attachments) {
+              const type = att.type;
+              const data = att[type];
+              if (data && data.owner_id !== undefined && data.id !== undefined) {
+                const key = data.access_key ? `_${data.access_key}` : "";
+                originalAttachments.push(`${type}${data.owner_id}_${data.id}${key}`);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[editVkMessage] Error fetching original message for preserve:", e);
+      }
+    }
+
+    const { preserveAttachment, deleteAttachment, ...cleanExtra } = extraParams;
     const params: any = {
       access_token: vkToken,
-      v: "5.199",
+      v: "5.131",
       peer_id: peerId,
       keep_forward_messages: 1,
-      keep_snippets: 1,
-      ...extraParams
+      keep_snippets: 0,
+      dont_parse_links: 1,
+      ...cleanExtra
     };
 
     if (params.keyboard) {
@@ -551,124 +593,59 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
       }
     }
 
-    if (params.attachment === "" || params.attachment === null) {
-      if (extraParams.attachment === "") {
+    if (text !== undefined && text !== null) {
+      params.message = text;
+    } else if (originalText) {
+      params.message = originalText;
+    } else {
+      params.message = "\u200b";
+    }
+
+    if (params.attachment === undefined) {
+      if (originalAttachments.length > 0) {
+        params.attachment = originalAttachments.join(",");
+      } else if (deleteAttachment) {
         params.attachment = "";
       } else {
         delete params.attachment;
       }
     }
 
-    if (text !== undefined && text !== null && text !== "") {
-      params.message = text;
+    if (params.attachment === "" || params.attachment === null) {
+      if (deleteAttachment) {
+        params.attachment = "";
+      } else {
+        delete params.attachment;
+      }
     }
 
-    // If message text is not provided, fetch existing message text so VK does not erase it
-    if (!params.message) {
-      try {
-        let existingMsg: any = null;
-        if (targetCmid) {
-          const res = await fastVkCall("messages.getByConversationMessageId", {
-            access_token: vkToken,
-            v: "5.199",
-            peer_id: String(peerId),
-            conversation_message_ids: String(targetCmid)
-          }, true);
-          if (res?.response?.items?.[0]) {
-            existingMsg = res.response.items[0];
-          }
-        } else if (targetId) {
-          const res = await fastVkCall("messages.getById", {
-            access_token: vkToken,
-            v: "5.199",
-            message_ids: String(targetId)
-          }, true);
-          if (res?.response?.items?.[0]) {
-            existingMsg = res.response.items[0];
-          }
-        }
-
-        if (existingMsg && existingMsg.text) {
-          params.message = existingMsg.text;
-        }
-      } catch (e) {}
-    }
-
-    // Lookup existing message ONLY if preserveAttachment is explicitly requested
-    if (extraParams.preserveAttachment === true && extraParams.attachment === undefined) {
-      try {
-        let existingMsg: any = null;
-        if (targetCmid) {
-          const res = await fastVkCall("messages.getByConversationMessageId", {
-            access_token: vkToken,
-            v: "5.199",
-            peer_id: String(peerId),
-            conversation_message_ids: String(targetCmid)
-          }, true);
-          if (res?.response?.items?.[0]) {
-            existingMsg = res.response.items[0];
-          }
-        } else if (targetId) {
-          const res = await fastVkCall("messages.getById", {
-            access_token: vkToken,
-            v: "5.199",
-            message_ids: String(targetId)
-          }, true);
-          if (res?.response?.items?.[0]) {
-            existingMsg = res.response.items[0];
-          }
-        }
-
-        if (existingMsg) {
-          if ((text === undefined || text === null || text === "") && existingMsg.text) {
-            params.message = existingMsg.text;
-          }
-          if (Array.isArray(existingMsg.attachments) && existingMsg.attachments.length > 0) {
-            const atts: string[] = [];
-            for (const att of existingMsg.attachments) {
-              const type = att.type;
-              const obj = att[type];
-              if (obj && obj.owner_id !== undefined && obj.id !== undefined) {
-                let s = `${type}${obj.owner_id}_${obj.id}`;
-                if (obj.access_key) s += `_${obj.access_key}`;
-                atts.push(s);
-              }
-            }
-            if (atts.length > 0) {
-              params.attachment = atts.join(",");
-            }
-          }
-        }
-      } catch (e) {}
-    }
-
-    if (!params.message && text !== undefined && text !== null) {
-      params.message = text;
+    // Always append a zero-width space if we have an attachment to force VK to refresh the message content
+    if (params.attachment) {
+      params.message = (params.message || "") + "\u200b";
     }
 
     const tryEdit = async (editParams: any) => {
-      let res = await fastVkCall("messages.edit", editParams, true);
-      if (res?.response === 1 || res?.response) return res;
-      if (res?.error && [911, 912].includes(Number(res.error.error_code)) && editParams.keyboard) {
-        // Log the error but don't clear the keyboard and retry as it confuses users
-        console.error(">>> messages.edit keyboard error (911/912):", JSON.stringify(res.error));
+      console.log(`[editVkMessage] Method: messages.edit, Params: ${JSON.stringify({ ...editParams, access_token: "REDACTED" })}`);
+      const res = await fastVkCall("messages.edit", editParams, true);
+      if (res?.response === 1 || res?.response) {
+        console.log(`[editVkMessage] Success for peer ${peerId}`);
+        return res;
       }
-      if (res?.error && res.error.error_code !== 909) {
-        console.error(">>> messages.edit error:", JSON.stringify(res.error));
+      if (res?.error) {
+        console.error(`[editVkMessage] Error for peer ${peerId}: ${JSON.stringify(res.error)}`);
       }
       return null;
     };
 
+    // Try conversation_message_id + peer_id first, as it's more reliable in chats
     if (targetCmid) {
-      const res = await tryEdit({ ...params, conversation_message_id: targetCmid });
+      const res = await tryEdit({ ...params, conversation_message_id: targetCmid, peer_id: peerId });
       if (res) return res;
     }
 
+    // Fallback to global message_id
     if (targetId) {
-      let res = await tryEdit({ ...params, message_id: targetId });
-      if (res) return res;
-
-      res = await tryEdit({ ...params, conversation_message_id: targetId });
+      const res = await tryEdit({ ...params, message_id: targetId, peer_id: peerId });
       if (res) return res;
     }
 
@@ -681,14 +658,22 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
 
 export async function sendVkToast(vkToken: string, eventId: string, userId: number, peerId: number, text: string) {
   try {
-    await fastVkCall("messages.sendMessageEventAnswer", {
+    let cleanText = typeof text === "string" ? text : String(text || "");
+    if (cleanText.length > 90) {
+      cleanText = cleanText.slice(0, 87) + "...";
+    }
+    const res = await fastVkCall("messages.sendMessageEventAnswer", {
       event_id: eventId,
       user_id: userId,
       peer_id: peerId,
-      event_data: JSON.stringify({ type: "show_snackbar", text }),
+      event_data: JSON.stringify({ type: "show_snackbar", text: cleanText }),
       access_token: vkToken,
       v: "5.131"
     }, false);
+    if (res?.error) {
+      console.error(`[sendVkToast] Error answering event ${eventId}:`, res.error);
+    }
+    return res;
   } catch (e: any) {
     console.error("sendVkToast error:", e.message);
   }
@@ -704,12 +689,20 @@ export async function answerVkEvent(vkToken: string, eventId: string, userId: nu
       v: "5.131"
     };
     if (eventData) {
-      if (typeof eventData === "object" && eventData.text && !eventData.type) {
-        eventData = { type: "show_snackbar", text: eventData.text };
+      let data = eventData;
+      if (typeof data === "object" && data.text && !data.type) {
+        data = { type: "show_snackbar", text: data.text };
       }
-      params.event_data = typeof eventData === "string" ? eventData : JSON.stringify(eventData);
+      if (typeof data === "object" && data.type === "show_snackbar" && typeof data.text === "string" && data.text.length > 90) {
+        data.text = data.text.slice(0, 87) + "...";
+      }
+      params.event_data = typeof data === "string" ? data : JSON.stringify(data);
     }
-    await fastVkCall("messages.sendMessageEventAnswer", params, false);
+    const res = await fastVkCall("messages.sendMessageEventAnswer", params, false);
+    if (res?.error) {
+      console.error(`[answerVkEvent] Error answering event ${eventId}:`, res.error);
+    }
+    return res;
   } catch (e: any) {
     console.error("answerVkEvent error:", e.message);
   }
@@ -734,11 +727,23 @@ export function formatTimeRemaining(ms: number) {
 export function formatVkText(text: string): string {
   if (!text) return "";
 
+  // Always capitalize "пользовател..." / "сообществ..." when directly following an emoji
+  text = text.replace(/([\p{Extended_Pictographic}\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}]\s*)(пользовател[а-яё]*|сообществ[а-яё]*)/gui, (match, p1, p2) => {
+    return p1 + p2.charAt(0).toUpperCase() + p2.slice(1);
+  });
+
+  // Capitalize inside mentions like [id123|пользователь]
+  text = text.replace(/(\[(?:id|club)\d+\|)(пользовател[а-яё]*|сообществ[а-яё]*)/gui, (match, p1, p2) => {
+    return p1 + p2.charAt(0).toUpperCase() + p2.slice(1);
+  });
+
+  // Capitalize at beginning of line or string
+  text = text.replace(/(^|\n)(пользовател[а-яё]*|сообществ[а-яё]*)/gui, (match, p1, p2) => {
+    return p1 + p2.charAt(0).toUpperCase() + p2.slice(1);
+  });
+
   // ⚡ 0ms Fast Short-Circuit for Plain Text
   if (text.indexOf("~") === -1 && text.indexOf("*") === -1 && text.indexOf("_") === -1 && text.indexOf("`") === -1 && text.indexOf("#") === -1) {
-    if (text.indexOf("пользователю") !== -1) {
-      return text.replace(/^([\s\S]{0,35}\[(?:id|club)\d+\|)пользователю(\])/i, "$1Пользователю$2").trim();
-    }
     return text.trim();
   }
 
@@ -811,10 +816,11 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
   const candidateCmIds = new Set<number>();
   const candidateMsgIds = new Set<number>();
 
-  const extractIdsFromVal = (val: any) => {
-    if (val === null || val === undefined) return;
+  const visitedObjects = new Set<any>();
+  const extractIdsFromVal = (val: any, depth = 0) => {
+    if (val === null || val === undefined || depth > 10) return;
     if (typeof val === "string" && val.includes(",")) {
-      val.split(",").forEach(s => extractIdsFromVal(s.trim()));
+      val.split(",").forEach(s => extractIdsFromVal(s.trim(), depth + 1));
       return;
     }
     if (typeof val === "number" || typeof val === "string") {
@@ -824,21 +830,23 @@ export async function deleteVkMessage(vkToken: string, peerId: number, msgIdOrOb
         candidateMsgIds.add(num);
       }
     } else if (typeof val === "object") {
+      if (visitedObjects.has(val)) return;
+      visitedObjects.add(val);
       if (val.response !== undefined) {
-        extractIdsFromVal(val.response);
+        extractIdsFromVal(val.response, depth + 1);
       }
       if (val.data !== undefined) {
-        extractIdsFromVal(val.data);
+        extractIdsFromVal(val.data, depth + 1);
       }
       if (Array.isArray(val)) {
-        val.forEach(item => extractIdsFromVal(item));
+        val.forEach(item => extractIdsFromVal(item, depth + 1));
       } else {
         if (val.conversation_message_id) candidateCmIds.add(Number(val.conversation_message_id));
         if (val.cmid) candidateCmIds.add(Number(val.cmid));
-        if (val.conversation_message_ids) extractIdsFromVal(val.conversation_message_ids);
-        if (val.cmids) extractIdsFromVal(val.cmids);
+        if (val.conversation_message_ids) extractIdsFromVal(val.conversation_message_ids, depth + 1);
+        if (val.cmids) extractIdsFromVal(val.cmids, depth + 1);
         if (val.message_id) candidateMsgIds.add(Number(val.message_id));
-        if (val.message_ids) extractIdsFromVal(val.message_ids);
+        if (val.message_ids) extractIdsFromVal(val.message_ids, depth + 1);
         if (val.id) candidateMsgIds.add(Number(val.id));
       }
     }

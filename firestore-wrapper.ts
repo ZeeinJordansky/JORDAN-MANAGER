@@ -6,7 +6,7 @@ import { uploadFiles, downloadFile } from "@huggingface/hub";
 import sqlite3 from "sqlite3";
 
 // Промисифицированный SQLite клиент
-class SqlitePromiseDb {
+export class SqlitePromiseDb {
   db: sqlite3.Database;
   filename: string;
 
@@ -19,9 +19,20 @@ class SqlitePromiseDb {
   private initPragmas() {
     this.db.run("PRAGMA journal_mode = WAL;");
     this.db.run("PRAGMA synchronous = NORMAL;");
-    this.db.run("PRAGMA cache_size = -64000;");
+    this.db.run("PRAGMA cache_size = -32000;"); // Increase cache to ~32MB
     this.db.run("PRAGMA temp_store = MEMORY;");
     this.db.run("PRAGMA foreign_keys = ON;");
+    // Limit WAL growth so it does not consume unnecessary space
+    this.db.run("PRAGMA wal_autocheckpoint = 20;");
+    this.db.run("PRAGMA journal_size_limit = 32768;");
+    this.db.run("PRAGMA auto_vacuum = INCREMENTAL;");
+    this.db.run("PRAGMA secure_delete = FAST;");
+    this.db.run("PRAGMA mmap_size = 268435456;"); // 256MB mmap
+    this.db.run("PRAGMA page_size = 4096;");
+    this.db.run("PRAGMA busy_timeout = 5000;");
+    this.db.run("PRAGMA threads = 4;");
+    this.db.run("CREATE TABLE IF NOT EXISTS firestore_collections (collection TEXT, id TEXT, data TEXT, PRIMARY KEY (collection, id));");
+    this.db.run("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, chat_id INTEGER, date TEXT, UNIQUE(user_id, chat_id));");
   }
 
   recreateDb() {
@@ -215,9 +226,9 @@ function getNestedValue(obj: any, pathStr: string): any {
 export let sqliteDb: SqlitePromiseDb | null = null;
 export let logsDb: SqlitePromiseDb | null = null;
 
-const LOGS_COLLECTIONS = ["bot_logs", "botlogs", "reports", "bot_logs_test"];
+const LOGS_COLLECTIONS = ["bot_logs", "botlogs", "reports", "bot_logs_test", "vk_processed_events"];
 
-const docStore = new Map<string, Map<string, any>>();
+export const docStore = new Map<string, Map<string, any>>();
 let readyPromise: Promise<void> | null = null;
 let isReady = false;
 
@@ -234,6 +245,16 @@ export function scheduleSync(collectionName?: string) {
     isDirty = true;
   }
 }
+
+// Фоновый интервал очистки/сжатия WAL каждые 30 секунд
+setInterval(() => {
+  if (sqliteDb) {
+    sqliteDb.run("PRAGMA wal_checkpoint(TRUNCATE);").catch(() => {});
+  }
+  if (logsDb) {
+    logsDb.run("PRAGMA wal_checkpoint(TRUNCATE);").catch(() => {});
+  }
+}, 30 * 1000);
 
 // Фоновый интервал отправки в HuggingFace раз в 15 минут
 setInterval(() => {
@@ -265,9 +286,8 @@ export async function performHFSync() {
     if (sqliteDb) {
       try {
         await sqliteDb.run("PRAGMA wal_checkpoint(TRUNCATE);");
-        await sqliteDb.run("VACUUM;");
       } catch (vErr) {
-        console.error(">>> [HuggingFace Sync] Ошибка при WAL checkpoint / VACUUM:", vErr);
+        console.error(">>> [HuggingFace Sync] Ошибка при WAL checkpoint:", vErr);
       }
     }
 
@@ -351,9 +371,9 @@ export async function performLogsSync() {
     
     if (logsDb) {
       try {
-        await logsDb.run("VACUUM;");
+        await logsDb.run("PRAGMA wal_checkpoint(TRUNCATE);");
       } catch (vErr) {
-        console.error(">>> [HuggingFace Logs Sync] Ошибка при VACUUM:", vErr);
+        console.error(">>> [HuggingFace Logs Sync] Ошибка при WAL checkpoint:", vErr);
       }
     }
 
@@ -520,7 +540,10 @@ async function initDatabase() {
   await sqliteDb.run(createTableSql);
   await logsDb.run(createTableSql);
 
-  // 4. Инициализация таблиц завершена (база работает полностью на SQLite + Hugging Face)
+  // 4. Инициализация таблиц завершена
+  // Миграция/Очистка: удаляем vk_processed_events из основной БД, так как теперь они в БД логов
+  await sqliteDb.run("DELETE FROM firestore_collections WHERE collection = 'vk_processed_events'");
+  
   const countRow = await sqliteDb.get("SELECT count(*) as count FROM firestore_collections");
   const logsCountRow = await logsDb.get("SELECT count(*) as count FROM firestore_collections");
   console.log(`>>> [Database] Загружены SQLite таблицы. Записей в основной БД: ${countRow?.count || 0}, записей в логах: ${logsCountRow?.count || 0}`);
@@ -729,7 +752,6 @@ class DocumentReferenceWrapper {
         "INSERT OR REPLACE INTO firestore_collections (collection, id, data) VALUES (?, ?, ?)",
         [this.collectionName, this.id, JSON.stringify(updated)]
       );
-      await targetDb.run("PRAGMA wal_checkpoint(TRUNCATE);").catch(() => {});
     }
 
     // Запуск фоновой синхронизации с Hugging Face
@@ -754,7 +776,6 @@ class DocumentReferenceWrapper {
         "INSERT OR REPLACE INTO firestore_collections (collection, id, data) VALUES (?, ?, ?)",
         [this.collectionName, this.id, JSON.stringify(updated)]
       );
-      await targetDb.run("PRAGMA wal_checkpoint(TRUNCATE);").catch(() => {});
     }
 
     // Запуск фоновой синхронизации с Hugging Face
@@ -774,7 +795,6 @@ class DocumentReferenceWrapper {
         "DELETE FROM firestore_collections WHERE collection = ? AND id = ?",
         [this.collectionName, this.id]
       );
-      await targetDb.run("PRAGMA wal_checkpoint(TRUNCATE);").catch(() => {});
     }
 
     // Запуск фоновой синхронизации с Hugging Face
