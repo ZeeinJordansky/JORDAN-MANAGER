@@ -524,6 +524,41 @@ const SYSTEM_CONFIGS: Record<string, SysConfig> = {
     emoji: "🚫",
     prop: "antiAd",
     helpText: "Автоматически удаляет сообщения с посторонними ссылками и рекламой других сообществ или бесед."
+  },
+  captcha: {
+    key: "captcha",
+    name: "Капча при входе",
+    emoji: "🧩",
+    prop: "captcha",
+    helpText: "Требует прохождения капчи новыми участниками при входе в беседу для защиты от спам-ботов."
+  },
+  antimat: {
+    key: "antimat",
+    name: "Анти-мат",
+    emoji: "🤬",
+    prop: "antiMat",
+    helpText: "Автоматически фильтрует нецензурную брань и удаляет матерные сообщения участников."
+  },
+  anticaps: {
+    key: "anticaps",
+    name: "Анти-капс",
+    emoji: "🔠",
+    prop: "antiCaps",
+    helpText: "Удаляет сообщения, написанные капслоком (заглавными буквами)."
+  },
+  antivoice: {
+    key: "antivoice",
+    name: "Анти-голосовые",
+    emoji: "🎤",
+    prop: "antiVoice",
+    helpText: "Запрещает отправку голосовых сообщений в беседе."
+  },
+  antisticker: {
+    key: "antisticker",
+    name: "Анти-стикеры",
+    emoji: "🖼️",
+    prop: "antiSticker",
+    helpText: "Запрещает отправку стикеров в беседе."
   }
 };
 
@@ -550,8 +585,14 @@ function renderSettingsText(chatData: any): string {
   const isInviteModsOn = Boolean(chatData.inviteOnlyMods);
   const isLeaveKickOn = Boolean(chatData.leaveKick);
   const isAntiGamesOn = Boolean(chatData.gamesDisabled || chatData.games === false);
+  const isJoinNotifyOn = chatData.joinNotify !== undefined ? Boolean(chatData.joinNotify) : true;
+  const isCaptchaOn = Boolean(chatData.captcha || chatData.captchaEnabled);
+  const isAntiMatOn = Boolean(chatData.antiMat);
+  const isAntiCapsOn = Boolean(chatData.antiCaps);
+  const isAntiVoiceOn = Boolean(chatData.antiVoice);
+  const isAntiStickerOn = Boolean(chatData.antiSticker);
 
-  return `...::Настройки систем в этой беседе::...\n\n` +
+  return `...::Настройки автоматических систем беседы::...\n\n` +
     `| Система «Анти Флуд»: ${isAntiFloodOn ? "включена" : "выключена"}\n` +
     `| Система «Анти Слив»: ${isAntiSlivOn ? "включена" : "выключена"}\n` +
     `| Система «Анти Группы»: ${isAntiGroupOn ? "включена" : "выключена"}\n` +
@@ -560,7 +601,13 @@ function renderSettingsText(chatData: any): string {
     `| Система «Анти Рейд»: ${isAntiRaidOn ? "включена" : "выключена"}\n` +
     `| Система «Приглашение только модераторами»: ${isInviteModsOn ? "включена" : "выключена"}\n` +
     `| Система «Исключение при выходе»: ${isLeaveKickOn ? "включена" : "выключена"}\n` +
-    `| Система «Анти Игры»: ${isAntiGamesOn ? "включена" : "выключена"}`;
+    `| Система «Анти Игры»: ${isAntiGamesOn ? "включена" : "выключена"}\n` +
+    `| Система «Уведомление о входах»: ${isJoinNotifyOn ? "включена" : "выключена"}\n` +
+    `| Система «Капча при входе»: ${isCaptchaOn ? "включена" : "выключена"}\n` +
+    `| Система «Анти Мат»: ${isAntiMatOn ? "включена" : "выключена"}\n` +
+    `| Система «Анти Капс»: ${isAntiCapsOn ? "включена" : "выключена"}\n` +
+    `| Система «Анти Голосовые»: ${isAntiVoiceOn ? "включена" : "выключена"}\n` +
+    `| Система «Анти Стикеры»: ${isAntiStickerOn ? "включена" : "выключена"}`;
 }
 
 function renderSettingsKeyboard(chatData: any, page: number, authorId: number) {
@@ -573,6 +620,12 @@ function renderSettingsKeyboard(chatData: any, page: number, authorId: number) {
   const isInviteModsOn = Boolean(chatData.inviteOnlyMods);
   const isLeaveKickOn = Boolean(chatData.leaveKick);
   const isAntiGamesOn = Boolean(chatData.gamesDisabled || chatData.games === false);
+  const isJoinNotifyOn = chatData.joinNotify !== undefined ? Boolean(chatData.joinNotify) : true;
+  const isCaptchaOn = Boolean(chatData.captcha || chatData.captchaEnabled);
+  const isAntiMatOn = Boolean(chatData.antiMat);
+  const isAntiCapsOn = Boolean(chatData.antiCaps);
+  const isAntiVoiceOn = Boolean(chatData.antiVoice);
+  const isAntiStickerOn = Boolean(chatData.antiSticker);
 
   const buttons: any[][] = [];
 
@@ -611,24 +664,61 @@ function renderSettingsKeyboard(chatData: any, page: number, authorId: number) {
       color: isInviteModsOn ? "negative" : "positive"
     }]);
     buttons.push([{
-      action: { type: "callback", label: "След. Страница кнопок", payload: JSON.stringify({ cmd: "settings_page_3", authorId }) },
-      color: "secondary"
-    }]);
-    buttons.push([{
-      action: { type: "callback", label: "Назад", payload: JSON.stringify({ cmd: "settings_page_1", authorId }) },
-      color: "negative"
-    }]);
-  } else if (page === 3) {
-    buttons.push([{
-      action: { type: "callback", label: isLeaveKickOn ? "Выключить «Исключение при выходе»" : "Включить «Исключение при выходе»", payload: JSON.stringify({ cmd: "settings_toggle_leave_3", authorId }) },
+      action: { type: "callback", label: isLeaveKickOn ? "Выключить «Исключение при выходе»" : "Включить «Исключение при выходе»", payload: JSON.stringify({ cmd: "settings_toggle_leave_2", authorId }) },
       color: isLeaveKickOn ? "negative" : "positive"
     }]);
+    buttons.push([
+      {
+        action: { type: "callback", label: "Назад", payload: JSON.stringify({ cmd: "settings_page_1", authorId }) },
+        color: "negative"
+      },
+      {
+        action: { type: "callback", label: "Вперед", payload: JSON.stringify({ cmd: "settings_page_3", authorId }) },
+        color: "secondary"
+      }
+    ]);
+  } else if (page === 3) {
     buttons.push([{
       action: { type: "callback", label: isAntiGamesOn ? "Выключить «Анти Игры»" : "Включить «Анти Игры»", payload: JSON.stringify({ cmd: "settings_toggle_games_3", authorId }) },
       color: isAntiGamesOn ? "negative" : "positive"
     }]);
     buttons.push([{
-      action: { type: "callback", label: "Назад", payload: JSON.stringify({ cmd: "settings_page_1", authorId }) },
+      action: { type: "callback", label: isJoinNotifyOn ? "Выключить «Уведомления о входе»" : "Включить «Уведомления о входе»", payload: JSON.stringify({ cmd: "settings_toggle_join_3", authorId }) },
+      color: isJoinNotifyOn ? "negative" : "positive"
+    }]);
+    buttons.push([{
+      action: { type: "callback", label: isCaptchaOn ? "Выключить «Капчу при входе»" : "Включить «Капчу при входе»", payload: JSON.stringify({ cmd: "settings_toggle_captcha_3", authorId }) },
+      color: isCaptchaOn ? "negative" : "positive"
+    }]);
+    buttons.push([{
+      action: { type: "callback", label: isAntiMatOn ? "Выключить «Анти Мат»" : "Включить «Анти Мат»", payload: JSON.stringify({ cmd: "settings_toggle_antimat_3", authorId }) },
+      color: isAntiMatOn ? "negative" : "positive"
+    }]);
+    buttons.push([
+      {
+        action: { type: "callback", label: "Назад", payload: JSON.stringify({ cmd: "settings_page_2", authorId }) },
+        color: "negative"
+      },
+      {
+        action: { type: "callback", label: "Вперед", payload: JSON.stringify({ cmd: "settings_page_4", authorId }) },
+        color: "secondary"
+      }
+    ]);
+  } else if (page === 4) {
+    buttons.push([{
+      action: { type: "callback", label: isAntiCapsOn ? "Выключить «Анти Капс»" : "Включить «Анти Капс»", payload: JSON.stringify({ cmd: "settings_toggle_anticaps_4", authorId }) },
+      color: isAntiCapsOn ? "negative" : "positive"
+    }]);
+    buttons.push([{
+      action: { type: "callback", label: isAntiVoiceOn ? "Выключить «Анти Голосовые»" : "Включить «Анти Голосовые»", payload: JSON.stringify({ cmd: "settings_toggle_antivoice_4", authorId }) },
+      color: isAntiVoiceOn ? "negative" : "positive"
+    }]);
+    buttons.push([{
+      action: { type: "callback", label: isAntiStickerOn ? "Выключить «Анти Стикеры»" : "Включить «Анти Стикеры»", payload: JSON.stringify({ cmd: "settings_toggle_antisticker_4", authorId }) },
+      color: isAntiStickerOn ? "negative" : "positive"
+    }]);
+    buttons.push([{
+      action: { type: "callback", label: "Назад", payload: JSON.stringify({ cmd: "settings_page_3", authorId }) },
       color: "negative"
     }]);
   }
@@ -14270,19 +14360,18 @@ async function handleVkEvent(payload: any, receivedAt?: number) {
 async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
   const width = 450;
   const height = 450;
-  const framesCount = 40; // True 40 FPS buttery smooth animation
+  const framesCount = 50; // Smooth 50 FPS animation
 
   const encoder = new GIFEncoder(width, height, "neuquant", true);
   encoder.setRepeat(0);
-  encoder.setDelay(25); // 25ms per frame = 40 FPS
+  encoder.setDelay(20); // 20ms per frame = 50 FPS
   encoder.setQuality(20);
   encoder.start();
 
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 
-  // 28 Meaningful, Iconic, High-Fidelity Collectibles
-  // Clean names in lowercase, clean rarity in badge without emoji or symbols
+  // 28 Meaningful, Iconic, Ultra-Detailed Collectibles
   const GIFTS = [
     // 1. Секретная / Секретный
     {
@@ -14705,16 +14794,16 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
   }
 
   const centerX = width / 2;
-  const centerY = 195;
+  const centerY = 175; // Perfectly centered in the upper collectible stage
 
   for (let f = 0; f < framesCount; f++) {
     const progress = f / framesCount;
     const phase = progress * Math.PI * 2;
-    const floatY = Math.sin(phase) * 6; // slow, smooth floating
-    const pulseScale = 1 + Math.sin(phase) * 0.02;
+    const floatY = Math.sin(phase) * 5.5; // slow smooth float
+    const pulseScale = 1 + Math.sin(phase) * 0.018;
     const rainbowHue = Math.floor(progress * 360);
 
-    // 1. Luxury Dark Velvet Background
+    // 1. Stage Background
     let curBgCenter = gift.bgCenter;
     let curBgEdge = gift.bgEdge;
     let mainColor1 = gift.color1;
@@ -14727,33 +14816,33 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       mainColor2 = `hsl(${(rainbowHue + 80) % 360}, 100%, 60%)`;
     }
 
-    const bgGrad = ctx.createRadialGradient(centerX, centerY - 15, 20, centerX, centerY, 250);
+    const bgGrad = ctx.createRadialGradient(centerX, centerY - 15, 20, centerX, centerY, 230);
     bgGrad.addColorStop(0, curBgCenter);
-    bgGrad.addColorStop(0.7, curBgEdge);
+    bgGrad.addColorStop(0.75, curBgEdge);
     bgGrad.addColorStop(1, "#020108");
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
 
-    // Soft Ambient Glow behind collectible
-    const glowGrad = ctx.createRadialGradient(centerX, centerY + floatY, 15, centerX, centerY + floatY, 140);
-    glowGrad.addColorStop(0, gift.isSecret ? `hsla(${rainbowHue}, 100%, 65%, 0.4)` : (mainColor1 + "55"));
-    glowGrad.addColorStop(0.5, gift.isSecret ? `hsla(${(rainbowHue + 60) % 360}, 100%, 55%, 0.15)` : (mainColor2 + "20"));
+    // Soft Ambient Glow (Strictly restricted to top stage)
+    const glowGrad = ctx.createRadialGradient(centerX, centerY + floatY, 15, centerX, centerY + floatY, 125);
+    glowGrad.addColorStop(0, gift.isSecret ? `hsla(${rainbowHue}, 100%, 65%, 0.38)` : (mainColor1 + "50"));
+    glowGrad.addColorStop(0.5, gift.isSecret ? `hsla(${(rainbowHue + 60) % 360}, 100%, 55%, 0.14)` : (mainColor2 + "18"));
     glowGrad.addColorStop(1, "transparent");
     ctx.fillStyle = glowGrad;
     ctx.beginPath();
-    ctx.arc(centerX, centerY + floatY, 140, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY + floatY, 125, 0, Math.PI * 2);
     ctx.fill();
 
     // Floating Sparkles
     for (let s = 0; s < 6; s++) {
       const spAngle = phase + s * (Math.PI / 3);
-      const spDist = 100 + Math.sin(phase * 2 + s) * 22;
+      const spDist = 90 + Math.sin(phase * 2 + s) * 20;
       const spX = centerX + Math.cos(spAngle) * spDist;
-      const spY = centerY + Math.sin(spAngle) * (spDist * 0.42) + floatY;
+      const spY = centerY + Math.sin(spAngle) * (spDist * 0.4) + floatY;
       
       ctx.fillStyle = gift.isSecret ? `hsl(${(rainbowHue + s * 60) % 360}, 100%, 75%)` : gift.accent;
       ctx.beginPath();
-      ctx.arc(spX, spY, 2.2, 0, Math.PI * 2);
+      ctx.arc(spX, spY, 2, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -14763,14 +14852,14 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
     ctx.strokeStyle = gift.isSecret ? `hsl(${rainbowHue}, 100%, 70%)` : (mainColor1 + "77");
     ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.ellipse(centerX, 295, 110, 34, 0, 0, Math.PI * 2);
+    ctx.ellipse(centerX, 275, 105, 32, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.ellipse(centerX, 295, 85, 25, 0, 0, Math.PI * 2);
+    ctx.ellipse(centerX, 275, 80, 23, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
 
@@ -14781,24 +14870,24 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
     if (gift.id === "secret_sphere") {
       // 🌌 СФЕРА ВРЕМЕНИ
-      const ringAngle = phase * 0.3; // Slow rotation
+      const ringAngle = phase * 0.25;
       for (let r = 0; r < 3; r++) {
         ctx.save();
         ctx.strokeStyle = `hsl(${(rainbowHue + r * 60) % 360}, 100%, 75%)`;
         ctx.lineWidth = 2.5;
         ctx.beginPath();
-        ctx.ellipse(0, 0, 72 - r * 9, 24 + r * 7, ringAngle + (r * Math.PI) / 3, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, 68 - r * 8, 22 + r * 6, ringAngle + (r * Math.PI) / 3, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
-      const sGrad = ctx.createRadialGradient(-12, -12, 4, 0, 0, 42);
+      const sGrad = ctx.createRadialGradient(-10, -10, 4, 0, 0, 38);
       sGrad.addColorStop(0, "#FFFFFF");
       sGrad.addColorStop(0.4, `hsl(${rainbowHue}, 100%, 70%)`);
       sGrad.addColorStop(0.8, `hsl(${(rainbowHue + 120) % 360}, 100%, 55%)`);
       sGrad.addColorStop(1, "#000000");
       ctx.fillStyle = sGrad;
       ctx.beginPath();
-      ctx.arc(0, 0, 42, 0, Math.PI * 2);
+      ctx.arc(0, 0, 38, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
       ctx.lineWidth = 2;
@@ -14806,9 +14895,9 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
     } else if (gift.id === "secret_heart") {
       // ❤️ ПЛАМЕННОЕ СЕРДЦЕ
-      const hScale = 1 + Math.sin(phase * 2) * 0.05;
+      const hScale = 1 + Math.sin(phase * 2) * 0.04;
       ctx.scale(hScale, hScale);
-      const hGrad = ctx.createRadialGradient(-10, -10, 5, 0, 0, 55);
+      const hGrad = ctx.createRadialGradient(-8, -8, 4, 0, 0, 48);
       hGrad.addColorStop(0, "#FFFFFF");
       hGrad.addColorStop(0.3, `hsl(${rainbowHue}, 100%, 65%)`);
       hGrad.addColorStop(0.8, `hsl(${(rainbowHue + 40) % 360}, 100%, 50%)`);
@@ -14816,9 +14905,9 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.fillStyle = hGrad;
 
       ctx.beginPath();
-      ctx.moveTo(0, 45);
-      ctx.bezierCurveTo(-50, 10, -55, -35, 0, -25);
-      ctx.bezierCurveTo(55, -35, 50, 10, 0, 45);
+      ctx.moveTo(0, 40);
+      ctx.bezierCurveTo(-45, 8, -50, -30, 0, -22);
+      ctx.bezierCurveTo(50, -30, 45, 8, 0, 40);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
@@ -14827,8 +14916,8 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
     } else if (gift.id === "secret_star") {
       // ⭐ ЗВЕЗДА ГАЛАКТИКИ
-      ctx.rotate(phase * 0.2); // Slow rotation
-      const starGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, 55);
+      ctx.rotate(phase * 0.15);
+      const starGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, 50);
       starGrad.addColorStop(0, "#FFFFFF");
       starGrad.addColorStop(0.5, `hsl(${rainbowHue}, 100%, 70%)`);
       starGrad.addColorStop(1, `hsl(${(rainbowHue + 120) % 360}, 100%, 55%)`);
@@ -14838,8 +14927,8 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       for (let p = 0; p < 8; p++) {
         const rad1 = (p / 8) * Math.PI * 2;
         const rad2 = ((p + 0.5) / 8) * Math.PI * 2;
-        const r1 = p % 2 === 0 ? 55 : 32;
-        const r2 = 18;
+        const r1 = p % 2 === 0 ? 50 : 28;
+        const r2 = 16;
         if (p === 0) ctx.moveTo(Math.cos(rad1) * r1, Math.sin(rad1) * r1);
         else ctx.lineTo(Math.cos(rad1) * r1, Math.sin(rad1) * r1);
         ctx.lineTo(Math.cos(rad2) * r2, Math.sin(rad2) * r2);
@@ -14852,15 +14941,15 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
     } else if (gift.id === "secret_cube") {
       // 🧊 ХРОНО-КУБ
-      ctx.rotate(phase * 0.2); // Slow rotation
-      const cubeGrad = ctx.createLinearGradient(-45, -45, 45, 45);
+      ctx.rotate(phase * 0.15);
+      const cubeGrad = ctx.createLinearGradient(-40, -40, 40, 40);
       cubeGrad.addColorStop(0, `hsl(${rainbowHue}, 100%, 75%)`);
       cubeGrad.addColorStop(0.5, `hsl(${(rainbowHue + 90) % 360}, 100%, 65%)`);
       cubeGrad.addColorStop(1, `hsl(${(rainbowHue + 180) % 360}, 100%, 60%)`);
       ctx.fillStyle = cubeGrad;
       
       ctx.beginPath();
-      (ctx as any).roundRect ? (ctx as any).roundRect(-45, -45, 90, 90, 14) : ctx.rect(-45, -45, 90, 90);
+      (ctx as any).roundRect ? (ctx as any).roundRect(-40, -40, 80, 80, 12) : ctx.rect(-40, -40, 80, 80);
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
       ctx.lineWidth = 3;
@@ -14868,30 +14957,30 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
       ctx.fillStyle = "#FFFFFF";
       ctx.beginPath();
-      ctx.arc(0, 0, 16, 0, Math.PI * 2);
+      ctx.arc(0, 0, 14, 0, Math.PI * 2);
       ctx.fill();
 
     } else if (gift.id === "elite_crown") {
       // 👑 ИМПЕРАТОРСКАЯ КОРОНА
       ctx.fillStyle = "#B71C1C";
       ctx.beginPath();
-      ctx.ellipse(0, 8, 55, 40, 0, Math.PI, Math.PI * 2);
+      ctx.ellipse(0, 8, 50, 36, 0, Math.PI, Math.PI * 2);
       ctx.fill();
 
-      const cGrad = ctx.createLinearGradient(-65, -55, 65, 45);
+      const cGrad = ctx.createLinearGradient(-60, -50, 60, 40);
       cGrad.addColorStop(0, "#FFF176");
       cGrad.addColorStop(0.5, "#FFD700");
       cGrad.addColorStop(1, "#FF8F00");
       ctx.fillStyle = cGrad;
 
       ctx.beginPath();
-      ctx.moveTo(-65, 35);
-      ctx.lineTo(65, 35);
-      ctx.lineTo(75, -30);
-      ctx.lineTo(38, 5);
-      ctx.lineTo(0, -58);
-      ctx.lineTo(-38, 5);
-      ctx.lineTo(-75, -30);
+      ctx.moveTo(-60, 32);
+      ctx.lineTo(60, 32);
+      ctx.lineTo(70, -26);
+      ctx.lineTo(35, 4);
+      ctx.lineTo(0, -52);
+      ctx.lineTo(-35, 4);
+      ctx.lineTo(-70, -26);
       ctx.closePath();
       ctx.fill();
 
@@ -14901,15 +14990,15 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
       ctx.fillStyle = "#D50000";
       ctx.beginPath();
-      ctx.ellipse(0, 35, 65, 10, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 32, 60, 9, 0, 0, Math.PI * 2);
       ctx.fill();
 
       const jewels = [
-        { x: -75, y: -30, r: 7, color: "#00E5FF" },
-        { x: -38, y: 5, r: 5, color: "#FF1744" },
-        { x: 0, y: -58, r: 9, color: "#00E5FF" },
-        { x: 38, y: 5, r: 5, color: "#FF1744" },
-        { x: 75, y: -30, r: 7, color: "#00E5FF" }
+        { x: -70, y: -26, r: 6.5, color: "#00E5FF" },
+        { x: -35, y: 4, r: 4.5, color: "#FF1744" },
+        { x: 0, y: -52, r: 8, color: "#00E5FF" },
+        { x: 35, y: 4, r: 4.5, color: "#FF1744" },
+        { x: 70, y: -26, r: 6.5, color: "#00E5FF" }
       ];
       for (const j of jewels) {
         ctx.fillStyle = j.color;
@@ -14923,22 +15012,22 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
     } else if (gift.id === "elite_cup") {
       // 🏆 ЗОЛОТОЙ КУБОК
-      const cupGrad = ctx.createLinearGradient(-45, -55, 45, 55);
+      const cupGrad = ctx.createLinearGradient(-40, -50, 40, 50);
       cupGrad.addColorStop(0, "#FFF9C4");
       cupGrad.addColorStop(0.5, "#FFD700");
       cupGrad.addColorStop(1, "#FF6F00");
       ctx.fillStyle = cupGrad;
 
       ctx.beginPath();
-      ctx.moveTo(-45, -45);
-      ctx.lineTo(45, -45);
-      ctx.quadraticCurveTo(40, 10, 10, 22);
-      ctx.lineTo(10, 45);
-      ctx.lineTo(30, 55);
-      ctx.lineTo(-30, 55);
-      ctx.lineTo(-10, 45);
-      ctx.lineTo(-10, 22);
-      ctx.quadraticCurveTo(-40, 10, -45, -45);
+      ctx.moveTo(-40, -40);
+      ctx.lineTo(40, -40);
+      ctx.quadraticCurveTo(36, 8, 9, 20);
+      ctx.lineTo(9, 40);
+      ctx.lineTo(26, 48);
+      ctx.lineTo(-26, 48);
+      ctx.lineTo(-9, 40);
+      ctx.lineTo(-9, 20);
+      ctx.quadraticCurveTo(-36, 8, -40, -40);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
@@ -14946,27 +15035,27 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.stroke();
 
       ctx.strokeStyle = "#FFD700";
-      ctx.lineWidth = 5;
+      ctx.lineWidth = 4.5;
       ctx.beginPath();
-      ctx.arc(-46, -18, 16, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.arc(-42, -16, 14, Math.PI * 0.5, Math.PI * 1.5);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(46, -18, 16, Math.PI * 1.5, Math.PI * 0.5);
+      ctx.arc(42, -16, 14, Math.PI * 1.5, Math.PI * 0.5);
       ctx.stroke();
 
     } else if (gift.id === "elite_throne") {
       // 🪑 ТРОН МОНАРХА
       ctx.fillStyle = "#6A1B9A";
-      ctx.fillRect(-32, -40, 64, 65);
+      ctx.fillRect(-28, -35, 56, 58);
       ctx.strokeStyle = "#FFD700";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(-32, -40, 64, 65);
+      ctx.lineWidth = 3.5;
+      ctx.strokeRect(-28, -35, 56, 58);
 
       ctx.fillStyle = "#FFD700";
       ctx.beginPath();
-      ctx.moveTo(-40, -40);
-      ctx.lineTo(0, -68);
-      ctx.lineTo(40, -40);
+      ctx.moveTo(-36, -35);
+      ctx.lineTo(0, -60);
+      ctx.lineTo(36, -35);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
@@ -14974,13 +15063,13 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.stroke();
 
       ctx.fillStyle = "#D50000";
-      ctx.fillRect(-36, 25, 72, 22);
+      ctx.fillRect(-32, 23, 64, 20);
 
     } else if (gift.id === "elite_ring") {
       // 💍 КОЛЬЦО ВЛАСТИ
       ctx.fillStyle = "#FFD700";
       ctx.beginPath();
-      ctx.arc(0, 12, 38, 0, Math.PI * 2);
+      ctx.arc(0, 10, 34, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "#FFF59D";
       ctx.lineWidth = 3;
@@ -14988,27 +15077,25 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
       ctx.fillStyle = "#1e0730";
       ctx.beginPath();
-      ctx.arc(0, 12, 24, 0, Math.PI * 2);
+      ctx.arc(0, 10, 22, 0, Math.PI * 2);
       ctx.fill();
 
-      // Huge Ruby Gem
-      const rGrad = ctx.createRadialGradient(-5, -35, 2, 0, -32, 22);
+      const rGrad = ctx.createRadialGradient(-4, -30, 2, 0, -28, 20);
       rGrad.addColorStop(0, "#FF8A80");
       rGrad.addColorStop(0.4, "#FF1744");
       rGrad.addColorStop(1, "#B71C1C");
       ctx.fillStyle = rGrad;
       ctx.beginPath();
-      ctx.arc(0, -32, 18, 0, Math.PI * 2);
+      ctx.arc(0, -28, 16, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
       ctx.lineWidth = 2;
       ctx.stroke();
 
     } else if (gift.id === "legend_dragon") {
-      // 🐉 ИЗУМРУДНЫЙ ДРАКОН (One Solid Gold Color for Horns/Ears!)
+      // 🐉 ИЗУМРУДНЫЙ ДРАКОН (One Solid Gold Color for Horns/Ears)
       ctx.save();
-      // Wings in background
-      const wingGrad = ctx.createLinearGradient(-95, -70, 95, 35);
+      const wingGrad = ctx.createLinearGradient(-85, -60, 85, 30);
       wingGrad.addColorStop(0, "#00B0FF");
       wingGrad.addColorStop(0.6, "#00E676");
       wingGrad.addColorStop(1, "#1DE9B6");
@@ -15016,10 +15103,10 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
       // Left Wing
       ctx.beginPath();
-      ctx.moveTo(-18, 10);
-      ctx.lineTo(-80, -58);
-      ctx.quadraticCurveTo(-52, -30, -66, 0);
-      ctx.quadraticCurveTo(-40, 12, -18, 30);
+      ctx.moveTo(-16, 8);
+      ctx.lineTo(-72, -50);
+      ctx.quadraticCurveTo(-46, -26, -58, 0);
+      ctx.quadraticCurveTo(-36, 10, -16, 26);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#B9F6CA";
@@ -15028,10 +15115,10 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
       // Right Wing
       ctx.beginPath();
-      ctx.moveTo(18, 10);
-      ctx.lineTo(80, -58);
-      ctx.quadraticCurveTo(52, -30, 66, 0);
-      ctx.quadraticCurveTo(40, 12, 18, 30);
+      ctx.moveTo(16, 8);
+      ctx.lineTo(72, -50);
+      ctx.quadraticCurveTo(46, -26, 58, 0);
+      ctx.quadraticCurveTo(36, 10, 16, 26);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#B9F6CA";
@@ -15039,14 +15126,14 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.stroke();
       ctx.restore();
 
-      // Solid Pure Golden Horns / Ears (1 single solid color #FFD700)
+      // Solid Pure Golden Horns / Ears
       ctx.fillStyle = "#FFD700";
 
       // Left Horn
       ctx.beginPath();
-      ctx.moveTo(-14, -22);
-      ctx.quadraticCurveTo(-40, -50, -55, -80);
-      ctx.quadraticCurveTo(-34, -54, -4, -34);
+      ctx.moveTo(-12, -20);
+      ctx.quadraticCurveTo(-35, -45, -48, -70);
+      ctx.quadraticCurveTo(-30, -48, -4, -30);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#FFF9C4";
@@ -15055,9 +15142,9 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
       // Right Horn
       ctx.beginPath();
-      ctx.moveTo(14, -22);
-      ctx.quadraticCurveTo(40, -50, 55, -80);
-      ctx.quadraticCurveTo(34, -54, 4, -34);
+      ctx.moveTo(12, -20);
+      ctx.quadraticCurveTo(35, -45, 48, -70);
+      ctx.quadraticCurveTo(30, -48, 4, -30);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#FFF9C4";
@@ -15065,7 +15152,7 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.stroke();
 
       // Emerald Dragon Head
-      const headGrad = ctx.createLinearGradient(0, -55, 0, 65);
+      const headGrad = ctx.createLinearGradient(0, -48, 0, 58);
       headGrad.addColorStop(0, "#69F0AE");
       headGrad.addColorStop(0.4, "#00E676");
       headGrad.addColorStop(0.8, "#00B0FF");
@@ -15073,16 +15160,16 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.fillStyle = headGrad;
 
       ctx.beginPath();
-      ctx.moveTo(0, -45);
-      ctx.lineTo(25, -22);
-      ctx.lineTo(34, -4);
-      ctx.lineTo(20, 8);
-      ctx.lineTo(22, 40);
-      ctx.lineTo(0, 58);
-      ctx.lineTo(-22, 40);
-      ctx.lineTo(-20, 8);
-      ctx.lineTo(-34, -4);
-      ctx.lineTo(-25, -22);
+      ctx.moveTo(0, -40);
+      ctx.lineTo(22, -20);
+      ctx.lineTo(30, -4);
+      ctx.lineTo(18, 7);
+      ctx.lineTo(20, 35);
+      ctx.lineTo(0, 52);
+      ctx.lineTo(-20, 35);
+      ctx.lineTo(-18, 7);
+      ctx.lineTo(-30, -4);
+      ctx.lineTo(-22, -20);
       ctx.closePath();
       ctx.fill();
 
@@ -15093,22 +15180,22 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       // Crimson Glowing Eyes
       ctx.fillStyle = "#FF1744";
       ctx.beginPath();
-      ctx.ellipse(-12, -4, 6, 3.5, -Math.PI / 8, 0, Math.PI * 2);
+      ctx.ellipse(-10, -4, 5.5, 3, -Math.PI / 8, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.ellipse(12, -4, 6, 3.5, Math.PI / 8, 0, Math.PI * 2);
+      ctx.ellipse(10, -4, 5.5, 3, Math.PI / 8, 0, Math.PI * 2);
       ctx.fill();
 
       // Golden Pupils
       ctx.fillStyle = "#FFE57F";
-      ctx.fillRect(-13, -6, 2, 5);
-      ctx.fillRect(11, -6, 2, 5);
+      ctx.fillRect(-11, -5, 2, 4);
+      ctx.fillRect(9, -5, 2, 4);
 
     } else if (gift.id === "legend_helmet") {
       // 🥷 КИБЕР-ШЛЕМ
       ctx.fillStyle = "#212121";
       ctx.beginPath();
-      ctx.arc(0, -10, 45, Math.PI, 0);
+      ctx.arc(0, -10, 40, Math.PI, 0);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#B71C1C";
@@ -15117,8 +15204,8 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
       ctx.fillStyle = "#FFD700";
       ctx.beginPath();
-      ctx.arc(0, -40, 32, -Math.PI * 0.8, -Math.PI * 0.2);
-      ctx.lineTo(0, -54);
+      ctx.arc(0, -36, 28, -Math.PI * 0.8, -Math.PI * 0.2);
+      ctx.lineTo(0, -48);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
@@ -15126,35 +15213,34 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.stroke();
 
       ctx.fillStyle = "#B71C1C";
-      ctx.fillRect(-28, -10, 56, 40);
+      ctx.fillRect(-25, -10, 50, 35);
       ctx.strokeStyle = "#FFD700";
       ctx.lineWidth = 2;
-      ctx.strokeRect(-28, -10, 56, 40);
+      ctx.strokeRect(-25, -10, 50, 35);
 
       ctx.fillStyle = "#00E5FF";
-      ctx.fillRect(-20, 0, 40, 7);
+      ctx.fillRect(-18, 0, 36, 6);
 
     } else if (gift.id === "legend_pegasus") {
       // 🦄 КРЫЛАТЫЙ ПЕГАС
       ctx.fillStyle = "#EDE7F6";
       ctx.beginPath();
-      ctx.moveTo(-12, -35);
-      ctx.lineTo(22, -18);
-      ctx.lineTo(35, 18);
-      ctx.lineTo(8, 45);
-      ctx.lineTo(-26, 18);
+      ctx.moveTo(-10, -30);
+      ctx.lineTo(20, -15);
+      ctx.lineTo(30, 15);
+      ctx.lineTo(7, 40);
+      ctx.lineTo(-22, 15);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#B388FF";
       ctx.lineWidth = 2.5;
       ctx.stroke();
 
-      // Wings
       ctx.fillStyle = "#FFD700";
       ctx.beginPath();
-      ctx.moveTo(10, -10);
-      ctx.lineTo(65, -50);
-      ctx.lineTo(40, 10);
+      ctx.moveTo(8, -8);
+      ctx.lineTo(55, -45);
+      ctx.lineTo(35, 8);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
@@ -15164,7 +15250,7 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
     } else if (gift.id === "legend_firesword") {
       // 🗡️ ОГНЕННЫЙ КЛИНОК
       ctx.rotate(-Math.PI / 4);
-      const fGrad = ctx.createLinearGradient(-10, -85, 10, 35);
+      const fGrad = ctx.createLinearGradient(-8, -75, 8, 30);
       fGrad.addColorStop(0, "#FFFF8D");
       fGrad.addColorStop(0.3, "#FF9100");
       fGrad.addColorStop(0.8, "#FF3D00");
@@ -15172,11 +15258,11 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.fillStyle = fGrad;
 
       ctx.beginPath();
-      ctx.moveTo(0, -90);
-      ctx.lineTo(14, -70);
-      ctx.lineTo(10, 35);
-      ctx.lineTo(-10, 35);
-      ctx.lineTo(-14, -70);
+      ctx.moveTo(0, -80);
+      ctx.lineTo(12, -60);
+      ctx.lineTo(9, 30);
+      ctx.lineTo(-9, 30);
+      ctx.lineTo(-12, -60);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
@@ -15184,49 +15270,49 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.stroke();
 
       ctx.fillStyle = "#FFD700";
-      ctx.fillRect(-26, 35, 52, 9);
+      ctx.fillRect(-22, 30, 44, 8);
       ctx.fillStyle = "#3E2723";
-      ctx.fillRect(-7, 44, 14, 35);
+      ctx.fillRect(-6, 38, 12, 30);
       ctx.fillStyle = "#FFD700";
       ctx.beginPath();
-      ctx.arc(0, 84, 8, 0, Math.PI * 2);
+      ctx.arc(0, 72, 7, 0, Math.PI * 2);
       ctx.fill();
 
     } else if (gift.id === "mythic_crystal") {
       // 💎 МАГИЧЕСКИЙ КРИСТАЛЛ
       for (let i = 0; i < 3; i++) {
         const sAngle = phase + i * ((Math.PI * 2) / 3);
-        const sx = Math.cos(sAngle) * 58;
-        const sy = Math.sin(sAngle) * 22 - 8;
+        const sx = Math.cos(sAngle) * 52;
+        const sy = Math.sin(sAngle) * 20 - 7;
         ctx.fillStyle = "#EA80FC";
         ctx.beginPath();
-        ctx.moveTo(sx, sy - 10);
-        ctx.lineTo(sx + 6, sy);
-        ctx.lineTo(sx, sy + 10);
-        ctx.lineTo(sx - 6, sy);
+        ctx.moveTo(sx, sy - 9);
+        ctx.lineTo(sx + 5, sy);
+        ctx.lineTo(sx, sy + 9);
+        ctx.lineTo(sx - 5, sy);
         ctx.closePath();
         ctx.fill();
       }
 
-      const cryGrad = ctx.createLinearGradient(-45, -65, 45, 65);
+      const cryGrad = ctx.createLinearGradient(-40, -58, 40, 58);
       cryGrad.addColorStop(0, "#FFFFFF");
       cryGrad.addColorStop(0.3, "#E040FB");
       cryGrad.addColorStop(1, "#651FFF");
       ctx.fillStyle = cryGrad;
 
       ctx.beginPath();
-      ctx.moveTo(0, -72);
-      ctx.lineTo(46, -16);
-      ctx.lineTo(0, 72);
-      ctx.lineTo(-46, -16);
+      ctx.moveTo(0, -65);
+      ctx.lineTo(40, -14);
+      ctx.lineTo(0, 65);
+      ctx.lineTo(-40, -14);
       ctx.closePath();
       ctx.fill();
 
       ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
       ctx.beginPath();
-      ctx.moveTo(0, -72);
-      ctx.lineTo(46, -16);
-      ctx.lineTo(0, 72);
+      ctx.moveTo(0, -65);
+      ctx.lineTo(40, -14);
+      ctx.lineTo(0, 65);
       ctx.closePath();
       ctx.fill();
 
@@ -15235,27 +15321,125 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.stroke();
 
     } else if (gift.id === "mythic_book") {
-      // 📖 КНИГА ЗАКЛЯТИЙ
-      ctx.fillStyle = "#4A148C";
-      ctx.fillRect(-48, -40, 96, 75);
-      ctx.strokeStyle = "#FFD700";
-      ctx.lineWidth = 3;
-      ctx.strokeRect(-48, -40, 96, 75);
+      // 📖 КНИГА ЗАКЛЯТИЙ (Ультра-детализированный 3D Гримуар)
+      
+      // Floating Arcane Rune Glyphs
+      for (let g = 0; g < 3; g++) {
+        const rAng = phase + g * ((Math.PI * 2) / 3);
+        const rx = Math.cos(rAng) * 48;
+        const ry = -45 + Math.sin(rAng) * 12;
+        ctx.fillStyle = "#EA80FC";
+        ctx.beginPath();
+        ctx.arc(rx, ry, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
-      ctx.fillStyle = "#FFD700";
-      ctx.fillRect(-5, -40, 10, 75);
+      // Isometric Thick Book Cover (Ancient Velvet / Leather)
+      const bookGrad = ctx.createLinearGradient(-45, -35, 45, 35);
+      bookGrad.addColorStop(0, "#4A148C");
+      bookGrad.addColorStop(0.5, "#311B92");
+      bookGrad.addColorStop(1, "#1A237E");
+      ctx.fillStyle = bookGrad;
 
-      ctx.fillStyle = "#E040FB";
+      // 3D Angled Tome
       ctx.beginPath();
-      ctx.arc(22, -2, 16, 0, Math.PI * 2);
+      ctx.moveTo(-45, -35);
+      ctx.lineTo(35, -45);
+      ctx.lineTo(48, 25);
+      ctx.lineTo(-32, 38);
+      ctx.closePath();
       ctx.fill();
+      ctx.strokeStyle = "#FFD700";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      // Book Spine & Thickness
+      ctx.fillStyle = "#280654";
+      ctx.beginPath();
+      ctx.moveTo(-45, -35);
+      ctx.lineTo(-32, 38);
+      ctx.lineTo(-38, 44);
+      ctx.lineTo(-51, -29);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#FFD700";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Gilded Page Edges
+      ctx.fillStyle = "#FFF9C4";
+      ctx.beginPath();
+      ctx.moveTo(-32, 38);
+      ctx.lineTo(48, 25);
+      ctx.lineTo(42, 31);
+      ctx.lineTo(-38, 44);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#FFB300";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Gold Filigree Corners
+      ctx.fillStyle = "#FFD700";
+      // Top left corner
+      ctx.beginPath();
+      ctx.moveTo(-45, -35);
+      ctx.lineTo(-25, -37);
+      ctx.lineTo(-35, -15);
+      ctx.closePath();
+      ctx.fill();
+      // Bottom right corner
+      ctx.beginPath();
+      ctx.moveTo(48, 25);
+      ctx.lineTo(28, 27);
+      ctx.lineTo(38, 5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Glowing Arcane Pentagram Seal on Cover
+      ctx.save();
+      ctx.translate(2, -4);
+      ctx.rotate(-0.1);
+      ctx.fillStyle = "rgba(224, 64, 251, 0.4)";
+      ctx.beginPath();
+      ctx.arc(0, 0, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#E040FB";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 5-Point star
       ctx.strokeStyle = "#FFFFFF";
       ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const a1 = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+        const x1 = Math.cos(a1) * 14;
+        const y1 = Math.sin(a1) * 14;
+        if (i === 0) ctx.moveTo(x1, y1);
+        else ctx.lineTo(x1, y1);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+
+      // Silk Red/Gold Bookmark Ribbon hanging out
+      ctx.fillStyle = "#D50000";
+      ctx.beginPath();
+      ctx.moveTo(10, 29);
+      ctx.lineTo(16, 52);
+      ctx.lineTo(10, 47);
+      ctx.lineTo(4, 52);
+      ctx.lineTo(4, 30);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#FFD700";
+      ctx.lineWidth = 1;
       ctx.stroke();
 
     } else if (gift.id === "mythic_tear") {
       // 💧 СЛЕЗА СИРЕНЫ
-      const tGrad = ctx.createRadialGradient(-12, -18, 4, 0, 0, 52);
+      const tGrad = ctx.createRadialGradient(-10, -15, 3, 0, 0, 46);
       tGrad.addColorStop(0, "#FFFFFF");
       tGrad.addColorStop(0.4, "#00E5FF");
       tGrad.addColorStop(0.8, "#7C4DFF");
@@ -15263,10 +15447,10 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.fillStyle = tGrad;
 
       ctx.beginPath();
-      ctx.moveTo(0, -68);
-      ctx.quadraticCurveTo(40, -8, 40, 22);
-      ctx.arc(0, 22, 40, 0, Math.PI);
-      ctx.quadraticCurveTo(-40, -8, 0, -68);
+      ctx.moveTo(0, -60);
+      ctx.quadraticCurveTo(36, -7, 36, 19);
+      ctx.arc(0, 19, 36, 0, Math.PI);
+      ctx.quadraticCurveTo(-36, -7, 0, -60);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
@@ -15275,17 +15459,17 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
     } else if (gift.id === "mythic_portal") {
       // 🌀 ПОРТАЛ БЕЗДНЫ
-      ctx.rotate(phase * 0.25); // Slow rotation
+      ctx.rotate(phase * 0.2);
       for (let p = 0; p < 6; p++) {
         const pAng = (p / 6) * Math.PI * 2;
         ctx.fillStyle = p % 2 === 0 ? "#7C4DFF" : "#651FFF";
         ctx.beginPath();
-        ctx.arc(Math.cos(pAng) * 40, Math.sin(pAng) * 40, 18, 0, Math.PI * 2);
+        ctx.arc(Math.cos(pAng) * 35, Math.sin(pAng) * 35, 16, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.fillStyle = "#000000";
       ctx.beginPath();
-      ctx.arc(0, 0, 26, 0, Math.PI * 2);
+      ctx.arc(0, 0, 23, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "#E040FB";
       ctx.lineWidth = 3;
@@ -15293,82 +15477,79 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
     } else if (gift.id === "epic_shield") {
       // 🛡️ ЩИТ РЫЦАРЯ
-      const shGrad = ctx.createRadialGradient(-12, -12, 8, 0, 0, 55);
+      const shGrad = ctx.createRadialGradient(-10, -10, 7, 0, 0, 48);
       shGrad.addColorStop(0, "#80D8FF");
       shGrad.addColorStop(0.6, "#0288D1");
       shGrad.addColorStop(1, "#01579B");
       ctx.fillStyle = shGrad;
       ctx.beginPath();
-      ctx.arc(0, 0, 55, 0, Math.PI * 2);
+      ctx.arc(0, 0, 48, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "#FFD700";
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 3.5;
       ctx.stroke();
 
       ctx.fillStyle = "#FFD700";
       ctx.beginPath();
-      ctx.arc(0, 0, 18, 0, Math.PI * 2);
+      ctx.arc(0, 0, 16, 0, Math.PI * 2);
       ctx.fill();
 
     } else if (gift.id === "epic_hammer") {
       // 🔨 ГРОМОВОЙ МОЛОТ
       ctx.fillStyle = "#455A64";
-      ctx.fillRect(-40, -55, 80, 45);
+      ctx.fillRect(-35, -48, 70, 40);
       ctx.strokeStyle = "#00E5FF";
-      ctx.lineWidth = 3;
-      ctx.strokeRect(-40, -55, 80, 45);
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(-35, -48, 70, 40);
 
       ctx.fillStyle = "#8D6E63";
-      ctx.fillRect(-7, -10, 14, 75);
+      ctx.fillRect(-6, -8, 12, 65);
 
       ctx.fillStyle = "#00E5FF";
       ctx.beginPath();
-      ctx.moveTo(4, -45);
-      ctx.lineTo(-9, -32);
-      ctx.lineTo(0, -32);
-      ctx.lineTo(-4, -18);
-      ctx.lineTo(9, -34);
-      ctx.lineTo(0, -34);
+      ctx.moveTo(3, -40);
+      ctx.lineTo(-8, -28);
+      ctx.lineTo(0, -28);
+      ctx.lineTo(-3, -16);
+      ctx.lineTo(8, -30);
+      ctx.lineTo(0, -30);
       ctx.closePath();
       ctx.fill();
 
     } else if (gift.id === "epic_bow") {
       // 🏹 ЛЕДЯНОЙ ЛУК
       ctx.strokeStyle = "#00E5FF";
-      ctx.lineWidth = 6;
+      ctx.lineWidth = 5;
       ctx.beginPath();
-      ctx.arc(-15, 0, 55, -Math.PI * 0.45, Math.PI * 0.45);
+      ctx.arc(-12, 0, 48, -Math.PI * 0.45, Math.PI * 0.45);
       ctx.stroke();
 
-      // String
       ctx.strokeStyle = "#FFFFFF";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(-15 + Math.cos(-Math.PI * 0.45) * 55, Math.sin(-Math.PI * 0.45) * 55);
-      ctx.lineTo(-15 + Math.cos(Math.PI * 0.45) * 55, Math.sin(Math.PI * 0.45) * 55);
+      ctx.moveTo(-12 + Math.cos(-Math.PI * 0.45) * 48, Math.sin(-Math.PI * 0.45) * 48);
+      ctx.lineTo(-12 + Math.cos(Math.PI * 0.45) * 48, Math.sin(Math.PI * 0.45) * 48);
       ctx.stroke();
 
-      // Crystal Arrow
       ctx.fillStyle = "#80D8FF";
-      ctx.fillRect(-35, -2, 70, 4);
+      ctx.fillRect(-30, -2, 60, 4);
 
     } else if (gift.id === "epic_axe") {
       // 🪓 БОЕВОЙ ТОПОР
       ctx.rotate(-Math.PI / 4);
       ctx.fillStyle = "#5D4037";
-      ctx.fillRect(-6, -70, 12, 140);
+      ctx.fillRect(-5, -60, 10, 120);
 
-      const axGrad = ctx.createLinearGradient(-40, -50, 40, -10);
+      const axGrad = ctx.createLinearGradient(-35, -45, 35, -8);
       axGrad.addColorStop(0, "#ECEFF1");
       axGrad.addColorStop(0.6, "#78909C");
       axGrad.addColorStop(1, "#37474F");
       ctx.fillStyle = axGrad;
 
-      // Double blade
       ctx.beginPath();
-      ctx.moveTo(6, -60);
-      ctx.quadraticCurveTo(45, -45, 35, -15);
-      ctx.lineTo(6, -25);
+      ctx.moveTo(5, -52);
+      ctx.quadraticCurveTo(40, -40, 30, -12);
+      ctx.lineTo(5, -22);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
@@ -15376,9 +15557,9 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.moveTo(-6, -60);
-      ctx.quadraticCurveTo(-45, -45, -35, -15);
-      ctx.lineTo(-6, -25);
+      ctx.moveTo(-5, -52);
+      ctx.quadraticCurveTo(-40, -40, -30, -12);
+      ctx.lineTo(-5, -22);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
@@ -15389,24 +15570,24 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       // 🌙 ЛУННЫЙ АМУЛЕТ
       ctx.fillStyle = "#80D8FF";
       ctx.beginPath();
-      ctx.arc(0, 0, 52, 0, Math.PI * 2);
+      ctx.arc(0, 0, 46, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.globalCompositeOperation = "destination-out";
       ctx.beginPath();
-      ctx.arc(18, -12, 45, 0, Math.PI * 2);
+      ctx.arc(16, -10, 40, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.globalCompositeOperation = "source-over";
       ctx.strokeStyle = "#FFFFFF";
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(0, 0, 52, -Math.PI * 0.4, Math.PI * 0.85);
+      ctx.arc(0, 0, 46, -Math.PI * 0.4, Math.PI * 0.85);
       ctx.stroke();
 
       ctx.fillStyle = "#00E5FF";
       ctx.beginPath();
-      ctx.arc(12, 0, 12, 0, Math.PI * 2);
+      ctx.arc(10, 0, 10, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
       ctx.lineWidth = 1.5;
@@ -15416,59 +15597,59 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       // 🧪 КОЛБА С ЗЕЛЬЕМ
       ctx.fillStyle = "#2979FF";
       ctx.beginPath();
-      ctx.arc(0, 12, 35, 0, Math.PI * 2);
+      ctx.arc(0, 10, 30, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillRect(-10, -40, 20, 26);
+      ctx.fillRect(-9, -35, 18, 23);
       ctx.strokeStyle = "#FFFFFF";
       ctx.lineWidth = 2;
       ctx.stroke();
 
       ctx.fillStyle = "#8D6E63";
-      ctx.fillRect(-13, -50, 26, 10);
+      ctx.fillRect(-11, -44, 22, 9);
 
     } else if (gift.id === "rare_compass") {
       // 🧭 МОРСКОЙ КОМПАС
       ctx.fillStyle = "#283593";
       ctx.beginPath();
-      ctx.arc(0, 0, 50, 0, Math.PI * 2);
+      ctx.arc(0, 0, 44, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "#FFD700";
-      ctx.lineWidth = 3.5;
+      ctx.lineWidth = 3;
       ctx.stroke();
 
-      ctx.rotate(phase * 0.3); // Slow rotation
+      ctx.rotate(phase * 0.25);
       ctx.fillStyle = "#FF1744";
       ctx.beginPath();
-      ctx.moveTo(0, -36);
-      ctx.lineTo(7, 0);
-      ctx.lineTo(-7, 0);
+      ctx.moveTo(0, -32);
+      ctx.lineTo(6, 0);
+      ctx.lineTo(-6, 0);
       ctx.closePath();
       ctx.fill();
 
       ctx.fillStyle = "#ECEFF1";
       ctx.beginPath();
-      ctx.moveTo(0, 36);
-      ctx.lineTo(7, 0);
-      ctx.lineTo(-7, 0);
+      ctx.moveTo(0, 32);
+      ctx.lineTo(6, 0);
+      ctx.lineTo(-6, 0);
       ctx.closePath();
       ctx.fill();
 
     } else if (gift.id === "rare_lantern") {
       // 🏮 СТАРИННЫЙ ФОНАРЬ
       ctx.fillStyle = "#37474F";
-      ctx.fillRect(-26, -35, 52, 65);
+      ctx.fillRect(-22, -30, 44, 56);
       ctx.strokeStyle = "#FFD700";
       ctx.lineWidth = 2.5;
-      ctx.strokeRect(-26, -35, 52, 65);
+      ctx.strokeRect(-22, -30, 44, 56);
 
       ctx.fillStyle = "#00E5FF";
       ctx.beginPath();
-      ctx.arc(0, -2, 14, 0, Math.PI * 2);
+      ctx.arc(0, -2, 12, 0, Math.PI * 2);
       ctx.fill();
 
     } else if (gift.id === "common_coin") {
       // 🪙 ЗОЛОТАЯ МОНЕТА
-      const rimGrad = ctx.createRadialGradient(-20, -20, 8, 0, 0, 68);
+      const rimGrad = ctx.createRadialGradient(-18, -18, 7, 0, 0, 58);
       rimGrad.addColorStop(0, "#FFF9C4");
       rimGrad.addColorStop(0.35, "#FFD700");
       rimGrad.addColorStop(0.7, "#FF8F00");
@@ -15476,32 +15657,32 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.fillStyle = rimGrad;
 
       ctx.beginPath();
-      ctx.arc(0, 0, 66, 0, Math.PI * 2);
+      ctx.arc(0, 0, 58, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "#FFE082";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2.5;
       ctx.stroke();
 
-      for (let d = 0; d < 18; d++) {
-        const dotAngle = (d / 18) * Math.PI * 2;
-        const dx = Math.cos(dotAngle) * 58;
-        const dy = Math.sin(dotAngle) * 58;
+      for (let d = 0; d < 16; d++) {
+        const dotAngle = (d / 16) * Math.PI * 2;
+        const dx = Math.cos(dotAngle) * 50;
+        const dy = Math.sin(dotAngle) * 50;
         ctx.fillStyle = d % 2 === 0 ? "#FFF59D" : "#FF6F00";
         ctx.beginPath();
-        ctx.arc(dx, dy, 2, 0, Math.PI * 2);
+        ctx.arc(dx, dy, 1.8, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      const innerGrad = ctx.createRadialGradient(0, 0, 8, 0, 0, 52);
+      const innerGrad = ctx.createRadialGradient(0, 0, 7, 0, 0, 45);
       innerGrad.addColorStop(0, "#FFD54F");
       innerGrad.addColorStop(0.6, "#FFA000");
       innerGrad.addColorStop(1, "#BF360C");
       ctx.fillStyle = innerGrad;
       ctx.beginPath();
-      ctx.arc(0, 0, 52, 0, Math.PI * 2);
+      ctx.arc(0, 0, 45, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "#FFE57F";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
       ctx.stroke();
 
       ctx.fillStyle = "#FFFDE7";
@@ -15509,8 +15690,8 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       for (let p = 0; p < 8; p++) {
         const rad1 = (p / 8) * Math.PI * 2 - Math.PI / 2;
         const rad2 = ((p + 0.5) / 8) * Math.PI * 2 - Math.PI / 2;
-        const rOuter = p % 2 === 0 ? 32 : 18;
-        const rInner = 10;
+        const rOuter = p % 2 === 0 ? 28 : 15;
+        const rInner = 8;
         if (p === 0) ctx.moveTo(Math.cos(rad1) * rOuter, Math.sin(rad1) * rOuter);
         else ctx.lineTo(Math.cos(rad1) * rOuter, Math.sin(rad1) * rOuter);
         ctx.lineTo(Math.cos(rad2) * rInner, Math.sin(rad2) * rInner);
@@ -15523,55 +15704,54 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.rotate(Math.PI / 4);
       ctx.fillStyle = "#ECEFF1";
       ctx.beginPath();
-      ctx.arc(0, -40, 22, 0, Math.PI * 2);
+      ctx.arc(0, -35, 18, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "#78909C";
-      ctx.lineWidth = 3.5;
+      ctx.lineWidth = 3;
       ctx.stroke();
 
       ctx.fillStyle = "#CFD8DC";
-      ctx.fillRect(-5, -18, 10, 75);
+      ctx.fillRect(-4, -16, 8, 65);
 
-      ctx.fillRect(5, 35, 16, 7);
-      ctx.fillRect(5, 48, 10, 7);
+      ctx.fillRect(4, 30, 14, 6);
+      ctx.fillRect(4, 42, 9, 6);
 
     } else if (gift.id === "common_hourglass") {
       // ⏳ ПЕСОЧНЫЕ ЧАСЫ
       ctx.fillStyle = "#8D6E63";
-      ctx.fillRect(-40, -58, 80, 9);
-      ctx.fillRect(-40, 49, 80, 9);
+      ctx.fillRect(-35, -50, 70, 8);
+      ctx.fillRect(-35, 42, 70, 8);
 
       ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
       ctx.beginPath();
-      ctx.moveTo(-30, -49);
-      ctx.lineTo(30, -49);
+      ctx.moveTo(-26, -42);
+      ctx.lineTo(26, -42);
       ctx.lineTo(0, 0);
-      ctx.lineTo(30, 49);
-      ctx.lineTo(-30, 49);
+      ctx.lineTo(26, 42);
+      ctx.lineTo(-26, 42);
       ctx.lineTo(0, 0);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = "#FFE082";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
       ctx.stroke();
 
       ctx.fillStyle = "#FFB300";
       ctx.beginPath();
-      ctx.arc(0, 30, 18, 0, Math.PI);
+      ctx.arc(0, 26, 15, 0, Math.PI);
       ctx.fill();
 
     } else {
       // 📦 ДЕРЕВЯННЫЙ СУНДУК
       ctx.fillStyle = "#5D4037";
-      ctx.fillRect(-45, -30, 90, 60);
+      ctx.fillRect(-38, -25, 76, 50);
       ctx.strokeStyle = "#FFD700";
-      ctx.lineWidth = 3;
-      ctx.strokeRect(-45, -30, 90, 60);
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(-38, -25, 76, 50);
 
-      // Gold Lock
       ctx.fillStyle = "#FFD700";
       ctx.beginPath();
-      ctx.arc(0, 0, 12, 0, Math.PI * 2);
+      ctx.arc(0, 0, 10, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "#FFFFFF";
       ctx.lineWidth = 1.5;
@@ -15580,17 +15760,26 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
 
     ctx.restore();
 
-    // 4. Title in clean LOWERCASE letters without emoji or symbols
+    // ==========================================
+    // 4. COMPLETELY ISOLATED FOOTER CARD FOR TEXT & BADGE
+    // (Guarantees zero lighting/glow spill onto text or badge)
+    // ==========================================
     ctx.save();
-    ctx.font = "bold 22px sans-serif";
+    ctx.fillStyle = "#07030e";
+    ctx.fillRect(0, 335, width, 115);
+
+    // Subtle divider line
+    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.fillRect(0, 335, width, 1);
+
+    // Title in clean LOWERCASE letters, pure white, NO shadow/color bleeding
+    ctx.font = "bold 21px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#FFFFFF";
-    ctx.shadowColor = gift.isSecret ? `hsl(${rainbowHue}, 100%, 65%)` : mainColor1;
-    ctx.shadowBlur = 14;
-    ctx.fillText(gift.name.toLowerCase(), centerX, 365);
+    ctx.fillText(gift.name.toLowerCase(), centerX, 366);
 
-    // 5. Rectangular Slightly Rounded Rarity Badge (CLEAN TEXT, NO EMOJI, NO STARS, SOLID PAINT)
+    // Rectangular Slightly Rounded Rarity Badge (SOLID PAINT, NO EMOJI, NO SHIFTING)
     const rarityLabel = gift.rarityName;
     ctx.font = "bold 15px sans-serif";
     const textWidth = ctx.measureText(rarityLabel).width;
@@ -15599,7 +15788,6 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
     const badgeX = Math.round(centerX - badgeW / 2);
     const badgeY = 402 - Math.round(badgeH / 2);
 
-    // Solid constant paint
     ctx.fillStyle = gift.badgeBg;
     if ((ctx as any).roundRect) {
       ctx.beginPath();
@@ -15609,7 +15797,6 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
     }
 
-    // Crisp text
     ctx.fillStyle = gift.badgeText;
     ctx.fillText(rarityLabel, centerX, 402);
     ctx.restore();
@@ -18594,6 +18781,16 @@ if (cmd === "join_kick") {
           chatData.gamesDisabled = isDis;
           chatData.games = !isDis;
         }
+        else if (sysKey === "join") chatData.joinNotify = !(chatData.joinNotify !== undefined ? chatData.joinNotify : true);
+        else if (sysKey === "captcha") {
+          const isCap = !(chatData.captcha || chatData.captchaEnabled);
+          chatData.captcha = isCap;
+          chatData.captchaEnabled = isCap;
+        }
+        else if (sysKey === "antimat") chatData.antiMat = !chatData.antiMat;
+        else if (sysKey === "anticaps") chatData.antiCaps = !chatData.antiCaps;
+        else if (sysKey === "antivoice") chatData.antiVoice = !chatData.antiVoice;
+        else if (sysKey === "antisticker") chatData.antiSticker = !chatData.antiSticker;
 
         await updateChat(peerId, {
           antiFlood: chatData.antiFlood,
@@ -18605,7 +18802,14 @@ if (cmd === "join_kick") {
           inviteOnlyMods: chatData.inviteOnlyMods,
           leaveKick: chatData.leaveKick,
           gamesDisabled: chatData.gamesDisabled,
-          games: chatData.games
+          games: chatData.games,
+          joinNotify: chatData.joinNotify,
+          captcha: chatData.captcha,
+          captchaEnabled: chatData.captchaEnabled,
+          antiMat: chatData.antiMat,
+          antiCaps: chatData.antiCaps,
+          antiVoice: chatData.antiVoice,
+          antiSticker: chatData.antiSticker
         });
 
         const text = renderSettingsText(chatData);
