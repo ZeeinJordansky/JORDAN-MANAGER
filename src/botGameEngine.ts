@@ -150,8 +150,6 @@ let globalRateLimitUntil = 0;
 let lastSendTimestamp = 0;
 const MIN_SEND_GAP_MS = 0; // Instant message dispatch (0ms delay)
 
-import { vk } from "../server";
-
 // Zero-overhead body stringifier (Zero-allocation string builder)
 function fastStringifyParams(params: Record<string, any>): string {
   let out = "";
@@ -308,8 +306,8 @@ export function sendVkMessage(vkToken: string, peerId: number, text: string, ext
   const sendKey = `${peerId}_${(text || "").trim().slice(0, 150)}_${extraParams.attachment || ""}`;
   const now = Date.now();
   const lastSent = recentSentMessages.get(sendKey);
-  const isSystemNotice = text && (text.includes("#VACUUM") || text.includes("#NAMES") || text.includes("#PRUNE") || text.includes("зарплата") || text.includes("Х2 режим"));
-  const dedupThreshold = isSystemNotice ? 60000 : 5000;
+  const isSystemNotice = text && (text.includes("#VACUUM") || text.includes("#NAMES") || text.includes("#PRUNE") || text.includes("зарплата") || text.includes("Х2 режим") || text.includes("#SQLrestart") || text.includes("перезагрузка сервера SQL"));
+  const dedupThreshold = isSystemNotice ? 180000 : 5000; // 3 minutes window for system notices
   if (!extraParams.forceSend && lastSent && (now - lastSent < dedupThreshold)) {
     console.log(`[DEDUP] Dropping duplicate message to peer ${peerId}: ${text.slice(0, 60)}...`);
     return Promise.resolve(null);
