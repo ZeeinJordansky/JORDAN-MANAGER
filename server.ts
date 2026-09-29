@@ -111,6 +111,74 @@ function pluralize(n: number, one: string, two: string, five: string): string {
   return pluralizeRu(n, one, two, five);
 }
 
+function formatMuteEndDate(ms: number): string {
+  if (!ms || ms <= 0) return "Навсегда";
+  const d = new Date(ms + 3 * 3600000); // Moscow time UTC+3
+  let hours = d.getUTCHours();
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const hh = String(hours).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  const ss = String(d.getUTCSeconds()).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const year = d.getUTCFullYear();
+  return `${hh}:${mm}:${ss} ${ampm} | ${day}.${month}.${year}`;
+}
+
+function formatStatsJoinedDate(ms?: number | null): string {
+  if (!ms || ms <= 0) return "Отсутствует";
+  const d = new Date(ms + 3 * 3600000);
+  const daysOfWeek = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+  const monthsGen = [
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря"
+  ];
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dayName = daysOfWeek[d.getUTCDay()] || "понедельник";
+  const dd = pad(d.getUTCDate());
+  const monthName = monthsGen[d.getUTCMonth()] || "января";
+  const year = d.getUTCFullYear();
+  const hh = pad(d.getUTCHours());
+  const mm = pad(d.getUTCMinutes());
+  const ss = pad(d.getUTCSeconds());
+  return `${hh} ч. ${mm} м. ${ss} с. (МСК) | ${dayName}, ${dd} ${monthName} ${year} год`;
+}
+
+async function getChatMessagesRank(peerId: number, targetId: number): Promise<number> {
+  const allUsers = await getAllUsers();
+  const sorted = allUsers
+    .map(u => {
+      const msgs = (u.chatTotalMsgs?.[peerId] || u.chatTodayMsgs?.[peerId] || 0);
+      return { id: Number(u.userId), msgs };
+    })
+    .filter(u => u.id > 0 && u.msgs > 0)
+    .sort((a, b) => b.msgs - a.msgs);
+
+  const idx = sorted.findIndex(u => u.id === targetId);
+  return idx >= 0 ? idx + 1 : 1;
+}
+
+function formatStatsLastActivity(ms?: number | null): string {
+  if (!ms || ms <= 0) return "Отсутствует";
+  const d = new Date(ms + 3 * 3600000);
+  const daysOfWeek = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+  const monthsGen = [
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря"
+  ];
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dayName = daysOfWeek[d.getUTCDay()] || "понедельник";
+  const dd = pad(d.getUTCDate());
+  const monthName = monthsGen[d.getUTCMonth()] || "января";
+  const year = d.getUTCFullYear();
+  const hh = pad(d.getUTCHours());
+  const mm = pad(d.getUTCMinutes());
+  const ss = pad(d.getUTCSeconds());
+  return `${hh} ч. ${mm} м. ${ss} с. (МСК) | ${dayName}, ${dd} ${monthName} ${year} год`;
+}
+
 function formatNumberDots(num: number | string): string {
   if (num === null || num === undefined) return "0";
   const n = typeof num === "string" ? parseFloat(num) : num;
@@ -138,7 +206,7 @@ function formatBanchatDate(ts?: number | string | null): { timeStr: string; date
   const ss = pad(d.getUTCSeconds());
   return {
     timeStr: `${hh} ч. ${mm} м. ${ss} с.`,
-    dateStr: `${dayName}, ${dd} ${monthName}, ${year} года`
+    dateStr: `${dayName}, ${dd} ${monthName} ${year} года`
   };
 }
 
@@ -259,7 +327,7 @@ setInterval(async () => {
 
 const nftAttachmentCache = new Map<string, { attachment: string; ts: number }>();
 const nftBufferCache = new Map<string, { buf: Buffer; ts: number }>();
-const ALL_CANONICAL_COMMANDS: { cmd: string; aliases: string[] }[] = [
+const ALL_CANONICAL_COMMANDS: { cmd: string; aliases: string[]; minRole?: number }[] = [
   { cmd: "/ping", aliases: ["/ping", "/пинг", "/пингг", "/pong", "/понг"] },
   { cmd: "/pin", aliases: ["/pin", "/пин", "/закр", "/закрепить"] },
   { cmd: "/unpin", aliases: ["/unpin", "/анпин", "/унпин", "/открепить", "/откреп"] },
@@ -2082,7 +2150,7 @@ function formatDateTimeWithDeclension(ts?: number | string | null): string {
   const hh = pad(d.getUTCHours());
   const mm = pad(d.getUTCMinutes());
   const ss = pad(d.getUTCSeconds());
-  return `${dayName}, ${dd} ${monthName}, ${year} года в ${hh}:${mm}:${ss}`;
+  return `${dayName}, ${dd} ${monthName} ${year} года в ${hh}:${mm}:${ss}`;
 }
 
 function formatMskDetailedDate(ms?: number | string | null, defaultText: string = "Навсегда"): string {
@@ -2697,7 +2765,7 @@ async function generateUserStatsImage(targetUser: any, targetId: number, current
 
   ctx.fillStyle = "#64748b";
   ctx.font = "12px NotoSans, sans-serif";
-  ctx.fillText("By. «ORION» – чат-менеджер (@orion_manager)", 45, height - 15);
+  ctx.fillText("By. «Mint» – чат-менеджер (@cm_mint)", 45, height - 15);
 
   try {
     return canvas.toBuffer("image/jpeg", { quality: 0.90 });
@@ -3118,7 +3186,7 @@ async function generateUserDailyStatsChartBuffer(
   ctx.fillStyle = "#64748b";
   ctx.font = "12px NotoSans, sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText("By. «ORION» – чат-менеджер (@orion_manager)", leftX, height - 16);
+  ctx.fillText("By. «Mint» – чат-менеджер (@cm_mint)", leftX, height - 16);
 
   try {
     return canvas.toBuffer("image/jpeg", { quality: 0.90 });
@@ -3262,7 +3330,7 @@ async function generateBtcChartBuffer(currentPrice: number): Promise<Buffer> {
   ctx.fillStyle = "#64748b";
   ctx.font = "12px NotoSans, sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText("Обновление курса каждые 10 часов | By. «ORION» – чат-менеджер (@orion_manager)", 60, height - 20);
+  ctx.fillText("Обновление курса каждые 10 часов | By. «Mint» – чат-менеджер (@cm_mint)", 60, height - 20);
 
   return canvas.toBuffer("image/jpeg", { quality: 0.90 });
 }
@@ -3378,7 +3446,7 @@ async function generateBalanceChartBuffer(targetName: string, balance: number, b
   ctx.fillStyle = "#94a3b8";
   ctx.font = "11px NotoSans, sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText("By. «ORION» – чат-менеджер (@orion_manager)", leftX, height - 12);
+  ctx.fillText("By. «Mint» – чат-менеджер (@cm_mint)", leftX, height - 12);
 
   return canvas.toBuffer("image/png");
 }
@@ -3471,11 +3539,11 @@ async function generateChatStatsChartBuffer(metrics: { msgs: number; photos: num
   ctx.lineTo(width - leftX, height - 38);
   ctx.stroke();
 
-  // Bottom Left text ONLY: By. «ORION» – чат-менеджер (@orion_manager)
+  // Bottom Left text ONLY: By. «Mint» – чат-менеджер (@cm_mint)
   ctx.fillStyle = "#94a3b8";
   ctx.font = "12px NotoSans, sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText("By. «ORION» – чат-менеджер (@orion_manager)", leftX, height - 16);
+  ctx.fillText("By. «Mint» – чат-менеджер (@cm_mint)", leftX, height - 16);
 
   return canvas.toBuffer("image/jpeg", { quality: 0.90 });
 }
@@ -3526,8 +3594,8 @@ const blackjackGames = new LRUCache<string, any>({ max: 500, ttl: 1000 * 60 * 10
 const stakanGames = new LRUCache<string, any>({ max: 500, ttl: 1000 * 60 * 10 });
 const robCooldowns = new LRUCache<number, number>({ max: 10000, ttl: 1000 * 3600 * 5 });
 const floodTracker = new LRUCache<string, any>({ max: 1000, ttl: 1000 * 60 * 10 });
-let globalApiPing: number = 24;
-let chatManagerServerPing: number = 18;
+let globalApiPing: number = 10;
+let chatManagerServerPing: number = 1.2;
 let lastCallbackReceivedTimestamp: number = Date.now();
 let isLongPollActive: boolean = false;
 let activeLongPollSessionId: number = 0;
@@ -4456,19 +4524,32 @@ const inFlightButtonClicks = new Set<string>();
 
 function getEventDeduplicationKeys(event: any): string[] {
   const keys: string[] = [];
-  if (event?.event_id) keys.push(`evt_${event.event_id}`);
-  if (event?.id) keys.push(`id_${event.id}`);
-  if (event?.conversation_message_id) keys.push(`cmid_${event.peer_id || ""}_${event.conversation_message_id}`);
+  if (!event) return keys;
+
+  const msg = event.object?.message || event.object || event;
+  const peerId = msg.peer_id || event.peer_id || event.object?.peer_id || 0;
+  const cmId = msg.conversation_message_id || event.conversation_message_id || event.object?.conversation_message_id;
+  const msgId = msg.id || event.id || event.object?.id;
+  const evtId = event.event_id || event.object?.event_id;
+
+  if (evtId) keys.push(`evt_${evtId}`);
+  if (peerId && cmId) keys.push(`cmid_${peerId}_${cmId}`);
+  if (msgId && msgId > 0) keys.push(`msgid_${msgId}`);
+
   return keys;
 }
 
-function deduplicateEventGlobally(key: string | string[], ttlMs: number = 3000): boolean {
-  if (Array.isArray(key)) {
-    return key.some(k => deduplicateEventGlobally(k, ttlMs));
+function deduplicateEventGlobally(keys: string | string[], ttlMs: number = 10000): boolean {
+  const keyList = Array.isArray(keys) ? keys : [keys];
+  if (keyList.length === 0) return false;
+  
+  const isDuplicate = keyList.some(k => processedEventIds.has(k));
+  if (isDuplicate) return true;
+
+  for (const k of keyList) {
+    processedEventIds.add(k);
+    setTimeout(() => processedEventIds.delete(k), ttlMs);
   }
-  if (processedEventIds.has(key)) return true;
-  processedEventIds.add(key);
-  setTimeout(() => processedEventIds.delete(key), ttlMs);
   return false;
 }
 
@@ -4784,9 +4865,8 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
   const btnModer = { action: { type: "callback", label: "Модератор", payload: JSON.stringify({ cmd: "help_moder", authorId: safeAuthorId }) }, color: "secondary" };
   const btnSModer = { action: { type: "callback", label: "Старший Модератор", payload: JSON.stringify({ cmd: "help_smoder", authorId: safeAuthorId }) }, color: "secondary" };
   const btnAdmin = { action: { type: "callback", label: "Администратор", payload: JSON.stringify({ cmd: "help_admin", authorId: safeAuthorId }) }, color: "secondary" };
-  const btnSAdmin = { action: { type: "callback", label: "Старший Администратор", payload: JSON.stringify({ cmd: "help_sadmin", authorId: safeAuthorId }) }, color: "secondary" };
-  const btnZSA = { action: { type: "callback", label: "Зам. Главного Администратора", payload: JSON.stringify({ cmd: "help_zsa", authorId: safeAuthorId }) }, color: "secondary" };
-  const btnSA = { action: { type: "callback", label: "Главный Администратор", payload: JSON.stringify({ cmd: "help_sa", authorId: safeAuthorId }) }, color: "secondary" };
+  const btnGA = { action: { type: "callback", label: "Главный Администратор", payload: JSON.stringify({ cmd: "help_ga", authorId: safeAuthorId }) }, color: "secondary" };
+  const btnRuk = { action: { type: "callback", label: "Руководитель беседы", payload: JSON.stringify({ cmd: "help_ruk", authorId: safeAuthorId }) }, color: "secondary" };
   const btnOwner = { action: { type: "callback", label: "Владелец беседы", payload: JSON.stringify({ cmd: "help_owner", authorId: safeAuthorId }) }, color: "secondary" };
   const btnGames = { action: { type: "callback", label: "Игровые команды", payload: JSON.stringify({ cmd: "help_games", authorId: safeAuthorId }) }, color: "positive" };
   const btnBack = { action: { type: "callback", label: "Назад", payload: JSON.stringify({ cmd: "cmd_help_main", authorId: safeAuthorId }) }, color: "negative" };
@@ -4795,15 +4875,16 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
     case "cmd_help_main":
       text = `...::Помощь по командам чат-менеджера::...
 
-| Префиксы команд: «/» «!» «.» «;» «:» «,»
+` +
+        `| Префиксы команд: «/» «!» «.» «;» «:» «,»
 
-| Выберите уровень прав, чтобы узнать какие команды ему доступны:`;
+` +
+        `| Выберите уровень прав, чтобы узнать какие команды ему доступны:`;
       keyboard.buttons = [
         [btnUser],
         [btnModer, btnSModer],
-        [btnAdmin, btnSAdmin],
-        [btnZSA, btnSA],
-        [btnOwner],
+        [btnAdmin, btnGA],
+        [btnRuk, btnOwner],
         [btnGames]
       ];
       break;
@@ -4811,24 +4892,31 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
     case "help_user":
       text = `...::Помощь по командам чат-менеджера::...
 
-| Уровень прав: Пользователь (0 LVL)
+` +
+        `| Уровень прав: Пользователь (0 LVL)
 
-| Команды:
-**/id** [Ссылка/упоминание] — Узнать ID страницы пользователя или сообщества.
-**/ping** — Проверить работоспособность и пинг бота.
-**/staff** — Список администрации беседы.
-**/rules** — Правила беседы.
-**/info** — Информация о беседе.
-**/online** — Список участников онлайн.
-**/top** — Топ активности участников.
-**/me** [действие] — Выполнить действие от своего лица.
-**/try** [действие] — Попытать удачу.
-**/report** [ответ на сообщение] — Отправить жалобу администрации.`;
+` +
+        `| Команды:
+` +
+        `**/id** [Ссылка/упоминание] — Узнать ID страницы пользователя или сообщества.
+` +
+        `**/ping** — Проверить работоспособность и пинг бота.
+` +
+        `**/staff** — Список модерации беседы.
+` +
+        `**/rules** — Правила беседы.
+` +
+        `**/info** — Информация о беседе.
+` +
+        `**/online** — Список участников онлайн.
+` +
+        `**/top** — Топ активности участников.
+` +
+        `**/report** [ответ на сообщение] — Отправить жалобу администрации.`;
       keyboard.buttons = [
         [btnModer, btnSModer],
-        [btnAdmin, btnSAdmin],
-        [btnZSA, btnSA],
-        [btnOwner],
+        [btnAdmin, btnGA],
+        [btnRuk, btnOwner],
         [btnGames, btnBack]
       ];
       break;
@@ -4836,27 +4924,49 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
     case "help_moder":
       text = `...::Помощь по командам чат-менеджера::...
 
-| Уровень прав: Модератор (1 LVL)
+` +
+        `| Уровень прав: Модератор (1 LVL)
 
-| Команды:
-**/mute** [Ссылка/упоминание] [срок] [причина] — Выдать блокировку чата пользователю.
-**/unmute** [Ссылка/упоминание] — Снять блокировку чата пользователю.
-**/warn** [Ссылка/упоминание] [причина] — Выдать предупреждение пользователю.
-**/unwarn** [Ссылка/упоминание] — Снять предупреждение пользователю.
-**/kick** [Ссылка/упоминание] [причина] — Исключить пользователя из беседы.
-**/smute** [Ссылка/упоминание] — Выдать тихую блокировку чата.
-**/skick** [Ссылка/упоминание] — Тихо исключить пользователя.
-**/clear** [кол-во] — Очистить сообщения в беседе.
-**/lists** — Список пользователей с наказаниями.
-**/snick** [Ссылка/упоминание] [Ник] — Установить Nick_Name пользователю.
-**/gnick** [Ссылка/упоминание] — Узнать Nick_Name пользователя.
-**/rnick** [Ссылка/упоминание] — Удалить Nick_Name пользователю.
-**/nlist** — Список пользователей с Nick_Name в беседе.`;
+` +
+        `| Команды:
+` +
+        `/𝗴𝗲𝘁 [Ссылка/упоминание] — Информация о наказаниях пользователя.
+` +
+        `/𝗺𝘂𝘁𝗲 [Ссылка/упоминание] [срок] [причина] — Выдать блокировку чата пользователю.
+` +
+        `/𝘂𝗻𝗺𝘂𝘁𝗲 [Ссылка/упоминание] — Снять блокировку чата пользователю.
+` +
+        `/𝘄𝗮𝗿𝗻 [Ссылка/упоминание] [причина] — Выдать предупреждение пользователю.
+` +
+        `/𝘂𝗻𝘄𝗮𝗿𝗻 [Ссылка/упоминание] — Снять предупреждение пользователю.
+` +
+        `/𝗸𝗶𝗰𝗸 [Ссылка/упоминание] [причина] — Исключить пользователя из беседы.
+` +
+        `/𝗰𝗹𝗲𝗮𝗿 [Ссылка/упоминание] — Очистить сообщение от пользователя.
+` +
+        `/𝗺𝗰𝗹𝗲𝗮𝗿 [Ссылка/упоминание] — Очистить несколько сообщений от пользователя.
+` +
+        `/𝘀𝗺𝘂𝘁𝗲 [Ссылка/упоминание] — Выдать тихую блокировку чата пользователю.
+` +
+        `/𝘀𝗸𝗶𝗰𝗸 [Ссылка/упоминание] — Тихо исключить пользователя из беседы.
+` +
+        `/𝘀𝗰𝗹𝗲𝗮𝗿 [Ссылка/упоминание] — Тихо очистить сообщение от пользователя.
+` +
+        `/𝘀𝗺𝗰𝗹𝗲𝗮𝗿 [Ссылка/упоминание] — Тихо очистить несколько сообщений от пользователя.
+` +
+        `/𝗹𝗶𝘀𝘁𝘀 — Список пользователей с наказаниями.
+` +
+        `/𝘀𝘁𝗮𝗳𝗳 — Список модерации беседы.
+` +
+        `/𝘀𝗻𝗶𝗰𝗸 [Ссылка/упоминание] [Ник] — Установить Nick_Name пользователю.
+` +
+        `/𝗴𝗻𝗶𝗰𝗸 [Ссылка/упоминание] — Узнать Nick_Name пользователя.
+` +
+        `/𝗿𝗻𝗶𝗰𝗸 [Ссылка/упоминание] — Удалить Nick_Name пользователю.`;
       keyboard.buttons = [
         [btnUser, btnSModer],
-        [btnAdmin, btnSAdmin],
-        [btnZSA, btnSA],
-        [btnOwner],
+        [btnAdmin, btnGA],
+        [btnRuk, btnOwner],
         [btnGames, btnBack]
       ];
       break;
@@ -4864,23 +4974,35 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
     case "help_smoder":
       text = `...::Помощь по командам чат-менеджера::...
 
-| Уровень прав: Старший Модератор (2 LVL)
+` +
+        `| Уровень прав: Старший Модератор (2 LVL)
 
-| Команды:
-**/ban** [Ссылка/упоминание] [срок] [причина] — Заблокировать пользователя в беседе.
-**/unban** [Ссылка/упоминание] — Разблокировать пользователя в беседе.
-**/sban** [Ссылка/упоминание] [срок] [причина] — Тихо заблокировать пользователя.
-**/sunban** [Ссылка/упоминание] — Тихо разблокировать пользователя.
-**/addaccesslevel** [Ссылка/упоминание] 1 — Выдать роль «Модератор».
-**/removerole** [Ссылка/упоминание] — Забрать уровень прав у пользователя.
-**/zov** [причина] — Вызвать всех участников беседы.
-**/olist** — Список участников беседы в сети.
-**/offlinelist** — Список участников беседы оффлайн.`;
+` +
+        `| Команды:
+` +
+        `/𝗯𝗮𝗻 [Ссылка/упоминание] [срок] [причина] — Заблокировать пользователя в беседе.
+` +
+        `/𝘂𝗻𝗯𝗮𝗻 [Ссылка/упоминание] — Разблокировать пользователя в беседе.
+` +
+        `/𝘀𝗯𝗮𝗻 [Ссылка/упоминание] [срок] [причина] — Тихо заблокировать пользователя в беседе.
+` +
+        `/𝘀𝘂𝗻𝗯𝗮𝗻 [Ссылка/упоминание] — Тихо разблокировать пользователя в беседе.
+` +
+        `/𝗮𝗱𝗱𝗮𝗰𝗰𝗲𝘀𝘀𝗹𝗲𝘃𝗲𝗹 [Ссылка/упоминание] [Уровень] — Выдать уровень прав пользователю.
+` +
+        `/𝗿𝗲𝗺𝗼𝘃𝗲𝗿𝗼𝗹𝗲 [Ссылка/упоминание] — Забрать уровень прав у пользователя.
+` +
+        `/𝗹𝗶𝘀𝘁𝘀 — Список пользователей с наказаниями.
+` +
+        `/𝘇𝗼𝘃 [причина] — Вызвать всех участников беседы.
+` +
+        `/𝗼𝗹𝗶𝘀𝘁 — Список участников беседы, которые в сети.
+` +
+        `/𝗼𝗳𝗳𝗹𝗶𝗻𝗲𝗹𝗶𝘀𝘁 — Список участников беседы, которые оффлайн.`;
       keyboard.buttons = [
         [btnUser, btnModer],
-        [btnAdmin, btnSAdmin],
-        [btnZSA, btnSA],
-        [btnOwner],
+        [btnAdmin, btnGA],
+        [btnRuk, btnOwner],
         [btnGames, btnBack]
       ];
       break;
@@ -4889,76 +5011,77 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
     case "cmd_help_admin_bot":
       text = `...::Помощь по командам чат-менеджера::...
 
-| Уровень прав: Администратор (3 LVL)
+` +
+        `| Уровень прав: Администратор (3 LVL)
 
-| Команды:
-**/purge** — Очистить ненужную информацию в беседе.
-**/silence** — Включить или выключить режим тишины.
-**/addaccesslevel** [Ссылка/упоминание] [1-2] — Выдать уровень прав в беседе.
-**/nban** [Ссылка/упоминание] [срок] [причина] — Заблокировать пользователя в беседах сетки.
-**/nunban** [Ссылка/упоминание] — Разблокировать пользователя в беседах сетки.
-**/nkick** [Ссылка/упоминание] — Исключить пользователя из бесед сетки.
-**/nrole** [Ссылка/упоминание] [LVL] — Выдать уровень прав в беседах сетки.
-**/nremoverole** [Ссылка/упоминание] — Забрать уровень прав в беседах сетки.
-**/nsnick** [Ссылка/упоминание] [Ник] — Установить Nick_Name в беседах сетки.
-**/nrnick** [Ссылка/упоминание] — Удалить Nick_Name в беседах сетки.`;
+` +
+        `| Команды:
+` +
+        `/𝗽𝘂𝗿𝗴𝗲 — Очистить ненужную информацию в беседе.
+` +
+        `/𝘀𝗶𝗹𝗲𝗻𝗰𝗲 — Включить или выключить режим тишины.
+` +
+        `/𝗻𝗯𝗮𝗻 [Ссылка/упоминание] [срок] [причина] — Заблокировать пользователя в беседах сетки.
+` +
+        `/𝗻𝘂𝗻𝗯𝗮𝗻 [Ссылка/упоминание] — Разблокировать пользователя в беседах сетки.
+` +
+        `/𝗻𝗸𝗶𝗰𝗸 [Ссылка/упоминание] — Исключить пользователя из бесед сетки.
+` +
+        `/𝗻𝗿𝗼𝗹𝗲 [Ссылка/упоминание] [LVL] — Выдать уровень прав пользователю в беседах сетки.
+` +
+        `/𝗻𝗿𝗲𝗺𝗼𝘃𝗲𝗿𝗼𝗹𝗲 [Ссылка/упоминание] — Забрать уровень прав у пользователя в беседах сетки.
+` +
+        `/𝘀𝗻𝗯𝗮𝗻 [Ссылка/упоминание] [срок] [причина] — Тихо заблокировать пользователя в беседах сетки.
+` +
+        `/𝘀𝗻𝗸𝗶𝗰𝗸 [Ссылка/упоминание] — Тихо исключить пользователя из бесед сетки.
+` +
+        `/𝘀𝗻𝗿𝗼𝗹𝗲 [Ссылка/упоминание] [LVL] — Тихо выдать уровень прав пользователю в беседах сетки.
+` +
+        `/𝘀𝗻𝗿𝗲𝗺𝗼𝘃𝗲𝗿𝗼𝗹𝗲 [Ссылка/упоминание] — Тихо забрать уровень прав у пользователя в беседах сетки.`;
       keyboard.buttons = [
         [btnUser, btnModer],
-        [btnSModer, btnSAdmin],
-        [btnZSA, btnSA],
-        [btnOwner],
+        [btnSModer, btnGA],
+        [btnRuk, btnOwner],
         [btnGames, btnBack]
       ];
       break;
 
-    case "help_sadmin":
-      text = `...::Помощь по командам чат-менеджера::...
-
-| Уровень прав: Старший Администратор (4 LVL)
-
-| Команды:
-**/addaccesslevel** [Ссылка/упоминание] [1-3] — Выдать уровень прав в беседе.`;
-      keyboard.buttons = [
-        [btnUser, btnModer],
-        [btnSModer, btnAdmin],
-        [btnZSA, btnSA],
-        [btnOwner],
-        [btnGames, btnBack]
-      ];
-      break;
-
-    case "help_zsa":
-      text = `...::Помощь по командам чат-менеджера::...
-
-| Уровень прав: Зам. Главного Администратора (5 LVL)
-
-| Команды:
-**/pin** [ответ на сообщение] — Закрепить сообщение в беседе.
-**/unpin** — Открепить сообщение в беседе.
-**/addaccesslevel** [Ссылка/упоминание] [1-4] — Выдать уровень прав в беседе.`;
-      keyboard.buttons = [
-        [btnUser, btnModer],
-        [btnSModer, btnAdmin],
-        [btnSAdmin, btnSA],
-        [btnOwner],
-        [btnGames, btnBack]
-      ];
-      break;
-
+    case "help_ga":
     case "help_sa":
       text = `...::Помощь по командам чат-менеджера::...
 
-| Уровень прав: Главный Администратор (6 LVL)
+` +
+        `| Уровень прав: Главный Администратор (4 LVL)
 
-| Команды:
-**/resetchat** — Сбросить настройки беседы.
-**/protection** [on/off] — Включить или выключить защиту беседы.
-**/addaccesslevel** [Ссылка/упоминание] [1-5] — Выдать уровень прав в беседе.`;
+` +
+        `| Команды:
+` +
+        `/𝗽𝗶𝗻 [ответ на сообщение] — Закрепить сообщение в беседе.
+` +
+        `/𝘂𝗻𝗽𝗶𝗻 — Открепить сообщение в беседе.`;
       keyboard.buttons = [
         [btnUser, btnModer],
         [btnSModer, btnAdmin],
-        [btnSAdmin, btnZSA],
-        [btnOwner],
+        [btnRuk, btnOwner],
+        [btnGames, btnBack]
+      ];
+      break;
+
+    case "help_ruk":
+    case "help_zsa":
+      text = `...::Помощь по командам чат-менеджера::...
+
+` +
+        `| Уровень прав: Руководитель беседы (5 LVL)
+
+` +
+        `| Команды:
+` +
+        `Команды временно отсутствуют.`;
+      keyboard.buttons = [
+        [btnUser, btnModer],
+        [btnSModer, btnAdmin],
+        [btnGA, btnOwner],
         [btnGames, btnBack]
       ];
       break;
@@ -4966,24 +5089,35 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
     case "help_owner":
       text = `...::Помощь по командам чат-менеджера::...
 
-| Уровень прав: Владелец Беседы (7 LVL)
+` +
+        `| Уровень прав: Владелец Беседы (6 LVL)
 
-| Команды:
-**/settings** — Настройки чат-менеджера в беседе.
-**/start** — Активировать чат-менеджера в беседе.
-**/sync** — Синхронизировать беседу с базой данных чат-менеджера.
-**/setrules** [текст] — Установить правила беседы.
-**/setinfo** [текст] — Установить информацию беседы.
-**/addaccesslevel** [Ссылка/упоминание] [1-6] — Выдать уровень прав в беседе.
-**/giveowner** [Ссылка/упоминание] — Передать уровень прав «Владелец Беседы» пользователю.
-**/addap** [Ссылка/упоминание] — Выдать «Анти Наказание» пользователю в беседе.
-**/unap** [Ссылка/упоминание] — Забрать «Анти Наказание» у пользователя.
-**/aplist** — Список пользователей с функцией «Анти Наказание».`;
+` +
+        `| Команды:
+` +
+        `**/settings** — Настройки чат-менеджера в беседе.
+` +
+        `**/start** — Активировать чат-менеджера в беседе.
+` +
+        `**/sync** — Синхронизировать беседу с базой данных чат-менеджера.
+` +
+        `**/setrules** [текст] — Установить правила беседы.
+` +
+        `**/setinfo** [текст] — Установить информацию беседы.
+` +
+        `**/addaccesslevel** [Ссылка/упоминание] [1-5] — Выдать уровень прав в беседе.
+` +
+        `**/giveowner** [Ссылка/упоминание] — Передать уровень прав «Владелец Беседы» пользователю.
+` +
+        `**/addap** [Ссылка/упоминание] — Выдать «Анти Наказание» пользователю в беседе.
+` +
+        `**/unap** [Ссылка/упоминание] — Забрать «Анти Наказание» у пользователя.
+` +
+        `**/aplist** — Список пользователей с функцией «Анти Наказание».`;
       keyboard.buttons = [
         [btnUser, btnModer],
         [btnSModer, btnAdmin],
-        [btnSAdmin, btnZSA],
-        [btnSA],
+        [btnGA, btnRuk],
         [btnGames, btnBack]
       ];
       break;
@@ -5023,9 +5157,8 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
       keyboard.buttons = [
         [btnUser, btnModer],
         [btnSModer, btnAdmin],
-        [btnSAdmin, btnZSA],
-        [btnSA, btnOwner],
-        [btnBack]
+        [btnGA, btnRuk],
+        [btnOwner, btnBack]
       ];
       break;
 
@@ -5038,9 +5171,8 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
       keyboard.buttons = [
         [btnUser],
         [btnModer, btnSModer],
-        [btnAdmin, btnSAdmin],
-        [btnZSA, btnSA],
-        [btnOwner],
+        [btnAdmin, btnGA],
+        [btnRuk, btnOwner],
         [btnGames]
       ];
       break;
@@ -5756,7 +5888,7 @@ function formatVkRegDateRussianFull(dateStr: string): string {
   const monthName = monthsGen[monthNum] || "января";
   const yearStr = `${yearNum} года`;
 
-  return `${dayName}, ${dd} ${monthName}, ${yearStr}`;
+  return `${dayName}, ${dd} ${monthName} ${yearStr}`;
 }
 
 function isMskWeekendX2(): boolean {
@@ -5882,6 +6014,7 @@ const inMemorySentX2Keys = new Set<string>();
 const inMemorySentSalaryKeys = new Set<string>();
 let x2CheckInProgress = false;
 let salaryDistributingInProgress = false;
+let x2RoutineBootstrapped = false;
 
 async function checkX2AndSalaryRoutine() {
   if (x2CheckInProgress) return;
@@ -5896,6 +6029,25 @@ async function checkX2AndSalaryRoutine() {
     const currentX2 = isMskWeekendX2();
     const targetStatus = currentX2 ? "on" : "off";
     const currentPeriodKey = getX2PeriodKey(mskNow);
+
+    // On cold server startup / reboot, record current period state WITHOUT sending notification
+    if (!x2RoutineBootstrapped) {
+      x2RoutineBootstrapped = true;
+      inMemorySentX2Keys.add(currentPeriodKey);
+      if (!globalSettings.lastX2PeriodKey || globalSettings.lastX2PeriodKey !== currentPeriodKey) {
+        globalSettings.lastX2PeriodKey = currentPeriodKey;
+        globalSettings.lastX2StatusNotified = targetStatus;
+        globalSettings.isX2Active = currentX2;
+        diskLastX2PeriodKey = currentPeriodKey;
+        diskLastX2Status = targetStatus;
+        updateGlobalSettings({
+          lastX2StatusNotified: targetStatus,
+          lastX2PeriodKey: currentPeriodKey,
+          isX2Active: currentX2
+        }).catch(() => {});
+      }
+      return;
+    }
 
     const lastPeriodKey = globalSettings.lastX2PeriodKey || diskLastX2PeriodKey || "";
 
@@ -8001,18 +8153,6 @@ async function performSyncNamesAndChatsTask() {
 
 async function performPostgresDeepVacuum(): Promise<{ success: boolean; freedBytes: number; freedMb: string; formattedSize: string; error?: string }> {
   try {
-    const isSelect = /^\s*SELECT\b/i.test(cleanSql);
-    const cacheKey = `pg_query_${cleanSql}`;
-    if (isSelect) {
-      const cached = pgRedis.get(cacheKey);
-      if (cached) {
-        return cached;
-      }
-    } else {
-      // Invalidate query caches on modifications
-      pgRedis.clear();
-    }
-
     const hfProxyUrl = process.env.POSTGRES_HTTP_URL || "https://romanjordansky-bot-jordans.hf.space";
     const secretKey = process.env.POSTGRES_PASSWORD || "my_super_secret_password";
 
@@ -9847,100 +9987,42 @@ const getStatsMainPage = async (targetId: number, currentPeerId: number, viewerU
   const chatNicks = targetUser.chatNicks || {};
   const nickStr = chatNicks[currentPeerId] || "отсутствует";
   
-  let statsStr = `...::Информация о ${formatUserMention(targetId, "пользователе", "abl")} в этой беседе::...
-
-`;
-  statsStr += `| VK ID — ${targetId}
-`;
-  const regAgeStr = formatAccountAge(regDateStr);
-  const regDateFull = (regAgeStr && regAgeStr !== "Не определен") ? `${regDateStr} (${regAgeStr})` : regDateStr;
-  statsStr += `| Дата регистрации: ${regDateFull}
-
-`;
-  statsStr += `| Nick_Name: ${nickStr}
-`;
-  statsStr += `| Должность: ${roleStr}
-
-`;
-  
+  const chatBansCount = targetUser.chatBans ? Object.keys(targetUser.chatBans).length : 0;
+  const hasChatBans = chatBansCount > 0;
   const isMuted = Boolean(targetUser.muteUntil && targetUser.muteUntil > Date.now());
-  if (isMuted) {
-    const timeLeft = formatTimeRemaining(targetUser.muteUntil! - Date.now());
-    statsStr += `| Активная блокировка чата: Да | ${timeLeft}
-`;
-  } else {
-    statsStr += `| Активная блокировка чата: Нет
-`;
-  }
-  
   const chatWarns = (targetUser.chatWarnings && targetUser.chatWarnings[currentPeerId]) || 0;
   const warnsCount = chatWarns || targetUser.warnings || 0;
-  statsStr += `| Активные предупреждения: ${warnsCount > 0 ? "Да" : "Нет"}
-
-`;
-  
   const totalMsgs = targetUser.chatTotalMsgs?.[currentPeerId] || targetUser.chatTodayMsgs?.[currentPeerId] || 0;
-  statsStr += `| Сообщений сегодня: ${todayMsgs}
-`;
-  statsStr += `| Сообщений за всё время: ${totalMsgs}
-`;
-  
   const rawAct = getValidLastMessageTimestamp(targetUser, currentPeerId);
-  const lastMsgStr = rawAct > 0 ? formatStats24hDate(rawAct, "Отсутствует") : "Отсутствует";
-  statsStr += `| Последнее сообщение: ${lastMsgStr}
+  const joinedTs = (targetUser.chatJoinedAt && targetUser.chatJoinedAt[currentPeerId]) || targetUser.regDate || 0;
+  const lastMsgStr = rawAct > 0 ? formatDateTimeWithDeclension(rawAct) : "Отсутствует";
+  let joinedDateStr = formatStatsJoinedDate(joinedTs);
+  let lastActStr = formatStatsLastActivity(rawAct);
 
-`;
-  
-  let joinedTs = targetUser.chatFirstJoinedAt?.[currentPeerId] || targetUser.chatJoinedAt?.[currentPeerId] || 0;
-  let inviterId = targetUser.chatInvitedBy?.[currentPeerId] || 0;
+    const chatRank = await getChatMessagesRank(currentPeerId, targetId);
 
-  if (currentPeerId > 2000000000) {
-    try {
-      const memData = await getChatMembers(currentPeerId);
-      const memberItem = memData?.items?.find((it: any) => it.member_id === targetId);
-      if (memberItem) {
-          if (memberItem.join_date) {
-            const vkJoinTs = memberItem.join_date * 1000;
-            const chatFirstJoinedAt = targetUser.chatFirstJoinedAt || {};
-            if (!chatFirstJoinedAt[currentPeerId] || vkJoinTs < chatFirstJoinedAt[currentPeerId]) {
-              chatFirstJoinedAt[currentPeerId] = vkJoinTs;
-              targetUser.chatFirstJoinedAt = chatFirstJoinedAt;
-              joinedTs = vkJoinTs;
-            }
-            const chatJoinedAt = targetUser.chatJoinedAt || {};
-            if (!chatJoinedAt[currentPeerId] || vkJoinTs > chatJoinedAt[currentPeerId]) {
-              chatJoinedAt[currentPeerId] = vkJoinTs;
-              targetUser.chatJoinedAt = chatJoinedAt;
-            }
-          }
-        if (!inviterId && memberItem.invited_by) {
-          inviterId = memberItem.invited_by;
-          const chatInvitedBy = targetUser.chatInvitedBy || {};
-          chatInvitedBy[currentPeerId] = inviterId;
-          targetUser.chatInvitedBy = chatInvitedBy;
-        }
-      }
-    } catch (e) {}
-  }
+  let statsStr = `📊 Информация о пользователе ${formatUserMention(targetId, targetName, "nom")} в этой беседе
 
-  let joinedDateStr = "Не удалось определить";
-  if (joinedTs > 0) {
-    joinedDateStr = `${formatStats24hDate(joinedTs)}${formatElapsedChatTime(joinedTs)}`;
-  }
-  statsStr += `| В беседе с: ${joinedDateStr}
-`;
-  
-  let invitedByStr = "сам";
-  if (inviterId > 0 && inviterId !== targetId) {
-    const invUser = await getOrCreateUser(inviterId);
-    const invName = invUser.fullName || invUser.nick || (await fetchVkFullName(inviterId)) || `id${inviterId}`;
-    invitedByStr = formatUserMention(inviterId, String(invName), "nom");
-  } else if (targetUser.chatJoinedByLink?.[currentPeerId] && inviterId === -1) {
-    invitedByStr = "По ссылке";
-  } else {
-    invitedByStr = "сам";
-  }
-  statsStr += `| В беседу пригласил: ${invitedByStr}`;
+` +
+      `🆔 VK ID: ${targetId}
+` +
+      `✏️ Nick_Name: ${nickStr === "отсутствует" ? "нету" : nickStr}
+
+` +
+      `🛡️ Уровень прав: ${roleStr}
+
+` +
+      `⚠️ Предупреждений: ${warnsCount}
+` +
+      `🔇 Блокировка чата: ${isMuted ? "да" : "нет"}
+
+` +
+      `💬 Сообщений в беседе (С/В): ${todayMsgs}/${totalMsgs} | Топ ${chatRank}
+
+` +
+      `📅 В беседе с: ${joinedDateStr}
+` +
+      `🕐 Последняя активность: ${lastActStr}`;
 
   const keyboard = await buildStatsKeyboard(targetUser, currentPeerId, "main", viewerUserId);
   return { 
@@ -12759,12 +12841,11 @@ function getRoleDisplayName(role: number): string {
   if (role === 7.3) return "Главный тех. специалист";
   if (role === 7.2) return "Куратор тех. специалистов";
   if (role === 7.1) return "Тех. Специалист";
-  if (role === 7) return "Владелец беседы";
-  if (role === 6) return "Главный Администратор";
-  if (role === 5) return "Зам. Главного Администратора";
-  if (role === 4) return "Ст. Администратор";
+  if (role >= 6) return "Владелец беседы";
+  if (role === 5) return "Руководитель беседы";
+  if (role === 4) return "Главный Администратор";
   if (role === 3) return "Администратор";
-  if (role === 2) return "Ст. Модератор";
+  if (role === 2) return "Старший Модератор";
   if (role === 1) return "Модератор";
   return "Пользователь";
 }
@@ -13212,6 +13293,20 @@ async function checkHierarchy(peerId: number, authorId: number, targetId: number
   
   // Nobody can punish the Owner
   if (targetId === 778382713) return false;
+
+  const aUser = userCache.get(authorId) || await getOrCreateUser(authorId);
+  const tUser = userCache.get(targetId) || await getOrCreateUser(targetId);
+
+  const aGlobal = aUser.role || 0;
+  const tGlobal = tUser.role || 0;
+
+  // If target is global project management (ЗР = 8, ОЗР = 9, Руководитель = 10, Главрук = 10.5, Зам.Владельца = 11, Владелец = 12)
+  // ordinary chat owner or lower staff cannot punish or manage them
+  if (tGlobal >= 8) {
+    if (aGlobal < 12 && aGlobal <= tGlobal && authorId !== 778382713) {
+      return false;
+    }
+  }
 
   const aRole = await getRole(peerId, authorId);
   const tRole = await getRole(peerId, targetId);
@@ -15169,8 +15264,137 @@ async function handleVkEvent(payload: any, receivedAt?: number) {
     return { text, keyboard: buttons.length > 0 ? { inline: true, buttons } : null };
   }
 
+async function renderTopCategory(category: string, page: number = 1, authorId: number = 0, peerId: number = 0): Promise<{ text: string; keyboard: any }> {
+  const normCat = category.toLowerCase().trim();
+  const allU = await getAllUsers();
+  let usersList: any[] = allU.filter(d => d && !d.hideTop);
+  const now = Date.now();
+  const getPremiumTag = (u: any) => (u.vipExpires && u.vipExpires > now) ? " ⭐" : "";
+
+  let topTitle = "";
+  let fullItems: string[] = [];
+
+  if (normCat === "chat_msgs" || normCat === "chat" || normCat === "msgs" || normCat === "сообщения" || normCat === "сообщений") {
+    topTitle = "💬 Топ сообщений в этой беседе:";
+    const filtered = usersList
+      .map(u => {
+        const msgs = (u.chatTotalMsgs?.[peerId] || u.chatTodayMsgs?.[peerId] || 0);
+        return { ...u, chatMsgs: msgs };
+      })
+      .filter(u => u.chatMsgs > 0)
+      .sort((a, b) => b.chatMsgs - a.chatMsgs);
+
+    fullItems = filtered.slice(0, 50).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || u.fullName || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | Сообщений: ${u.chatMsgs.toLocaleString()}`);
+  } else if (normCat === "money" || normCat === "деньги" || normCat === "баланс" || normCat === "наличные") {
+    topTitle = "💰 Топ пользователей по деньгам:";
+    const filtered = usersList.filter(u => (u.balance || 0) > 0).sort((a, b) => (b.balance || 0) - (a.balance || 0));
+    fullItems = filtered.slice(0, 50).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | На руках: ${(u.balance || 0).toLocaleString()}$`);
+  } else if (normCat === "bank" || normCat === "банк" || normCat === "в банке") {
+    topTitle = "🏦 Топ пользователей по деньгам в банке:";
+    const filtered = usersList.filter(u => (u.bank || 0) > 0).sort((a, b) => (b.bank || 0) - (a.bank || 0));
+    fullItems = filtered.slice(0, 50).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | В банке: ${(u.bank || 0).toLocaleString()}$`);
+  } else if (normCat === "beer" || normCat === "пиво" || normCat === "пивасик") {
+    topTitle = "🍺 Топ по пиву за последние 3 месяца:";
+    const filtered = usersList.filter(u => (u.beer || 0) > 0).sort((a, b) => (b.beer || 0) - (a.beer || 0));
+    fullItems = filtered.slice(0, 50).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | Выпито - ${(u.beer || 0).toFixed(1)} л.`);
+  } else if (normCat === "jc" || normCat === "btc" || normCat === "биткоин" || normCat === "биткоины" || normCat === "биткоинов") {
+    topTitle = "🪙 Топ пользователей по BTC:";
+    const filtered = usersList.filter(u => ((u.btc || u.jc || 0) > 0)).sort((a, b) => (b.btc || b.jc || 0) - (a.btc || a.jc || 0));
+    fullItems = filtered.slice(0, 50).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | Биткоинов: ${(u.btc || u.jc || 0).toLocaleString()} BTC`);
+  } else if (normCat === "biz" || normCat === "бизнес" || normCat === "бизнесы") {
+    topTitle = "🏦 Топ пользователей по бизнесам:";
+    const filtered = usersList.filter(u => (u.businesses || 0) > 0).sort((a, b) => (b.businesses || 0) - (a.businesses || 0));
+    fullItems = filtered.slice(0, 50).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | бизнесов: ${u.businesses || 0} | Баланс бизнесов: ${((u.businesses || 0) * 1000).toLocaleString()}$`);
+  } else if (normCat === "rep" || normCat === "реп" || normCat === "репутация" || normCat === "репутацию") {
+    topTitle = "🌟 Топ пользователей по репутации:";
+    const filtered = usersList.filter(u => (u.rep || 0) !== 0).sort((a, b) => (b.rep || 0) - (a.rep || 0));
+    fullItems = filtered.slice(0, 50).map((u, i) => {
+      const r = u.rep || 0;
+      const sign = r >= 0 ? "+" : "";
+      return `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | Репутация: ${sign}${r}`;
+    });
+  } else if (normCat === "lvl" || normCat === "лвл" || normCat === "уровень" || normCat === "опыт") {
+    topTitle = "⭐ Топ пользователей по уровню и опыту:";
+    const filtered = usersList.filter(u => (u.totalExp || 0) > 0 || (u.level || 1) > 1).sort((a, b) => (b.totalExp || 0) - (a.totalExp || 0));
+    fullItems = filtered.slice(0, 50).map((u, i) => {
+      const info = calculateLevelFromExp(u.totalExp || 0);
+      return `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | ${info.level} Уровень (${info.totalExp.toLocaleString()} EXP)`;
+    });
+  } else if (normCat === "chats" || normCat === "беседы" || normCat === "чаты") {
+    topTitle = "💬 Топ бесед по сообщениям:";
+    const allChats = await getAllChats();
+    const enabledChats = allChats.filter(c => c && c.showInTop !== false && ((c.totalMessages || 0) > 0 || (c.totalStats?.totalMessages || 0) > 0));
+    const sorted = enabledChats.sort((a, b) => {
+      const msgsA = a.totalMessages || a.totalStats?.totalMessages || 0;
+      const msgsB = b.totalMessages || b.totalStats?.totalMessages || 0;
+      return msgsB - msgsA;
+    });
+    fullItems = sorted.slice(0, 50).map((c, i) => {
+      const msgs = c.totalMessages || c.totalStats?.totalMessages || 0;
+      const name = c.title || c.name || `Беседа #${c.chatId || c.peerId}`;
+      return `${i + 1}. «${name}» | Сообщений: ${msgs.toLocaleString()}`;
+    });
+  } else if (normCat === "marriages" || normCat === "браки" || normCat === "брак") {
+    topTitle = "💍 Топ браков:";
+    const text = await getTopMarriagesText();
+    return {
+      text,
+      keyboard: {
+        inline: true,
+        buttons: [
+          [{ action: { type: "callback", label: "« Категории топа", payload: JSON.stringify({ cmd: "top_page", page: 1, authorId }) }, color: "secondary" }]
+        ]
+      }
+    };
+  } else if (normCat === "clans" || normCat === "кланы" || normCat === "клан") {
+    topTitle = "🏆 Топ кланов по победам:";
+    const clansSnap = await firestoreDb.collection("clans").orderBy("wins", "desc").limit(50).get();
+    if (!clansSnap.empty) {
+      let idx = 1;
+      for (const d of clansSnap.docs) {
+        const clanData = d.data();
+        const totalPower = (clanData.soldiers || 0) * 1 + (clanData.helicopters || 0) * 10 + (clanData.tanks || 0) * 50;
+        fullItems.push(`${idx}. Клан «${clanData.name}» | Побед: ${clanData.wins || 0} | Сила: ${formatNum(totalPower)}`);
+        idx++;
+      }
+    }
+  }
+
+  const perPage = 10;
+  const totalPages = Math.max(1, Math.ceil(fullItems.length / perPage));
+  const curPage = Math.max(1, Math.min(page, totalPages));
+  const pageItems = fullItems.slice((curPage - 1) * perPage, curPage * perPage);
+
+  let pageText = `${topTitle}\n\n`;
+  if (pageItems.length === 0) {
+    pageText += "В данном топе пока нет активных участников.";
+  } else {
+    pageText += pageItems.join("\n");
+  }
+
+  const navButtons: any[] = [
+    { action: { type: "callback", label: "«", payload: JSON.stringify({ cmd: "top_cat_page", cat: normCat, p: 1, authorId }) }, color: "primary" },
+    { action: { type: "callback", label: "‹", payload: JSON.stringify({ cmd: "top_cat_page", cat: normCat, p: Math.max(1, curPage - 1), authorId }) }, color: "primary" },
+    { action: { type: "callback", label: "›", payload: JSON.stringify({ cmd: "top_cat_page", cat: normCat, p: Math.min(totalPages, curPage + 1), authorId }) }, color: "primary" },
+    { action: { type: "callback", label: "»", payload: JSON.stringify({ cmd: "top_cat_page", cat: normCat, p: totalPages, authorId }) }, color: "primary" }
+  ];
+
+  const backButtons: any[] = [
+    { action: { type: "callback", label: "« Категории топа", payload: JSON.stringify({ cmd: "top_page", page: 1, authorId }) }, color: "secondary" }
+  ];
+
+  return {
+    text: pageText,
+    keyboard: {
+      inline: true,
+      buttons: [navButtons, backButtons]
+    }
+  };
+}
+
   function getTopButtons(page: number, authorId: number) {
     const allItems = [
+      { label: "Топ сообщений в этой беседе", cmd: "top_chat_msgs" },
       { label: "Топ по деньгам", cmd: "top_money" },
       { label: "Топ по деньгам в банке", cmd: "top_bank" },
       { label: "Топ по пиву", cmd: "top_beer" },
@@ -15218,7 +15442,7 @@ async function handleVkEvent(payload: any, receivedAt?: number) {
     const { profiles } = await getChatMembers(peerId);
     const chatData = await getOrCreateChat(peerId);
     const roleUsers: { [role: number]: { id: number; name: string }[] } = {
-      7: [], 6: [], 5: [], 4: [], 3: [], 2: [], 1: []
+      6: [], 5: [], 4: [], 3: [], 2: [], 1: []
     };
 
     for (const p of (profiles || [])) {
@@ -15230,51 +15454,65 @@ async function handleVkEvent(payload: any, receivedAt?: number) {
         const cRole = (u.chatRoles && u.chatRoles[peerId]) || 0;
         const gRole = u.role && u.role < 8 ? u.role : 0;
         const effRole = Math.max(gRole, cRole);
-        const r = effRole >= 1 && effRole <= 7 ? Math.floor(effRole) : 0;
+        const r = effRole >= 1 && effRole <= 6 ? Math.floor(effRole) : 0;
 
-        if (r >= 1 && r <= 7) {
+        if (r >= 1 && r <= 6) {
           const name = p.first_name && p.last_name ? `${p.first_name} ${p.last_name}` : (u.fullName || u.nick || `User${p.id}`);
           roleUsers[r].push({ id: p.id, name });
         }
       }
     }
 
-    if (chatData?.ownerId && !roleUsers[7].some(u => u.id === chatData.ownerId)) {
+    if (chatData?.ownerId && !roleUsers[6].some(u => u.id === chatData.ownerId)) {
       const ownerProfile = (profiles || []).find((p: any) => p.id === chatData.ownerId);
       const u = await getOrCreateUser(chatData.ownerId);
       const name = ownerProfile?.first_name && ownerProfile?.last_name 
         ? `${ownerProfile.first_name} ${ownerProfile.last_name}` 
         : (u.fullName || u.nick || (await fetchVkFullName(chatData.ownerId)) || `User${chatData.ownerId}`);
-      roleUsers[7].push({ id: chatData.ownerId, name });
+      roleUsers[6].push({ id: chatData.ownerId, name });
     }
 
-    const fmtGroup = (title: string, list: { id: number; name: string }[]) => {
-      if (!list || list.length === 0) return "";
-      const items = list.map(u => `— [id${u.id}|${u.name}]`).join("\n");
+    let out = "🛡️ Список модерации беседы\n\n";
 
-      return `| ${title}:
-${items}`;
-    };
+    if (roleUsers[6].length > 0) {
+      const title = roleUsers[6].length > 1 ? "Владельцы беседы" : "Владелец беседы";
+      out += `${title}\n${roleUsers[6].map(u => `— [id${u.id}|${u.name}]`).join("\n")}\n\n`;
+    }
 
-    const fmtOwner = (list: { id: number; name: string }[]) => {
-      if (!list || list.length === 0) return "";
-      const items = list.map(u => `[id${u.id}|${u.name}]`).join(", ");
-      return `| Владелец Беседы — ${items}`;
-    };
+    if (roleUsers[5].length > 0) {
+      const title = roleUsers[5].length > 1 ? "Руководители беседы" : "Руководитель беседы";
+      out += `${title}\n${roleUsers[5].map(u => `— [id${u.id}|${u.name}]`).join("\n")}\n\n`;
+    }
 
-    const parts: string[] = [];
-    if (roleUsers[7].length > 0) parts.push(fmtOwner(roleUsers[7]));
-    if (roleUsers[6].length > 0) parts.push(fmtGroup("Главный Администратор", roleUsers[6]));
-    if (roleUsers[5].length > 0) parts.push(fmtGroup("Зам. Главного Администратора", roleUsers[5]));
-    if (roleUsers[4].length > 0) parts.push(fmtGroup("Старший Администратор", roleUsers[4]));
-    if (roleUsers[3].length > 0) parts.push(fmtGroup("Администратор", roleUsers[3]));
-    if (roleUsers[2].length > 0) parts.push(fmtGroup("Старший Модератор", roleUsers[2]));
-    if (roleUsers[1].length > 0) parts.push(fmtGroup("Модератор", roleUsers[1]));
+    const hasAdmins = roleUsers[4].length > 0 || roleUsers[3].length > 0;
+    if (hasAdmins) {
+      out += "Администрация\n";
+      if (roleUsers[4].length > 0) {
+        const title = roleUsers[4].length > 1 ? "Главные Администраторы" : "Главный Администратор";
+        out += `• ${title} — ${roleUsers[4].map(u => `[id${u.id}|${u.name}]`).join(", ")}\n`;
+      }
+      if (roleUsers[3].length > 0) {
+        const title = roleUsers[3].length > 1 ? "Администраторы" : "Администратор";
+        out += `• ${title} — ${roleUsers[3].map(u => `[id${u.id}|${u.name}]`).join(", ")}\n`;
+      }
+      out += "\n";
+    }
 
-    return `...::Руководство беседы::...
+    const hasModers = roleUsers[2].length > 0 || roleUsers[1].length > 0;
+    if (hasModers) {
+      out += "Модерация\n";
+      if (roleUsers[2].length > 0) {
+        const title = roleUsers[2].length > 1 ? "Старшие Модераторы" : "Старший Модератор";
+        out += `• ${title} — ${roleUsers[2].map(u => `[id${u.id}|${u.name}]`).join(", ")}\n`;
+      }
+      if (roleUsers[1].length > 0) {
+        const title = roleUsers[1].length > 1 ? "Модераторы" : "Модератор";
+        out += `• ${title} — ${roleUsers[1].map(u => `[id${u.id}|${u.name}]`).join(", ")}\n`;
+      }
+    }
 
-` + (parts.length > 0 ? parts.join("\n") : "| Руководство беседы отсутствует");
-}
+    return out.trim();
+  }
 
   
 async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
@@ -16204,14 +16442,14 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
     ctx.textBaseline = "top";
     ctx.fillText("By.", wmX + 14, wmY + 10);
 
-    // Line 2: «ORION» – чат-менеджер (@orion_manager)
+    // Line 2: «Mint» – чат-менеджер (@cm_mint)
     ctx.font = "bold 16px sans-serif";
     const brandGrad = ctx.createLinearGradient(wmX + 14, 0, wmX + 340, 0);
     brandGrad.addColorStop(0, "#00E5FF");
     brandGrad.addColorStop(0.5, "#E040FB");
     brandGrad.addColorStop(1, "#FFD700");
     ctx.fillStyle = brandGrad;
-    ctx.fillText("«ORION» – чат-менеджер (@orion_manager)", wmX + 14, wmY + 34);
+    ctx.fillText("«Mint» – чат-менеджер (@cm_mint)", wmX + 14, wmY + 34);
     ctx.restore();
 
     // ==========================================
@@ -16317,7 +16555,7 @@ ${idx}) [id${uId}|${pName}]${modPart}`;
     return out;
   }
 
-  async function getChatNlistText(peerId: number): Promise<string> {
+  async function getChatNlistText(peerId: number, page: number = 1): Promise<{ text: string, keyboard?: any }> {
     let profiles: any[] = [];
     try {
       if (peerId > 2000000000) {
@@ -16360,32 +16598,50 @@ ${idx}) [id${uId}|${pName}]${modPart}`;
     });
 
     const count = foundMap.size;
-    const userPlural = pluralizeUsers(count);
-    let out = `...::Список пользователей с Nick_Name::...
+    let out = `👥 Пользователи с установленным Nick_Name
 
-В этой беседе ${count} ${userPlural} имеют установленный Nick_Name.
-
-| Информация о пользователях с Nick_Name:
 `;
 
     if (count === 0) {
-      out += "\nВ этой беседе отсутствуют пользователи с Nick_Name";
-    } else {
-      let idx = 1;
-      for (const [uId, item] of foundMap.entries()) {
-        const modId = item.setBy || 0;
-        let modName = "";
-        if (modId > 0) {
-          modName = vkNameCache.get(modId)?.name || userCache.get(modId)?.fullName || `id${modId}`;
-          if (!vkNameCache.has(modId)) fetchVkFullName(modId).catch(() => {});
-        }
-        const modPart = modId > 0 ? ` | Модератор - [id${modId}|${modName}]` : "";
-        out += `
-${idx}) [id${uId}|${item.name}] | Nick_Name: ${item.nick}${modPart}`;
-        idx++;
-      }
+      out += "В этой беседе отсутствуют пользователи с установленным Nick_Name.";
+      return { text: out };
     }
-    return out;
+
+    const items = Array.from(foundMap.entries());
+    const perPage = 15;
+    const totalPages = Math.ceil(items.length / perPage);
+    const currentPage = Math.max(1, Math.min(totalPages, page));
+    const startIdx = (currentPage - 1) * perPage;
+    const pageItems = items.slice(startIdx, startIdx + perPage);
+
+    for (const [uId, item] of pageItems) {
+      const modId = item.setBy || 0;
+      let modMention = "[id1|Администратор]";
+      if (modId > 0) {
+        const modName = vkNameCache.get(modId)?.name || userCache.get(modId)?.fullName || (await fetchVkFullName(modId)) || `id${modId}`;
+        modMention = `[id${modId}|${modName}]`;
+      }
+      out += `[id${uId}|${item.name}] — ${item.nick}
+└ Установлен модератором ${modMention}
+
+`;
+    }
+
+    out += `Всего: ${count}`;
+
+    let keyboard: any = undefined;
+    if (totalPages > 1) {
+      const navButtons: any[] = [];
+      if (currentPage > 1) {
+        navButtons.push({ action: { type: "callback", label: "« Назад", payload: JSON.stringify({ cmd: "nlist_page", p: currentPage - 1 }) }, color: "primary" });
+      }
+      if (currentPage < totalPages) {
+        navButtons.push({ action: { type: "callback", label: "Вперёд »", payload: JSON.stringify({ cmd: "nlist_page", p: currentPage + 1 }) }, color: "primary" });
+      }
+      keyboard = { inline: true, buttons: [navButtons] };
+    }
+
+    return { text: out, keyboard };
   }
 
   async function getTopMarriagesText(): Promise<string> {
@@ -17327,7 +17583,7 @@ if (topData.length === 0) {
       const effRole = (u.role >= 12 || userId === 778382713) ? 12 : (u.role || 0);
       if (effRole < 8) {
         if (cmId) processedEventIds.delete(`gban_form_action_${cmId}`);
-        await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+        await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
         return;
       }
 
@@ -17394,7 +17650,7 @@ if (topData.length === 0) {
       const effRole = (u.role >= 12 || userId === 778382713) ? 12 : (u.role || 0);
       if (effRole < 8) {
         if (cmId) processedEventIds.delete(`rep_action_${cmId}`);
-        await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+        await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
         return;
       }
 
@@ -17441,7 +17697,7 @@ if (topData.length === 0) {
       if (effRole < 10) {
         // If they failed auth, remove the deduplication lock so someone else can click
         if (cmId) processedEventIds.delete(`form_action_${cmId}`);
-        await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+        await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
         return;
       }
       
@@ -18284,7 +18540,7 @@ if (topData.length === 0) {
       const userChatRole = (u.chatRoles && u.chatRoles[peerId]) || 0;
       const effRole = u.role >= 8 ? u.role : Math.max(u.role || 0, userChatRole);
       if (effRole < 1 && !isVkAdmin) {
-         await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+         await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
          return;
       }
       const targetUser = await getOrCreateUser(targetId);
@@ -18330,7 +18586,7 @@ if (topData.length === 0) {
       const userChatRole = (u.chatRoles && u.chatRoles[peerId]) || 0;
       const effRole = u.role >= 8 ? u.role : Math.max(u.role || 0, userChatRole);
       if (effRole < 2 && !isVkAdmin) {
-         await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+         await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
          return;
       }
       const targetUser = await getOrCreateUser(targetId);
@@ -18443,6 +18699,46 @@ if (topData.length === 0) {
        await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
        await editVkMessage(VK_TOKEN, peerId, cmId, `Хорошо, вы отменили снятие всех блокировок ${formatUserMention(targetId, String(targetName), "dat")}`);
        return;
+    }
+
+    if (cmd === "confirm_giveowner") {
+      const isOwner = await checkIsOwner(userId, peerId, user.role);
+      if (!isOwner && user.role < 12) {
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
+      }
+      const targetId = Number(payloadObj.targetId);
+      if (!targetId || targetId === userId) return;
+      const targetU = await getOrCreateUser(targetId);
+      const chatRoles = targetU.chatRoles || {};
+      chatRoles[peerId] = 6;
+      await updateUser(targetId, { chatRoles });
+      await updateChat(peerId, { ownerId: targetId });
+      const myChatRoles = user.chatRoles || {};
+      myChatRoles[peerId] = 5;
+      await updateUser(userId, { chatRoles: myChatRoles });
+      await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+      if (cmId) {
+        await editVkMessage(VK_TOKEN, peerId, cmId, `👑 ${formatUserMention(userId, String(fullName), "nom")} передал(-а) права «Владелец Беседы» пользователю ${formatUserMention(targetId, targetU.fullName || targetU.nick || `id${targetId}`, "dat")}.`, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+      }
+      return;
+    }
+
+    if (cmd === "cancel_giveowner") {
+      await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+      if (cmId) {
+        await editVkMessage(VK_TOKEN, peerId, cmId, `❌ Передача прав владельца беседы была отменена.`, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+      }
+      return;
+    }
+
+    if (cmd === "nlist_page") {
+      await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+      const page = Number(payloadObj.p) || 1;
+      const { text: listText, keyboard } = await getChatNlistText(peerId, page);
+      if (cmId) {
+        await editVkMessage(VK_TOKEN, peerId, cmId, listText, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined });
+      }
+      return;
     }
 
     if (cmd === "af_approve" || cmd === "af_reject") {
@@ -18646,7 +18942,7 @@ if (cmd === "join_kick") {
       const userChatRole = (u.chatRoles && u.chatRoles[peerId]) || 0;
       const effRole = u.role >= 8 ? u.role : Math.max(u.role || 0, userChatRole);
       if (effRole < 1 && !isVkAdmin) {
-         await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+         await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
          return;
       }
       const targetUser = await getOrCreateUser(targetId);
@@ -19435,7 +19731,7 @@ if (cmd === "join_kick") {
           const userChatRole = (clickingUser.chatRoles && clickingUser.chatRoles[peerId]) || 0;
           const effRole = clickingUser.role >= 8 ? clickingUser.role : Math.max(clickingUser.role || 0, userChatRole);
           if (effRole < 7 && clickingUser.role < 12) {
-            return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+            return sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
           }
           await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
           const chatData = await getOrCreateChat(peerId);
@@ -19464,7 +19760,7 @@ if (cmd === "join_kick") {
         const userChatRole = (clickingUser.chatRoles && clickingUser.chatRoles[peerId]) || 0;
         const effRole = clickingUser.role >= 8 ? clickingUser.role : Math.max(clickingUser.role || 0, userChatRole);
         if (effRole < 7 && clickingUser.role < 12) {
-          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
         }
         await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
         const chatData = await getOrCreateChat(peerId);
@@ -20264,7 +20560,7 @@ function formatDateTime2(ts?: number): string {
 
      if (cmd === "staff_nicks" || cmd === "mod_nlist") {
         await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
-        const nlistText = await getChatNlistText(peerId);
+        const { text: nlistText, keyboard } = await getChatNlistText(peerId, 1);
         const replyToCmId = cmId && peerId > 2000000000 ? {
           forward: JSON.stringify({
             peer_id: peerId,
@@ -20504,7 +20800,7 @@ function formatDateTime2(ts?: number): string {
 
           if (cmd === "mod_all_bans") {
              if (effectiveRole < 2 && !isAdminMember) {
-                await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для просмотра списка блокировок.");
+                await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
                 return;
              }
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Загрузка списка блокировок..." });
@@ -20727,8 +21023,8 @@ function formatDateTime2(ts?: number): string {
                const newKb = renderFilteredKeyboard(payloadObj.s, "mod_nlist", tId, payloadObj.msgId, payloadObj.reason, payloadObj.level);
                await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { preserveAttachment: true, keyboard: JSON.stringify(newKb) });
              }
-             const nlistText = await getChatNlistText(peerId);
-             await sendVkMessage(VK_TOKEN, peerId, nlistText, replyToCmId);
+             const { text: nlistText, keyboard: nlistKb } = await getChatNlistText(peerId, 1);
+             await sendVkMessage(VK_TOKEN, peerId, nlistText, { ...replyToCmId, keyboard: nlistKb ? JSON.stringify(nlistKb) : undefined });
              return;
           }
 
@@ -20834,7 +21130,7 @@ function formatDateTime2(ts?: number): string {
              const targetLevel = Number(payloadObj.level || 1);
              const reqMinRole = Math.max(2, targetLevel + 1);
              if (effectiveRole < reqMinRole && !isAdminMember) {
-                await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для снятия этой роли!");
+                await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
                 return;
              }
              if (tId > 0 && !(await checkHierarchy(peerId, userId, tId, isAdminMember))) {
@@ -20868,7 +21164,7 @@ function formatDateTime2(ts?: number): string {
 
           if (cmd === "mod_unban_chat" || cmd === "mod_unban") {
              if (effectiveRole < 2 && !isAdminMember) {
-                await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+                await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
                 return;
              }
              const targetU = await getOrCreateUser(tId);
@@ -20891,7 +21187,7 @@ function formatDateTime2(ts?: number): string {
              }
              const hasGbanPerm = (clickingUser.role >= 8 || userId === 778382713 || effectiveRole >= 8);
              if (!hasGbanPerm) {
-                await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+                await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
                 return;
              }
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Глобальная блокировка снята." });
@@ -20908,7 +21204,7 @@ function formatDateTime2(ts?: number): string {
              }
              const hasBlackPerm = (clickingUser.role >= 10 || userId === 778382713 || effectiveRole >= 10);
              if (!hasBlackPerm) {
-                await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+                await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
                 return;
              }
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Чёрный список снят." });
@@ -20946,10 +21242,7 @@ function formatDateTime2(ts?: number): string {
               await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
               await sendVkToast(VK_TOKEN, eventId, userId, peerId, "У чат-менеджера отсутствуют права системного администратора (звёздочки)!");
               const sysAdminText = `Чат-менеджер не может тут работать так как у него отсутствуют права системного администратора (звёздочки).`;
-              const photo = await getSysAdminPhotoAttachment(peerId).catch(() => null);
-              await sendVkMessage(VK_TOKEN, peerId, sysAdminText, {
-                attachment: photo || undefined
-              });
+              await sendVkMessage(VK_TOKEN, peerId, sysAdminText);
               return;
             }
           }
@@ -21049,7 +21342,7 @@ function formatDateTime2(ts?: number): string {
           const isOwner = await checkIsOwner(userId, peerId, clickingU.role);
           const isSysAdmin = clickingU.role >= 12 || userId === 778382713;
           if (!isOwner && !isSysAdmin) {
-             await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+             await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
              return;
           }
           await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Ники удалены." });
@@ -21098,7 +21391,7 @@ function formatDateTime2(ts?: number): string {
           const isOwner = await checkIsOwner(userId, peerId, clickingU.role);
           const isSysAdmin = clickingU.role >= 12 || userId === 778382713;
           if (!isOwner && !isSysAdmin) {
-             await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+             await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
              return;
           }
           await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Уровни прав сняты." });
@@ -21177,7 +21470,7 @@ function formatDateTime2(ts?: number): string {
           const isSysAdmin = clickingU.role >= 12 || userId === 778382713;
 
           if ((!isTargetOwner || !isSourceOwner) && !isSysAdmin) {
-             await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+             await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
              return;
           }
 
@@ -21578,7 +21871,7 @@ return;
           const effectiveRole = u.role >= 8 ? u.role : Math.max(u.role || 0, chatRole);
           const isAdminMember = await checkIsAdmin(userId, peerId, u.role);
           if (effectiveRole < 3 && !isAdminMember) {
-             await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "Ваш уровень прав недостаточен для использования этой команды." });
+             await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { type: "show_snackbar", text: "❌ Ваш уровень прав недостаточен для этой команды." });
              return;
           }
           await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Режим тишины выключен." });
@@ -22585,7 +22878,7 @@ pageItems.forEach((item, idx) => {
         const userChatRole = (clickingUser.chatRoles && clickingUser.chatRoles[peerId]) || 0;
         const effRole = clickingUser.role >= 8 ? clickingUser.role : Math.max(clickingUser.role || 0, userChatRole);
         if (effRole < 1 && clickingUser.role < 12) {
-          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
         }
         await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
         await executeVkUnmute(peerId, tId);
@@ -22600,7 +22893,7 @@ pageItems.forEach((item, idx) => {
         const userChatRole = (clickingUser.chatRoles && clickingUser.chatRoles[peerId]) || 0;
         const effRole = clickingUser.role >= 8 ? clickingUser.role : Math.max(clickingUser.role || 0, userChatRole);
         if (effRole < 2 && clickingUser.role < 12) {
-          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
         }
         await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
         await executeVkUnban(peerId, tId);
@@ -22615,7 +22908,7 @@ pageItems.forEach((item, idx) => {
         const userChatRole = (clickingUser.chatRoles && clickingUser.chatRoles[peerId]) || 0;
         const effRole = clickingUser.role >= 8 ? clickingUser.role : Math.max(clickingUser.role || 0, userChatRole);
         if (effRole < 1 && clickingUser.role < 12) {
-          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Ваш уровень прав недостаточен для использования этой команды.");
+          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
         }
         await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
         const tUser = await getOrCreateUser(tId);
@@ -22814,111 +23107,27 @@ pageItems.forEach((item, idx) => {
       return;
     }
 
-    // Top categories buttons
+    // Top categories pagination & selection
+    if (cmd === "top_cat_page") {
+      if (payloadObj.authorId && payloadObj.authorId !== userId) {
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Переключать страницы может только автор!");
+      }
+      await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+      const cat = String(payloadObj.cat || "money");
+      const page = Number(payloadObj.p || 1);
+      const resData = await renderTopCategory(cat, page, userId, peerId);
+      await editVkMessage(VK_TOKEN, peerId, cmId, resData.text, { keyboard: JSON.stringify(resData.keyboard) });
+      return;
+    }
+
     if (cmd && cmd.startsWith("top_") && cmd !== "top_page") {
       await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
       if (payloadObj.authorId && payloadObj.authorId !== userId) {
         return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Переключать категории может только автор!");
       }
       const category = cmd.replace("top_", "");
-      const allU = await getAllUsers();
-      let usersList: any[] = allU.filter(d => d && !d.hideTop);
-
-      let topTitle = "";
-      let lines: string[] = [];
-
-      const now = Date.now();
-      const getPremiumTag = (u: any) => (u.vipExpires && u.vipExpires > now) ? " ⭐" : "";
-
-      usersList = usersList.filter(u => u && ((u.messagesTotal && u.messagesTotal > 0) || u.registered || (u.balance && u.balance > 0) || (u.bank && u.bank > 0) || (u.businesses && u.businesses > 0) || (u.role && u.role > 0)));
-      if (category === "money") {
-        topTitle = "💰 Топ пользователей по деньгам:";
-        const filtered = usersList.filter(u => (u.balance || 0) > 0).sort((a, b) => (b.balance || 0) - (a.balance || 0));
-        lines = filtered.slice(0, 10).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | На руках: ${(u.balance || 0).toLocaleString()}$`);
-      } else if (category === "bank") {
-        topTitle = "🏦 Топ пользователей по деньгам в банке:";
-        const filtered = usersList.filter(u => (u.bank || 0) > 0).sort((a, b) => (b.bank || 0) - (a.bank || 0));
-        lines = filtered.slice(0, 10).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | В банке: ${(u.bank || 0).toLocaleString()}$`);
-      } else if (category === "beer") {
-        topTitle = "🍺 Топ по пиву за последние 3 месяца:";
-        const filtered = usersList.filter(u => (u.beer || 0) > 0).sort((a, b) => (b.beer || 0) - (a.beer || 0));
-        lines = filtered.slice(0, 10).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | Выпито - ${(u.beer || 0).toFixed(1)} л.`);
-      } else if (category === "jc" || category === "btc") {
-        topTitle = "🪙 Топ пользователей по BTC:";
-        const filtered = usersList.filter(u => ((u.btc || u.jc || 0) > 0)).sort((a, b) => (b.btc || b.jc || 0) - (a.btc || a.jc || 0));
-        lines = filtered.slice(0, 10).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | Биткоинов: ${(u.btc || u.jc || 0).toLocaleString()} BTC`);
-      } else if (category === "biz") {
-        topTitle = "🏦 Топ пользователей по бизнесам:";
-        const filtered = usersList.filter(u => (u.businesses || 0) > 0).sort((a, b) => (b.businesses || 0) - (a.businesses || 0));
-        lines = filtered.slice(0, 10).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | бизнесов: ${u.businesses || 0} | Баланс бизнесов: ${((u.businesses || 0) * 1000).toLocaleString()}$`);
-      } else if (category === "rep") {
-        topTitle = "🌟 Топ пользователей по репутации:";
-        const filtered = usersList.filter(u => (u.rep || 0) !== 0).sort((a, b) => (b.rep || 0) - (a.rep || 0));
-        lines = filtered.slice(0, 10).map((u, i) => {
-          const r = u.rep || 0;
-          const sign = r >= 0 ? "+" : "";
-          return `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | Репутация: ${sign}${r}`;
-        });
-      } else if (category === "lvl") {
-        topTitle = "⭐ Топ пользователей по уровню и опыту:";
-        const filtered = usersList.filter(u => (u.totalExp || 0) > 0 || (u.level || 1) > 1).sort((a, b) => (b.totalExp || 0) - (a.totalExp || 0));
-        lines = filtered.slice(0, 10).map((u, i) => {
-          const info = calculateLevelFromExp(u.totalExp || 0);
-          return `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | ${info.level} Уровень (${info.totalExp.toLocaleString()} EXP)`;
-        });
-      } else if (category === "chats") {
-        topTitle = "💬 Топ бесед по сообщениям:";
-        const allChats = await getAllChats();
-        const enabledChats = allChats.filter(c => c && c.showInTop !== false && ((c.totalMessages || 0) > 0 || (c.totalStats?.totalMessages || 0) > 0));
-        const sorted = enabledChats.sort((a, b) => {
-          const msgsA = a.totalMessages || a.totalStats?.totalMessages || 0;
-          const msgsB = b.totalMessages || b.totalStats?.totalMessages || 0;
-          return msgsB - msgsA;
-        });
-        lines = sorted.slice(0, 10).map((c, i) => {
-          const msgs = c.totalMessages || c.totalStats?.totalMessages || 0;
-          const name = c.title || c.name || `Беседа #${c.chatId || c.peerId}`;
-          return `${i + 1}. «${name}» | Сообщений: ${msgs.toLocaleString()}`;
-        });
-      }
-
-      if (lines.length === 0) {
-        lines.push("В данном топе пока нет активных участников.");
-      }
-
-      const keyboard = getTopButtons(Number(payloadObj.page || 1), userId);
-
-      if (category === "marriages") {
-        const text = await getTopMarriagesText();
-        editVkMessage(VK_TOKEN, peerId, cmId, text, { keyboard: JSON.stringify(keyboard) });
-        return;
-      }
-
-      if (category === "clans") {
-        const clansSnap = await firestoreDb.collection("clans").orderBy("wins", "desc").limit(10).get();
-        let text = `🏆 Топ кланов по победам:
-
-`;
-if (clansSnap.empty) {
-          text += "Список кланов пуст.";
-        } else {
-          let idx = 1;
-          for (const d of clansSnap.docs) {
-            const clanData = d.data();
-            const totalPower = (clanData.soldiers || 0) * 1 + (clanData.helicopters || 0) * 10 + (clanData.tanks || 0) * 50;
-            text += `${idx}. Клан «${clanData.name}» | Побед: ${clanData.wins || 0} | Сила: ${formatNum(totalPower)}
-`;
-            idx++;
-          }
-        }
-        editVkMessage(VK_TOKEN, peerId, cmId, text, { keyboard: JSON.stringify(keyboard) });
-        return;
-      }
-
-      editVkMessage(VK_TOKEN, peerId, cmId, `${topTitle}
-
-${lines.join("\n")}`, { keyboard: JSON.stringify(keyboard) });
-
+      const resData = await renderTopCategory(category, 1, userId, peerId);
+      await editVkMessage(VK_TOKEN, peerId, cmId, resData.text, { keyboard: JSON.stringify(resData.keyboard) });
       return;
     }
 
@@ -24711,7 +24920,7 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
         const memberId = act === "chat_invite_user" ? message.action.member_id : userId;
         const isBot = Number(memberId) === -Math.abs(parseInt(VK_GROUP_ID));
         if (isBot) {
-          const greeting = `ORION был успешно добавлен в беседу!
+          const greeting = `Mint был успешно добавлен в беседу!
 
 Для активации чат-менеджера выдайте мне права системного администратора (звёздочку), или я без неё не смогу работать тут.
 
@@ -24731,18 +24940,7 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
 | ID Беседы: ${peerId}`;
           
           sendVkMessage(VK_TOKEN, 2000000010, logMsg).catch(() => {});
-          const sentRes = await sendVkMessage(VK_TOKEN, peerId, greeting, { keyboard: JSON.stringify(kb) });
-          const cmIdToEdit = sentRes?.conversation_message_id || sentRes?.message_id || sentRes?.response?.conversation_message_id || sentRes?.response?.message_id || sentRes?.response;
-          if (cmIdToEdit) {
-            getWelcomePhotoAttachment(peerId).then(async (photo) => {
-              if (photo) {
-                const editRes = await editVkMessage(VK_TOKEN, peerId, cmIdToEdit, greeting, { attachment: photo, keyboard: JSON.stringify(kb) }).catch(() => null);
-                if (!editRes || (editRes as any)?.error) {
-                  await sendVkMessage(VK_TOKEN, peerId, "", { attachment: photo }).catch(() => {});
-                }
-              }
-            }).catch(() => {});
-          }
+          await sendVkMessage(VK_TOKEN, peerId, greeting, { keyboard: JSON.stringify(kb) });
           return;
         } else if (memberId < 0) { // It's a group
           if (chatData.antiGroup) {
@@ -25055,7 +25253,7 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
         const cleanMsg = trimmedText
           .replace(/^\[(?:club|id)\d+\|[^\]]+\]\s*/gi, "")
           .replace(/^@\S+\s*/gi, "")
-          .replace(/^(орион|ор|orion)\s*[,:;]?\s*/gi, "")
+          .replace(/^(минт|mint|орион|ор|orion)\s*[,:;]?\s*/gi, "")
           .trim();
 
         if (!cleanMsg) return false;
@@ -25074,10 +25272,7 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
 
         if (!isBotAdmin) {
             const sysAdminText = `Чат-менеджер не может тут работать так как у него отсутствуют права системного администратора (звёздочки).`;
-            const photo = await getSysAdminPhotoAttachment(peerId).catch(() => null);
-            const extraParams: any = {
-                attachment: photo || undefined
-            };
+            const extraParams: any = {};
             if (message.conversation_message_id) {
                 extraParams.forward = JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true });
             }
@@ -25425,7 +25620,7 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
       if ((user._isNew || isStart)) {
         if (peerId < 2000000000) {
           user._isNew = false;
-          const dmGreeting = `Добро пожаловать в чат-менеджер «ORION».
+          const dmGreeting = `Добро пожаловать в чат-менеджер «Mint».
 
 В личных сообщениях чат-менеджера работают только определённые команды.
 
@@ -25958,10 +26153,7 @@ if (peerId > 2000000000) {
 const isBotAdmin = await checkIsBotChatAdmin(peerId);
 if (!isBotAdmin) {
 const sysAdminText = `Чат-менеджер не может тут работать так как у него отсутствуют права системного администратора (звёздочки).`;
-const photo = await getSysAdminPhotoAttachment(peerId).catch(() => null);
-const extraParams: any = {
-attachment: photo || undefined
-};
+const extraParams: any = {};
 if (message.conversation_message_id) {
 extraParams.forward = JSON.stringify({
 peer_id: peerId,
@@ -26200,7 +26392,7 @@ user.gban = false;
 user.gbanExpiresAt = 0;
 updateUser(userId, { gban: false, gbanExpiresAt: 0 }).catch(() => {});
 } else {
-return await sendResponse(`Вы находитесь в глобальной блокировке чат-менеджера ORION, доступ к использованиям команд вам закрыт.`, {
+return await sendResponse(`Вы находитесь в глобальной блокировке чат-менеджера Mint, доступ к использованиям команд вам закрыт.`, {
 noReply: false,
 disable_mentions: 1
 });
@@ -26282,13 +26474,11 @@ roleName = "Главный Агент Поддержки Чат-менеджер
 }
 
 if (user.role < requiredRole && userId !== 778382713) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 await updateUser(parsed.targetId, { role: targetRole });
 const targetName = parsed.targetName || (await fetchVkFullName(parsed.targetId)) || `User${parsed.targetId}`;
@@ -26365,7 +26555,7 @@ return await sendResponse(`Вы успешно подали тикет. Отве
 }
 
 if (["/answerticket", "/ответить", "/ans", "/otv", "/reply", "/ответ", "/comment", "/коммент", "/комментарий"].includes(rawCmd)) {
-if (user.role < 7.4) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 7.4) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const tId = Number(args[1]);
 const replyText = args.slice(2).join(" ").trim();
 if (!tId || !replyText) return await sendResponse("Использование: /answerticket [id] [текст]");
@@ -26477,7 +26667,7 @@ return await sendResponse(testResponse);
 // ==========================================
 if (["/achat", "/ачат", "/админчат"].includes(rawCmd)) {
 const isLeader = (user.role || 0) >= 12 || userId === 778382713;
-if (!isLeader) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isLeader) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 chatData.isAchat = true;
 chatData.adminChat = true;
 await updateChat(peerId, { isAchat: true, adminChat: true });
@@ -26489,7 +26679,7 @@ const netId = Number(args[1]);
 if (!netId) return await sendResponse("Использование: /addnet [номер сетки]");
 const isAdminGlobal = user.role >= 10;
 const isOwnerChat = await checkIsOwner(userId, peerId, user.role);
-if (!isAdminGlobal && !isOwnerChat) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isAdminGlobal && !isOwnerChat) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const netRef = firestoreDb.collection("grids").doc(String(netId));
 const netDoc = await netRef.get();
@@ -26519,7 +26709,7 @@ if (rawCmd === "/addchatnet" || rawCmd === "/привязатьсетку") {
 const netId = Number(args[1]);
 if (!netId) return await sendResponse("Использование: /addchatnet [номер сетки]");
 const isOwnerChat = await checkIsOwner(userId, peerId, user.role);
-if (!isOwnerChat && user.role < 10) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isOwnerChat && user.role < 10) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const netRef = firestoreDb.collection("grids").doc(String(netId));
 const netDoc = await netRef.get();
@@ -26552,13 +26742,11 @@ const netData = netDoc.data();
 // Check rights in grid
 const gridRole = netData?.roles?.[userId] || 0;
 const isGridOwner = netData?.ownerId === userId || user.role >= 10;
-if (!isGridOwner && gridRole < 6) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isGridOwner && gridRole < 6) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const parsedTarget = await parseTargetUser(message, args.slice(1));
 const targetId = parsedTarget.targetId;
-if (!targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 // Remove mention or VK link from command text to accurately parse duration and reason
 let textWithoutCmd = getRawArgText(message.text || "");
@@ -26782,8 +26970,7 @@ return;
 // /chatid (алиясы: /чатайди, /idchat, /айдичат, /чатид, /идчат) - Узнать ID чата
 if (["/chatid", "/чатайди", "/idchat", "/айдичат", "/чатид", "/идчат"].includes(rawCmd)) {
 const chatId = peerId > 2000000000 ? peerId - 2000000000 : peerId;
-return await sendResponse(`Peer_id беседы: ${peerId}
-Id беседы: ${chatId}`);
+return await sendResponse(`💬 ID этой беседы: ${chatId}`);
 }
 
 // /grrole
@@ -26791,12 +26978,10 @@ if (["/grrole", "/грроль", "/снятьгроль", "/снятьглоба
 const authorEffRole = user.role || 0;
 const isLeader = authorEffRole >= 9 || userId === 778382713;
 if (!isLeader) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 const tUser = await getOrCreateUser(parsed.targetId);
 const targetGlobalRole = tUser.role || 0;
@@ -26820,7 +27005,7 @@ const isOwner = await checkIsOwner(userId, peerId, user.role);
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
 if (!isOwner && effRole < 7 && !isAdmin) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const customArgText = args.slice(1).join(" ").trim();
@@ -26873,7 +27058,7 @@ const isOwner = await checkIsOwner(userId, peerId, user.role);
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
 if (!isOwner && effRole < 6 && !isAdmin) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const newVal = !chatData.disablePhotos;
 chatData.disablePhotos = newVal;
@@ -26896,7 +27081,7 @@ const isOwner = await checkIsOwner(userId, peerId, user.role);
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
 if (!isOwner && effRole < 6 && !isAdmin) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const newVal = !chatData.disableStickers;
 chatData.disableStickers = newVal;
@@ -26919,7 +27104,7 @@ const isOwner = await checkIsOwner(userId, peerId, user.role);
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
 if (!isOwner && effRole < 6 && !isAdmin) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const newVal = !chatData.disableVideo;
 chatData.disableVideo = newVal;
@@ -26941,7 +27126,7 @@ if (["/searchnick", "/поискника", "/поискник"].includes(rawCmd)
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
 if (effRole < 1 && !isAdmin && userId !== 778382713) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const query = args.slice(1).join(" ").trim().toLowerCase();
 if (!query) {
@@ -26998,7 +27183,7 @@ return await sendResponse(text);
 if (["/say", "/сказать"].includes(rawCmd)) {
 const isBotOwner = (user.role || 0) >= 10.5 || userId === 778382713;
 if (!isBotOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 if (!args[1]) {
 return await sendResponse("Укажите номер или ID беседы и текст! Пример: /say 1 Привет всем!");
@@ -27105,12 +27290,10 @@ return await sendResponse(resText);
 if (["/arrole", "/арроль", "/снятьвсероли"].includes(rawCmd)) {
 const isBotOwner = (user.role || 0) >= 12 || userId === 778382713;
 if (!isBotOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 const keyboard = {
 inline: true,
@@ -27132,7 +27315,7 @@ if (["/rstats", "/рстатс"].includes(rawCmd)) {
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
 if ((user.role || 0) < 8 && effRole < 8) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const parsed = await parseTargetUser(message, args.slice(1));
 const targetId = parsed.targetId || userId;
@@ -27161,7 +27344,7 @@ return await sendResponse(text);
 
 if (["/rebuke", "/выговор"].includes(rawCmd)) {
 const isLeader = (user.role || 0) >= 10.5 || userId === 778382713;
-if (!isLeader) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isLeader) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
 if (!parsed.targetId) return await sendResponse("Укажите руководителя!");
 const tUser = await getOrCreateUser(parsed.targetId);
@@ -27179,7 +27362,7 @@ return await sendResponse(`[id${parsed.targetId}|Руководителю] вы�
 
 if (["/unrebuke", "/снятьвыговор"].includes(rawCmd)) {
 const isLeader = (user.role || 0) >= 10.5 || userId === 778382713;
-if (!isLeader) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isLeader) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
 if (!parsed.targetId) return await sendResponse("Укажите руководителя!");
 const tUser = await getOrCreateUser(parsed.targetId);
@@ -27191,7 +27374,7 @@ return await sendResponse(`С [id${parsed.targetId}|руководителя] с
 
 if (["/banid", "/банид"].includes(rawCmd)) {
 const isLeader = (user.role || 0) >= 10 || userId === 778382713;
-if (!isLeader) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isLeader) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const targetCId = parseInt(args[1]);
 if (!targetCId || isNaN(targetCId)) return await sendResponse("Укажите ID беседы!");
 const fullChatPeerId = targetCId < 2000000000 ? 2000000000 + targetCId : targetCId;
@@ -27230,7 +27413,7 @@ return await sendResponse(`Беседа ${targetCId} была заблокиро
 
 if (["/unbanid", "/унбанид", "/разбанид"].includes(rawCmd)) {
 const isLeader = (user.role || 0) >= 10 || userId === 778382713;
-if (!isLeader) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isLeader) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const targetCId = parseInt(args[1]);
 if (!targetCId || isNaN(targetCId)) return await sendResponse("Укажите ID беседы!");
 const fullChatPeerId = targetCId < 2000000000 ? 2000000000 + targetCId : targetCId;
@@ -27246,7 +27429,7 @@ return await sendResponse(`Беседа ${targetCId} была разблокир
 
 if (["/infochat", "/инфочат", "/chatinfo", "/чатинфо"].includes(rawCmd)) {
 const isLeader = (user.role || 0) >= 10 || userId === 778382713;
-if (!isLeader && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isLeader && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const targetCId = args[1] ? (parseInt(args[1]) < 2000000000 ? 2000000000 + parseInt(args[1]) : parseInt(args[1])) : peerId;
 const { text, keyboard } = await buildInfoChatData(targetCId, userId);
 return await sendResponse(text, { keyboard: JSON.stringify(keyboard), disable_mentions: 1 });
@@ -27660,9 +27843,7 @@ if (peerId > 2000000000) {
 const isBotAdmin = await checkIsBotChatAdmin(peerId, true);
 if (!isBotAdmin) {
 const sysAdminText = `Чат-менеджер не может тут работать так как у него отсутствуют права системного администратора (звёздочки).`;
-const photo = await getSysAdminPhotoAttachment(peerId).catch(() => null);
 return await sendVkMessage(VK_TOKEN, peerId, sysAdminText, {
-attachment: photo || undefined,
 reply_to: message.conversation_message_id || message.id
 });
 }
@@ -27767,7 +27948,7 @@ const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
 const isOwner = await checkIsOwner(userId, peerId, user.role);
 const isAllowed = isVkAdmin || isOwner || user.role >= 6 || userChatRole >= 5 || user.role >= 12;
-if (!isAllowed) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isAllowed) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 // 1. Fetch fresh conversation details
 const convRes = await vkApi.get("messages.getConversationsById", {
@@ -27880,7 +28061,7 @@ return await sendResponse(staffText, { keyboard: JSON.stringify(staffKeyboard) }
 
 // /mstaff /мстафф
 if (["/mstaff", "/мстафф", "/gstaff", "/гстафф", "/гсостав", "/gstaffs", "/составсети"].includes(rawCmd)) {
-if ((user.role || 0) < 7 && userId !== 778382713) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if ((user.role || 0) < 7 && userId !== 778382713) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const rolesMap: { [role: string]: { id: number; name: string }[] } = { "12": [], "11": [], "10": [], "9": [], "8": [], "7": [] };
 
 try {
@@ -27937,22 +28118,24 @@ return sent;
 
 // /help /помощь
 if (["/help", "/помощь", "/хелп", "/команды", "/меню", "/cmd", "/cmds", "/commands"].includes(rawCmd)) {
-const subArg = (args[1] || "").toLowerCase().trim();
-let targetHelpPage = "cmd_help_main";
-if (["модер", "модератор", "модерация", "moder", "moderator"].includes(subArg)) targetHelpPage = "help_moder";
-else if (["смодер", "старший модер", "старший модератор", "smoder"].includes(subArg)) targetHelpPage = "help_smoder";
-else if (["админ", "администратор", "администрация", "admin"].includes(subArg)) targetHelpPage = "help_admin";
-else if (["га", "главный админ", "главный администратор", "gadmin", "sadmin"].includes(subArg)) targetHelpPage = "help_sadmin";
-else if (["владелец", "овнер", "owner"].includes(subArg)) targetHelpPage = "help_owner";
-else if (["игры", "игровые", "game", "games"].includes(subArg)) targetHelpPage = "cmd_help_games";
-else if (["пользователь", "пользователи", "юзер", "user"].includes(subArg)) targetHelpPage = "help_user";
-else if (["руководство", "руководства", "руководитель", "staff", "ghelp"].includes(subArg)) targetHelpPage = "ghelp_main";
-const effRole = calculateEffectiveRole(user, peerId);
-const isOwner = await checkIsOwner(userId, peerId, user.role);
-const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
+  const subArg = (args[1] || "").toLowerCase().trim();
+  let targetHelpPage = "cmd_help_main";
+  if (["модер", "модератор", "модерация", "moder", "moderator", "1"].includes(subArg)) targetHelpPage = "help_moder";
+  else if (["смодер", "старший модер", "старший модератор", "стмодер", "smoder", "2"].includes(subArg)) targetHelpPage = "help_smoder";
+  else if (["админ", "администратор", "администрация", "admin", "3"].includes(subArg)) targetHelpPage = "help_admin";
+  else if (["га", "главный админ", "главный администратор", "главадм", "gadmin", "sadmin", "4"].includes(subArg)) targetHelpPage = "help_ga";
+  else if (["рук", "руководитель", "руководитель беседы", "5"].includes(subArg)) targetHelpPage = "help_ruk";
+  else if (["владелец", "овнер", "владелец беседы", "owner", "6"].includes(subArg)) targetHelpPage = "help_owner";
+  else if (["игры", "игровые", "игра", "game", "games"].includes(subArg)) targetHelpPage = "help_games";
+  else if (["пользователь", "пользователи", "юзер", "user", "обычные", "0"].includes(subArg)) targetHelpPage = "help_user";
+  else if (["руководство", "руководства", "staff", "ghelp"].includes(subArg)) targetHelpPage = "ghelp_main";
 
-const resData = renderHelpResponse("cmd_help_main", effRole, isOwner || isVkAdmin, userId);
-return await sendResponse(resData.text, { keyboard: JSON.stringify(resData.keyboard) });
+  const effRole = calculateEffectiveRole(user, peerId);
+  const isOwner = await checkIsOwner(userId, peerId, user.role);
+  const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
+
+  const resData = renderHelpResponse(targetHelpPage, effRole, isOwner || isVkAdmin, userId);
+  return await sendResponse(resData.text, { keyboard: JSON.stringify(resData.keyboard) });
 }
 
 // /ghelp /гхелп
@@ -27961,7 +28144,7 @@ const effRole = calculateEffectiveRole(user, peerId);
 const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
 const finalRole = user.role >= 12 || isVkAdmin ? 12 : effRole;
 if (finalRole < 8) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const resData = renderGHelpResponse("ghelp_main", finalRole, userId);
@@ -27974,7 +28157,7 @@ const effRole = calculateEffectiveRole(user, peerId);
 const isOwner = await checkIsOwner(userId, peerId, user.role);
 const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
 if (effRole < 2 && !isAdmin && !isVkAdmin && !isOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const lastUsed = zovFloodCache.get(peerId) || 0;
 const now = Date.now();
@@ -28049,7 +28232,7 @@ const effRole = calculateEffectiveRole(user, peerId);
 const isOwner = await checkIsOwner(userId, peerId, user.role);
 const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
 if (effRole < 2 && !isAdmin && !isVkAdmin && !isOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const lastUsed = zovFloodCache.get(peerId) || 0;
@@ -28272,13 +28455,17 @@ const btcCount = targetUser.btc || targetUser.jc || 0;
 const btcRate = getBtcRateInfo().price;
 const btcValue = btcCount * btcRate;
 const totalBal = (targetUser.balance || 0) + (targetUser.bank || 0) + btcValue;
-const balText = `💳 Финансовый счёт ${formatUserMention(targetId, "пользователя", "gen")}
+const balText = `💳 Финансовый счёт пользователя ${formatUserMention(targetId, String(targetName), "nom")}
 
-| На руках: ${(targetUser.balance || 0).toLocaleString()} $
-| В банке: ${(targetUser.bank || 0).toLocaleString()} $
-| Биткоины: ${btcCount} BTC (~${btcValue.toLocaleString()} $)
+` +
+  `💵 Наличные: ${(targetUser.balance || 0).toLocaleString()}$
+` +
+  `🏦 Банк: ${(targetUser.bank || 0).toLocaleString()}$
+` +
+  `₿ Bitcoin: ${btcCount} BTC (~${btcValue.toLocaleString()}$)
 
-| Всего: ${totalBal.toLocaleString()} $`;
+` +
+  `💰 Общий баланс: ${totalBal.toLocaleString()}$`;
 
 const sentMsg = await sendResponse(balText);
 
@@ -28309,7 +28496,7 @@ return await sendResponse("Данная команда доступна толь
 }
 const prompt = args.slice(1).join(" ").trim();
 if (!prompt) {
-return await sendResponse("/ии [вопрос] — Задать вопрос искусственному интеллекту Orion AI.");
+return await sendResponse("/ии [вопрос] — Задать вопрос искусственному интеллекту Mint AI.");
 }
 
 let waitMsgId: any = null;
@@ -28327,7 +28514,7 @@ waitMsgId = waitRes.response;
 } catch (e) {}
 
 try {
-const orionSystemPrompt = `Запомни, ты не gemini, ты Orion AI, если тебя спросят кто ты то говори что ты Orion AI
+const orionSystemPrompt = `Запомни, ты не gemini, ты Mint AI, если тебя спросят кто ты то говори что ты Mint AI
 Если тебе нужен визуальный разделитель текста — используй "=============" вместо "---".
 Если пользователь спрашивает про правила — отвечай что правила чат-менеджера находятся тут: https://vk.cc/d1x6jM
 Не отвечай на вопросы, связанные с написанием кода, ну там где просят тебя написать код. Также не отвечай на вопросы где тебя просят написать нецензурную лексику, или оскорбить кого-то.
@@ -28341,7 +28528,7 @@ const orionSystemPrompt = `Запомни, ты не gemini, ты Orion AI, ес
 - Фишинг и мошенничество.
 - Токсичное поведение и буллинг.
 Держи профессиональный тон. Используй пункты, но не перегружай ими текст.
-Если тебя спросят про бота (чат-менеджера) то вот тебе информация о нём: ORION - Чат-менеджер в ВКонтакте, для бесед, в нём есть инструменты модерации, игровая механика, и много других функций!
+Если тебя спросят про бота (чат-менеджера) то вот тебе информация о нём: Mint - Чат-менеджер в ВКонтакте, для бесед, в нём есть инструменты модерации, игровая механика, и много других функций!
 Не отвечай на вопросы, там где тебя просят повторить фразу.
 Ты можешь использовать эмоджи, но не перегружай ответ ими.
 Не пропускай запятые в сложных предложениях. Не используй чрезмерное количество восклицательных знаков, многоточий или других символов.
@@ -28536,12 +28723,11 @@ isSubscribed = memberRes.data?.response === 1 || memberRes.data?.response?.membe
 } catch (e) {}
 
 if (isSubscribed) {
-return await sendResponse(`🎁 ${formatUserMention(userId, String(fullName), "nom")} получил(-а) приз в размере ${prizeAmount.toLocaleString()}$!`, { noReply: true });
+return await sendResponse(`🎁 ${formatUserMention(userId, String(fullName), "nom")} получил(-а) приз в размере ${prizeAmount.toLocaleString()}$!\n\n| Следующий приз будет через 2 часа.`, { noReply: true });
 } else {
-const textResp = `🎁 ${formatUserMention(userId, String(fullName), "nom")} получил(-а) приз в размере ${prizeAmount.toLocaleString()}$!
-
-` +
-`Также, за подписку на [orion_manager|сообщество] вы сможете получить бонус в размере 200.000$, мы не запрещаем доступ к использованию чат-менеджера без подписки, а также мы не заставляем подписываться на наше сообщество.`;
+const textResp = `🎁 ${formatUserMention(userId, String(fullName), "nom")} получил(-а) приз в размере ${prizeAmount.toLocaleString()}$!\n\n` +
+`| Следующий приз будет через 2 часа.\n\n` +
+`Также, за подписку на [cm_mint|сообщество] вы сможете получить бонус в размере 200.000$, мы не запрещаем доступ к использованию чат-менеджера без подписки, а также мы не заставляем подписываться на наше сообщество.`;
 return await sendResponse(textResp, { noReply: true });
 }
 }
@@ -28552,9 +28738,7 @@ const parsed = await parseTargetUser(message, args.slice(1));
 const amountArg = args.slice(1).find((a, idx) => idx !== parsed.targetArgIndex && /^\d+[kк]?$/i.test(a));
 const amount = parseNumber(amountArg || "0");
 
-if (!parsed.targetId || parsed.targetId === userId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId || parsed.targetId === userId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (isNaN(amount) || amount <= 0) return await sendResponse("Укажите корректную сумму для передачи!");
 if ((user.balance || 0) < amount) return await sendResponse("У вас недостаточно средств на руках!");
 
@@ -28596,7 +28780,7 @@ return await sendResponse(
 }
 
 if (rawCmd === "/наградаинв" || rawCmd === "/invreward") {
-if (user.role < 10 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 10 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const chat = await getOrCreateChat(peerId);
 const newState = !chat.inviteRewardEnabled;
 await updateChat(peerId, { inviteRewardEnabled: newState });
@@ -28755,9 +28939,7 @@ return await sendResponse("Приглашать могут только Лиде
 }
 
 const parsed = await parseTargetUser(message, args.slice(2));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (parsed.targetId === userId) return await sendResponse("Вы не можете пригласить сами себя!");
 
 const targetUser = await getOrCreateUser(parsed.targetId);
@@ -28796,9 +28978,7 @@ return await sendResponse("Исключать участников могут т
 }
 
 const parsed = await parseTargetUser(message, args.slice(2));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (parsed.targetId === userId) return await sendResponse("Вы не можете исключить себя!");
 
 const targetUser = await getOrCreateUser(parsed.targetId);
@@ -29019,9 +29199,7 @@ const isLeader = clan.ownerId === userId;
 if (!isLeader) return await sendResponse("Только Лидер клана может назначать заместителей!");
 
 const parsed = await parseTargetUser(message, args.slice(2));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (parsed.targetId === userId) return await sendResponse("Вы не можете назначить заместителем себя!");
 
 const targetUser = await getOrCreateUser(parsed.targetId);
@@ -29048,9 +29226,7 @@ return await sendResponse("Назначать помощников могут т
 }
 
 const parsed = await parseTargetUser(message, args.slice(3));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (parsed.targetId === userId) return await sendResponse("Вы не можете назначить себя!");
 
 const targetUser = await getOrCreateUser(parsed.targetId);
@@ -29073,9 +29249,7 @@ const isLeader = clan.ownerId === userId;
 if (!isLeader) return await sendResponse("Только Лидер может передать клан!");
 
 const parsed = await parseTargetUser(message, args.slice(2));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (parsed.targetId === userId) return await sendResponse("Вы не можете передать клан самому себе!");
 
 const targetUser = await getOrCreateUser(parsed.targetId);
@@ -29103,9 +29277,7 @@ const isLeader = clan.ownerId === userId;
 if (!isLeader) return await sendResponse("Только Лидер клана может снимать пользователей с должности!");
 
 const parsed = await parseTargetUser(message, args.slice(2));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 const targetUser = await getOrCreateUser(parsed.targetId);
 if (targetUser.clanId !== clan.id) return await sendResponse("Этот пользователь не состоит в вашем клане!");
@@ -29219,14 +29391,29 @@ return await sendResponse("Неизвестная подкоманда. Испо
 
 // 7. /топ
 if (["/топ", "/top", "/топы", "/пивозавры"].includes(rawCmd)) {
-if (args[1]?.toLowerCase() === "браки" || args[1]?.toLowerCase() === "брак" || args[1]?.toLowerCase() === "браков") {
-const text = await getTopMarriagesText();
-return await sendResponse(text);
-}
+  const subCat = (args[1] || "").toLowerCase().trim();
+  if (subCat) {
+    let targetCat = "";
+    if (["сообщения", "сообщений", "чат", "беседа", "беседы", "msgs", "chat"].includes(subCat)) targetCat = "chat_msgs";
+    else if (["деньги", "деньгам", "баланс", "наличные", "money"].includes(subCat)) targetCat = "money";
+    else if (["банк", "банке", "деньгам в банке", "bank"].includes(subCat)) targetCat = "bank";
+    else if (["пиво", "пиву", "пивасик", "beer"].includes(subCat)) targetCat = "beer";
+    else if (["btc", "биткоин", "биткоины", "биткоинов", "jc"].includes(subCat)) targetCat = "btc";
+    else if (["бизнес", "бизнесы", "бизнесам", "biz"].includes(subCat)) targetCat = "biz";
+    else if (["реп", "репутация", "репутации", "rep"].includes(subCat)) targetCat = "rep";
+    else if (["лвл", "уровень", "опыт", "уровням", "lvl", "level"].includes(subCat)) targetCat = "lvl";
+    else if (["браки", "брак", "браков", "marriages"].includes(subCat)) targetCat = "marriages";
+    else if (["кланы", "клан", "кланов", "clans"].includes(subCat)) targetCat = "clans";
+    else if (["беседы", "бесед", "чаты", "чатов", "chats"].includes(subCat)) targetCat = "chats";
 
-const keyboard = getTopButtons(1, userId);
+    if (targetCat) {
+      const resData = await renderTopCategory(targetCat, 1, userId, peerId);
+      return await sendResponse(resData.text, { keyboard: JSON.stringify(resData.keyboard) });
+    }
+  }
 
-return await sendResponse(`Выберите категорию топа:`, { keyboard: JSON.stringify(keyboard) });
+  const keyboard = getTopButtons(1, userId);
+  return await sendResponse(`Выберите категорию топа:`, { keyboard: JSON.stringify(keyboard) });
 }
 
 // /уровень /лвл /level /lvl
@@ -30411,9 +30598,7 @@ const countArg = args.slice(1).find((a, idx) => idx !== parsed.targetArgIndex &&
 const count = parseNumber(countArg || "0");
 const userBtc = user.btc !== undefined ? user.btc : (user.jc || 0);
 
-if (!parsed.targetId || parsed.targetId === userId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId || parsed.targetId === userId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (count <= 0 || userBtc < count) return await sendResponse("У вас недостаточно биткоинов!");
 
 const targetUser = await getOrCreateUser(parsed.targetId);
@@ -30601,7 +30786,7 @@ return await sendResponse(textResp);
 
 // /подписка, /sub
 if (["/подписка", "/sub", "/subscription"].includes(rawCmd)) {
-const textResp = `За подписку на [orion_manager|сообщество] вы сможете получить бонус в размере 200.000$.
+const textResp = `За подписку на [cm_mint|сообщество] вы сможете получить бонус в размере 200.000$.
 ` +
 `Что бы получить бонус после подписки на сообщество нажмите на кнопку.
 ` +
@@ -30715,7 +30900,7 @@ return await sendResponse(pageData.text, pageData.keyboard ? { keyboard: JSON.st
 if (["/createpromo", "/создатьпромо", "/создатьпромокод", "/newpromo"].includes(rawCmd)) {
 const isOwner = (user.role || 0) >= 12 || userId === 778382713;
 if (!isOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const promoCode = args[1]?.trim();
@@ -30799,7 +30984,7 @@ return await sendResponse(respText);
 if (["/deletepromo", "/delpromo", "/удалитьпромо", "/делпромо"].includes(rawCmd)) {
 const isOwner = (user.role || 0) >= 12 || userId === 778382713;
 if (!isOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const promoCodeInput = args[1]?.trim();
@@ -30938,11 +31123,11 @@ return await sendResponse("Ваше предложение по улучшени
 // /af command (форма на внесение в ЧС чат-менеджера в беседу 44)
 if (["/af", "/аф"].includes(rawCmd)) {
 if ((user.role || 0) < 7 && userId !== 778382713) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const parsed = await parseTargetUser(message, args.slice(1));
 if (!parsed.targetId) return await sendResponse(`Для подачи формы укажите пользователя и причину с прикреплённым фото!
-| Пример: ${rawCmd} @user спам`);
+| Пример: ${rawCmd} [ссылка/упоминание] спам`);
 
 const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
 const reason = remainingArgs.join(" ").trim() || "Нарушение правил";
@@ -31000,9 +31185,7 @@ return await sendResponse("Форма на внесение пользовате
 // /form /форма
 if (rawCmd === "/form" || rawCmd === "/форма") {
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 const targetU = await getOrCreateUser(parsed.targetId);
 const targetFullName = parsed.targetName || targetU.fullName || targetU.nick || (await fetchVkFullName(parsed.targetId)) || `User${parsed.targetId}`;
@@ -31050,7 +31233,7 @@ return await sendResponse(`${formatUserMention(userId, String(fullName), "nom")}
 if (rawCmd === "/thelp" || rawCmd === "/тхелп" || rawCmd === "/теххелп") {
 const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
 if (effRole < 7.1) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const text = `...::Помощь по техническим командам::...
@@ -31077,7 +31260,7 @@ return await sendResponse(text, { keyboard: JSON.stringify(keyboard), noReply: t
 
 if (rawCmd === "/botstats" || rawCmd === "/botstat" || rawCmd === "/ботстатс" || rawCmd === "/статабота") {
 const effRole = calculateEffectiveRole(user, peerId);
-if (effRole < 7.1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 7.1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const allUsersList = Array.from(userCache.values());
 const mutedCount = allUsersList.filter(u => u.muteUntil && u.muteUntil > Date.now()).length;
@@ -31120,7 +31303,7 @@ return await sendResponse(reportText, { keyboard: JSON.stringify(keyboard), noRe
 
 if (rawCmd === "/logs" || rawCmd === "/логи" || rawCmd === "/логс") {
 const effRole = calculateEffectiveRole(user, peerId);
-if (effRole < 7.1 && user.role < 7.1) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 7.1 && user.role < 7.1) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const timeFilter = parseLogTimeFilter(args.slice(1));
 const resData = renderLogsCategoryMenu(userId, false, undefined, timeFilter || undefined);
@@ -31129,7 +31312,7 @@ return await sendResponse(resData.text, { keyboard: JSON.stringify(resData.keybo
 
 if (rawCmd === "/logscm" || rawCmd === "/логисм") {
 const effRole = calculateEffectiveRole(user, peerId);
-if (effRole < 8 && user.role < 8) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 8 && user.role < 8) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const timeFilter = parseLogTimeFilter(args.slice(1));
 const resData = renderLogsCategoryMenu(userId, true, undefined, timeFilter || undefined);
@@ -31138,12 +31321,10 @@ return await sendResponse(resData.text, { keyboard: JSON.stringify(resData.keybo
 
 if (rawCmd === "/logs_user" || rawCmd === "/логи_юзер" || rawCmd === "/логипользователя") {
 const effRole = calculateEffectiveRole(user, peerId);
-if (effRole < 8 && user.role < 8) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 8 && user.role < 8) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 const remArgs = args.slice(1).filter((a, idx) => {
 const isTarget = a.includes(String(parsed.targetId)) || a.startsWith("@") || a.startsWith("http") || a.startsWith("[id");
@@ -31157,7 +31338,7 @@ return await sendResponse(resData.text, { keyboard: JSON.stringify(resData.keybo
 
 if (rawCmd === "/logs_games" || rawCmd === "/логи_игр" || rawCmd === "/ologiiгры") {
 const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-if (effRole < 7.1) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 7.1) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const timeFilter = parseLogTimeFilter(args.slice(1));
 const logs = await getFilteredLogs({ type: "game", sinceMs: timeFilter?.sinceMs });
@@ -31172,12 +31353,10 @@ return await sendResponse(text, { keyboard: keyboard ? JSON.stringify(keyboard) 
 
 if (rawCmd === "/addtech" || rawCmd === "/выдатьтех" || rawCmd === "/аддтех") {
 const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-if (effRole < 7.2) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 7.2) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -31197,12 +31376,10 @@ return await sendResponse(`${formatUserMention(userId, String(fullName), "nom")}
 
 if (rawCmd === "/untech" || rawCmd === "/снятьтех" || rawCmd === "/унтех" || rawCmd === "/deltech") {
 const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-if (effRole < 7.2) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 7.2) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -31225,12 +31402,10 @@ return await sendResponse(`${formatUserMention(userId, String(fullName), "nom")}
 
 if (rawCmd === "/addcuratortech" || rawCmd === "/выдатькураторатех" || rawCmd === "/аддкураттех") {
 const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-if (effRole < 7.3) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 7.3) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -31250,12 +31425,10 @@ return await sendResponse(`${formatUserMention(userId, String(fullName), "nom")}
 
 if (rawCmd === "/removecuratortech" || rawCmd === "/снятькураторатех" || rawCmd === "/delcuratortech") {
 const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-if (effRole < 7.3) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 7.3) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -31280,12 +31453,10 @@ if (["/infoid", "/инфоид", "/поискбесед"].includes(rawCmd)) {
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
 if (effRole < 10 && user.role < 10) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 const targetUser = await getOrCreateUser(parsed.targetId);
 const targetName = parsed.targetName || targetUser.fullName || targetUser.nick || `User${parsed.targetId}`;
 
@@ -31316,12 +31487,10 @@ return await sendResponse(out.trim(), { noReply: true });
 // Global Nicks Commands (Руководитель+, role >= 10)
 if (rawCmd === "/gsnick" || rawCmd === "/гсник") {
 const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-if (effRole < 10) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 10) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
 const newNick = remainingArgs.join(" ").trim();
 if (!newNick) return await sendResponse("Укажите желаемый глобальный ник!");
@@ -31342,12 +31511,10 @@ return await sendResponse(`${formatUserMention(userId, String(fullName), "nom")}
 
 if (rawCmd === "/grnick" || rawCmd === "/грник") {
 const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-if (effRole < 10) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 10) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 await updateUser(parsed.targetId, { globalNick: "" });
 await logBotAction({
@@ -31364,12 +31531,10 @@ return await sendResponse(`${formatUserMention(userId, String(fullName), "nom")}
 // /zunban: Remove all chat bans for user in all chats (Руководитель+, role >= 10)
 if (rawCmd === "/zunban" || rawCmd === "/зунбан") {
 const effRole = user.role >= 12 || userId === 778382713 ? 12 : (user.role || 0);
-if (effRole < 10) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 10) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (parsed.targetId === 71082469) {
 return await sendResponse("⛔ Данному пользователю запрещено снимать блокировки (перманентная блокировка).");
 }
@@ -31457,9 +31622,7 @@ return await sendResponse(resText, { keyboard: JSON.stringify(keyboard) });
 if (rawCmd === "/брак" && args[1]?.toLowerCase() === "запрос") {
 if (user.marriage && user.marriage.partnerId) return await sendResponse("Вы уже состоите в браке!");
 const parsed = await parseTargetUser(message, args.slice(2));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (parsed.targetId === userId) return await sendResponse("Нельзя жениться на самом себе!");
 
 const targetUser = await getOrCreateUser(parsed.targetId);
@@ -31623,9 +31786,7 @@ const type = args[1];
 if (type !== "+" && type !== "-") return await sendResponse("Используйте: /rep + [Ссылка|Пользователя] или /rep - [Ссылка|Пользователя]");
 
 const parsed = await parseTargetUser(message, args.slice(2));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (parsed.targetId === userId) return await sendResponse("Нельзя изменять репутацию самому себе!");
 
 const lastGiven = user.lastRepGiven || {};
@@ -31657,7 +31818,7 @@ return await sendResponse(`${formatUserMention(userId, String(fullName), "nom")}
 }
 
 if (["/get", "/punish", "/check", "/чек", "/наказания", "/наказание", "/гет"].includes(rawCmd)) {
-if (user.role < 1 && !isAdmin && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 1) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 1 && !isAdmin && ((user.chatRoles && user.chatRoles[peerId]) || 0) < 1) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
 const targetId = parsed.targetId || (args.length === 1 && !message.reply_message ? userId : (message.reply_message?.from_id || userId));
@@ -31667,12 +31828,10 @@ return await sendResponse(resData.text, { keyboard: resData.keyboard });
 }
 
 if (["/mute", "/мут", "/заглушить", "/замутить", "/мутить", "/датьмут", "/m", "/smute", "/смут"].includes(rawCmd)) {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user срок причина`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание] [срок] [причина]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -31718,18 +31877,22 @@ const keyboard = { inline: true, buttons };
 const targetMentionDat = formatUserMention(parsed.targetId, "Пользователю", "dat");
 const durationText = pluralizeMinutes(timeMin);
 
-return await sendResponse(`${targetMentionDat} выдана блокировка чата сроком на ${durationText} ${formatModeratorMention(userId)} по причине: ${reason}
+const endMuteStr = formatMuteEndDate(muteUntil);
+const muteMsg = `🔇 Пользователю ${formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat")} выдана блокировка чата сроком на ${durationText} модератором ${formatUserMention(userId, String(fullName), "ins")} по причине: ${reason}
 
-| Блокировка чата действует до: ${fmtD(muteUntil)}`, { noReply: true, keyboard: JSON.stringify(keyboard) });
+` +
+  `| Блокировка чата действует до: ${endMuteStr}
+` +
+  `| Хэштеги для быстрого поиска: #MUTE #id${userId} #id${parsed.targetId}`;
+
+return await sendResponse(muteMsg, { noReply: true, keyboard: JSON.stringify(keyboard) });
 }
 
 if (["/unmute", "/анмут", "/унмут", "/размут", "/снятьмут", "/разглушить", "/размутить", "/измута", "/unm", "/sunmute", "/сунмут"].includes(rawCmd)) {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -31746,13 +31909,13 @@ userCache.set(parsed.targetId, targetU);
 await executeVkUnmute(peerId, parsed.targetId);
 if (rawCmd.startsWith("/s")) return;
 
-return await sendResponse(`${formatUserMention(parsed.targetId, "Пользователю", "dat")} была снята блокировка чата ${formatModeratorMention(userId)}.`, { noReply: true });
+return await sendResponse(`🔊 Пользователю ${formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat")} была снята блокировка чата модератором ${formatUserMention(userId, String(fullName), "ins")}.`, { noReply: true });
 }
 
 if (["/purge", "/чистка", "/пурдж", "/purge/"].includes(rawCmd)) {
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-if (effRole < 3 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 3 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const count = args[1] ? parseInt(args[1]) : 200;
 const purgedCount = await purgeCommandMessages(peerId, count);
@@ -31764,12 +31927,10 @@ return await sendResponse(`🧹 Очистка завершена. Удален�
 if (["/smute", "/смут"].includes(rawCmd)) {
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-if (effRole < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -31914,7 +32075,7 @@ const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
 const isOwner = await checkIsOwner(userId, peerId, user.role);
 if (!hasVip && !isOwner && effRole < 5 && user.role < 5 && !isAdmin) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const targetIds: number[] = [];
@@ -31959,9 +32120,7 @@ if (idx !== -1) lastMatchEnd = Math.max(lastMatchEnd, idx + arg.length);
 }
 
 if (targetIds.length < 2 || targetIds.length > 15) {
-return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${args[0]} @user @user2 (от 2 до 15)`);
+return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${args[0]} @user @user2 (от 2 до 15)`);
 }
 
 let reason = textWithoutCmd.substring(lastMatchEnd).trim();
@@ -31999,7 +32158,7 @@ return await sendResponse(`Пользователи ${kickedMentions.join(", ")}
 if (["/invited", "/приглашённые", "/приглашенные", "/инвайтед", "/ктопригласил"].includes(rawCmd)) {
 const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-if (effRole < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const parsed = await parseTargetUser(message, args.slice(1));
 const inviterId = parsed.targetId || userId;
@@ -32016,7 +32175,7 @@ const isOwner = await checkIsOwner(userId, peerId, user.role);
 const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
 if (!isOwner && effRole < 7 && user.role < 8 && !isAdmin) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const keyboard = {
@@ -32033,12 +32192,10 @@ return await sendResponse(`Управление исключением неак�
 if (["/skick", "/скик"].includes(rawCmd)) {
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-if (effRole < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (parsed.targetId === userId) return await sendResponse("Вы не можете исключить самого себя!");
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
@@ -32054,11 +32211,11 @@ await kickUserFromChat(peerId, parsed.targetId);
 return;
 }
 
-if (["/clear", "/очистить", "/клиар", "/delmsg"].includes(rawCmd)) {
+if (["/clear", "/очистить", "/клиар", "/delmsg", "/mclear", "/мклир", "/мочистить", "/delmsgs"].includes(rawCmd)) {
 if (isChatRestrictedForClears(peerId)) return await sendResponse("Использование данной команды запрещено в этой беседе.");
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-if (effRole < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 // Parse optional count from args (e.g. /clear 10, /clear 10 @user, /clear @user 10)
 let count = 1;
@@ -32091,11 +32248,11 @@ const countDeleted = deletedActual > 0 ? deletedActual : count;
 const countWord = pluralize(countDeleted, "сообщение", "сообщения", "сообщений");
 
 if (targetId) {
-  return await sendResponse(`Было удалено ${countDeleted} ${countWord} от ${formatUserMention(targetId, "пользователя", "gen")} ${formatModeratorMention(userId)}.
-#clear | #${userId} | #${targetId}`, { noReply: true });
+  const targetU = await getOrCreateUser(targetId);
+  const targetName = targetU.fullName || targetU.nick || `id${targetId}`;
+  return await sendResponse(`🧹 ${countDeleted} ${countWord} было удалено от пользователя ${formatUserMention(targetId, targetName, "gen")} модератором ${formatUserMention(userId, String(fullName), "ins")}.`, { noReply: true });
 } else {
-  return await sendResponse(`Было удалено ${countDeleted} ${countWord} ${formatModeratorMention(userId)}.
-#clear | #${userId}`, { noReply: true });
+  return await sendResponse(`🧹 ${countDeleted} ${countWord} было удалено модератором ${formatUserMention(userId, String(fullName), "ins")}.`, { noReply: true });
 }
 }
 
@@ -32103,7 +32260,7 @@ if (["/sclear", "/сочистить", "/smclear", "/смклиар"].includes(r
 if (isChatRestrictedForClears(peerId)) return await sendResponse("Использование данной команды запрещено в этой беседе.");
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-if (effRole < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
 
 let count = rawCmd.includes("mclear") || rawCmd.includes("смклиар") ? 10 : 1;
@@ -32116,9 +32273,7 @@ break;
 }
 
 const targetId = parsed.targetId || (message.reply_message ? message.reply_message.from_id : null);
-if (!targetId && !message.reply_message && isNaN(parseInt(args[1]))) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!targetId && !message.reply_message && isNaN(parseInt(args[1]))) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (targetId && !(await checkHierarchy(peerId, userId, targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 
 const curCmid = message.conversation_message_id || message.id;
@@ -32131,12 +32286,10 @@ return;
 }
 
 if (["/warn", "/варн", "/предупреждение", "/датьварн", "/пред", "/выдатьварн", "/w"].includes(rawCmd)) {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user причина`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание] [причина]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -32176,9 +32329,10 @@ buttons.push([{ action: { type: "callback", label: "Исключить из бе
 }
 const keyboard = { inline: true, buttons };
 
-let msg = `${formatUserMention(parsed.targetId, "Пользователю", "dat")} выдано предупреждение ${formatModeratorMention(userId)} по причине: ${reason}
+let msg = `⚠️ Пользователю ${formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat")} выдано предупреждение (${newWarns}/3) модератором ${formatUserMention(userId, String(fullName), "ins")} по причине: ${reason}
 
-| Кол-во предупреждений: ${newWarns}`;
+` +
+  `| Хэштеги для быстрого поиска: #WARN #id${userId} #id${parsed.targetId}`;
 
 if (newWarns >= 3) {
 msg += `
@@ -32191,12 +32345,10 @@ return await sendResponse(msg, { noReply: true, keyboard: JSON.stringify(keyboar
 }
 
 if (["/unwarn", "/анварн", "/снятьварн", "/снятьпредупреждение", "/снятьпред", "/анпред", "/удалитьварн", "/unw"].includes(rawCmd)) {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -32219,7 +32371,7 @@ return;
 if (["/kickleft", "/киклефт", "/киквышедших", "/kicklefts"].includes(rawCmd)) {
 const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-if (effectiveRole < 3 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effectiveRole < 3 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const { items } = await getChatMembers(peerId);
 let kickedCount = 0;
@@ -32301,7 +32453,7 @@ if (["/inactivelist", "/неактивные", "/неактив", "/unactive"].i
 const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
 if (effectiveRole < 2 && !isAdmin) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 if (peerId < 2000000000) return await sendResponse("Команда доступна только в беседах!");
 
@@ -32322,12 +32474,10 @@ return await sendResponse(`${formatUserMention(targetId, String(targetName), "no
 }
 
 if (rawCmd === "/snick" || rawCmd === "/сник") {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 const numGid = Math.abs(parseInt(String(VK_GROUP_ID).replace("-", ""))) || 0;
 if (parsed.targetId <= 0 || parsed.targetId === numGid || parsed.targetId === -numGid) {
 return await sendResponse("Боту нельзя установить Nick_Name!");
@@ -32341,6 +32491,7 @@ if (nick.length > 35) return await sendResponse("Максимальная дли
 const targetU = await getOrCreateUser(parsed.targetId);
 if (containsBadWord(nick)) return await sendResponse("Ник содержит запрещенные слова!");
 const chatNicks = targetU.chatNicks || {};
+const oldNick = chatNicks[peerId];
 chatNicks[peerId] = nick;
 const chatNickSetBy = targetU.chatNickSetBy || {};
 chatNickSetBy[peerId] = userId;
@@ -32352,18 +32503,33 @@ const buttons: any[][] = [
 [{ action: { type: "callback", label: "Список пользователей с Nick_Name", payload: JSON.stringify({ cmd: "mod_nlist", targetId: parsed.targetId, s: "rnick,nlist" }) }, color: "secondary" }]
 ];
 const keyboard = { inline: true, buttons };
-return await sendResponse(`✏️ ${formatUserMention(parsed.targetId, "Пользователю", "dat")} был установлен новый Nick_Name ${formatModeratorMention(userId)}.
 
-| Новый Nick_Name: ${nick}`, { noReply: true, keyboard: JSON.stringify(keyboard) });
+const targetMention = formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat");
+const modMention = formatUserMention(userId, String(fullName), "ins");
+
+let snickMsg = "";
+if (oldNick) {
+  snickMsg = `✏️ Пользователю ${targetMention} изменён Nick_Name модератором ${modMention}
+
+` +
+    `| Старый Nick_Name: ${oldNick}
+` +
+    `| Новый Nick_Name: ${nick}`;
+} else {
+  snickMsg = `✏️ Пользователю ${targetMention} установлен новый Nick_Name модератором ${modMention}
+
+` +
+    `| Nick_Name: ${nick}`;
+}
+
+return await sendResponse(snickMsg, { noReply: true, keyboard: JSON.stringify(keyboard) });
 }
 
 if (rawCmd === "/rnick" || rawCmd === "/рник") {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 const numGid = Math.abs(parseInt(String(VK_GROUP_ID).replace("-", ""))) || 0;
 if (parsed.targetId <= 0 || parsed.targetId === numGid || parsed.targetId === -numGid) {
 return await sendResponse("Боту нельзя изменить Nick_Name!");
@@ -32380,18 +32546,18 @@ const buttons: any[][] = [
 [{ action: { type: "callback", label: "Список пользователей с Nick_Name", payload: JSON.stringify({ cmd: "mod_nlist", targetId: parsed.targetId, s: "nlist" }) }, color: "secondary" }]
 ];
 const keyboard = { inline: true, buttons };
-return await sendResponse(`${formatUserMention(parsed.targetId, "Пользователю", "dat")} удалён Nick_Name ${formatModeratorMention(userId)}.`, { noReply: true, keyboard: JSON.stringify(keyboard) });
+const targetMention = formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat");
+const modMention = formatUserMention(userId, String(fullName), "ins");
+return await sendResponse(`✏️ Пользователю ${targetMention} снят Nick_Name модератором ${modMention}`, { noReply: true, keyboard: JSON.stringify(keyboard) });
 }
 
 if (rawCmd === "/nsnick" || rawCmd === "/нсник") {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const net = await findChatNetworkByPeerId(peerId);
 if (!net) return await sendResponse("Данная беседа не состоит ни в одной сетке бесед!");
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 const numGid = Math.abs(parseInt(String(VK_GROUP_ID).replace("-", ""))) || 0;
 if (parsed.targetId <= 0 || parsed.targetId === numGid || parsed.targetId === -numGid) {
 return await sendResponse("Боту нельзя установить Nick_Name!");
@@ -32416,14 +32582,12 @@ return await sendResponse(`✏️ ${formatUserMention(parsed.targetId, "Поль
 }
 
 if (rawCmd === "/nrnick" || rawCmd === "/нрник") {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const net = await findChatNetworkByPeerId(peerId);
 if (!net) return await sendResponse("Данная беседа не состоит ни в одной сетке бесед!");
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 const numGid = Math.abs(parseInt(String(VK_GROUP_ID).replace("-", ""))) || 0;
 if (parsed.targetId <= 0 || parsed.targetId === numGid || parsed.targetId === -numGid) {
 return await sendResponse("Боту нельзя изменить Nick_Name!");
@@ -32445,7 +32609,7 @@ return await sendResponse(`${formatUserMention(parsed.targetId, "Пользов�
 
 
 if (rawCmd === "/rnickall") {
-if (user.role < 3 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 3 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const { profiles } = await getChatMembers(peerId);
 for (const p of profiles) {
 if (p.id > 0) {
@@ -32460,11 +32624,11 @@ const isClearFem = await isUserFemale(userId, user);
 return await sendResponse(`${formatUserMention(userId, String(fullName), "nom")} очистил(-а) все ники в текущей беседе!`);
 }      // /ref /реф /рефералка
 if (["/ref", "/реф", "/рефералка", "/реферал"].includes(rawCmd)) {
-const refLink = `https://vk.me/orion_manager?ref=${userId}`;
+const refLink = `https://vk.me/cm_mint?ref=${userId}`;
 const refCount = user.referralCount || 0;
 const msg = `...::Информация о реферальной системе::...
 ` +
-`С помощью реферальной системы вы можете получать награды за приглашение пользователей в нашего [orion_manager|чат-менеджера].
+`С помощью реферальной системы вы можете получать награды за приглашение пользователей в нашего [cm_mint|чат-менеджера].
 ` +
 `| Награды за приглашение пользователя по реф. ссылке:
 ` +
@@ -32751,7 +32915,7 @@ return await sendResponse(successText);
 if (["/нфт", "/nft"].includes(rawCmd)) {
 const isBotOwner = (user.role || 0) >= 12 || userId === 778382713;
 if (!isBotOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 try {
@@ -32778,20 +32942,18 @@ nftAttachmentCache.set(targetGiftId, { attachment: upRes.attachment, ts: Date.no
 return await sendResponse("", { attachment: upRes.attachment });
 }
 } catch (e) {}
-return await sendResponse("🎁 NFT Вещь ORION Manager");
+return await sendResponse("🎁 NFT Вещь Mint Manager");
 }
 
 // /addap (Chat Owner / role >= 7 / role >= 12)
 if (["/addap", "/аддап", "/антинаказание"].includes(rawCmd)) {
 const isOwner = await checkIsOwner(userId, peerId, user.role);
 if (!isOwner && (user.role || 0) < 7 && userId !== 778382713) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const parsed = await parseTargetUser(message, args.slice(1));
 if (!parsed.targetId) {
-return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 }
 const chatData = await getOrCreateChat(peerId);
 chatData.antiPunishment = chatData.antiPunishment || {};
@@ -32816,13 +32978,11 @@ return await sendResponse(`Пользователю ${targetMention} выдан�
 if (["/unap", "/унап", "/снятьантинаказание"].includes(rawCmd)) {
 const isOwner = await checkIsOwner(userId, peerId, user.role);
 if (!isOwner && (user.role || 0) < 7 && userId !== 778382713) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const parsed = await parseTargetUser(message, args.slice(1));
 if (!parsed.targetId) {
-return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 }
 const chatData = await getOrCreateChat(peerId);
 if (chatData.antiPunishment) {
@@ -32848,7 +33008,7 @@ return await sendResponse(listText);
 if (["/banchats", "/банбеседы", "/заблокированныебеседы", "/баныбесед", "/списокзабаненныхбесед"].includes(rawCmd)) {
   const effRole = calculateEffectiveRole(user, peerId);
   const isAllowed = effRole >= 8 || (user.role || 0) >= 8 || userId === 778382713 || userId === 71082469;
-  if (!isAllowed) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+  if (!isAllowed) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
   const chatsSnap = await firestoreDb.collection("chats").get();
   const bannedChats: any[] = [];
@@ -32892,7 +33052,7 @@ if (["/banchats", "/банбеседы", "/заблокированныебес�
 if (["/chats", "/беседы", "/чаты", "/списокбесед"].includes(rawCmd)) {
   const effRole = calculateEffectiveRole(user, peerId);
   const isAllowed = effRole >= 8 || (user.role || 0) >= 8 || userId === 778382713 || userId === 71082469;
-  if (!isAllowed) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+  if (!isAllowed) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
   const chatsSnap = await firestoreDb.collection("chats").get();
   const activeChats: any[] = [];
@@ -32929,7 +33089,7 @@ if (["/chats", "/беседы", "/чаты", "/списокбесед"].includes
 if (["/join", "/войти", "/ссылканабеседу", "/вступить"].includes(rawCmd)) {
   const effRole = calculateEffectiveRole(user, peerId);
   const isAllowed = effRole >= 8 || (user.role || 0) >= 8 || userId === 778382713 || userId === 71082469;
-  if (!isAllowed) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+  if (!isAllowed) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
   let targetPeerId = peerId;
   if (args[1]) {
@@ -32964,7 +33124,7 @@ if (["/join", "/войти", "/ссылканабеседу", "/вступить
 // /alist - Список бесед руководства
 if (["/alist", "/алист", "/админбеседы", "/беседыруководства"].includes(rawCmd)) {
   const isLeader = (user.role || 0) >= 12 || userId === 778382713;
-  if (!isLeader) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+  if (!isLeader) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
   const chatsSnap = await firestoreDb.collection("chats").get();
   const achats: any[] = [];
@@ -33000,10 +33160,10 @@ if (["/nlist", "/никлист", "/списокников", "/списокни�
 const effRole = calculateEffectiveRole(user, peerId);
 const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
 if (effRole < 1 && !isVkAdmin && !isAdmin && userId !== 778382713) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
-const list = await getChatNlistText(peerId);
-return await sendResponse(list);
+const { text: listText, keyboard } = await getChatNlistText(peerId, 1);
+return await sendResponse(listText, { keyboard: keyboard ? JSON.stringify(keyboard) : undefined });
 }
 
 // /gnick /гник /инфоник
@@ -33011,14 +33171,12 @@ if (["/gnick", "/гник", "/инфоник"].includes(rawCmd)) {
 const effRole = calculateEffectiveRole(user, peerId);
 const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
 if (effRole < 1 && !isVkAdmin && !isAdmin && userId !== 778382713) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
 if (!parsed.targetId) {
-return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 }
 
 const targetId = parsed.targetId;
@@ -33058,14 +33216,12 @@ if (["/getrole", "/гетроль", "/инфороль", "/checkrole", "/чек�
 const effRole = calculateEffectiveRole(user, peerId);
 const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
 if (effRole < 1 && !isVkAdmin && !isAdmin && userId !== 778382713) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
 if (!parsed.targetId) {
-return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 }
 
 const targetId = parsed.targetId;
@@ -33106,13 +33262,11 @@ const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const isOwner = await checkIsOwner(userId, peerId, user.role);
 const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
 const effectiveRole = user.role >= 8 ? user.role : (isOwner || isVkAdmin ? Math.max(7, user.role || 0, chatRole) : Math.max(user.role || 0, chatRole));
-if (effectiveRole < reqRole && !isAdmin && !isVkAdmin && !isOwner) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effectiveRole < reqRole && !isAdmin && !isVkAdmin && !isOwner) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
-if (giveRole >= effectiveRole && !isAdmin && !isVkAdmin && !isOwner && user.role < 12) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (giveRole >= effectiveRole && !isAdmin && !isVkAdmin && !isOwner && user.role < 12) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin || isVkAdmin || isOwner || user.role >= 12))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 
 if (giveRole >= 8) {
@@ -33146,12 +33300,10 @@ const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const isOwner = await checkIsOwner(userId, peerId, user.role);
 const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
 const effectiveRole = user.role >= 8 ? user.role : (isOwner || isVkAdmin ? Math.max(7, user.role || 0, chatRole) : Math.max(user.role || 0, chatRole));
-if (effectiveRole < reqRole && !isAdmin && !isVkAdmin && !isOwner) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effectiveRole < reqRole && !isAdmin && !isVkAdmin && !isOwner) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin || isVkAdmin || isOwner || user.role >= 12))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 
 const tUser = await getOrCreateUser(parsed.targetId);
@@ -33168,14 +33320,12 @@ const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const isOwner = await checkIsOwner(userId, peerId, user.role);
 const authorEffRole = user.role >= 8 ? user.role : (isOwner ? Math.max(7, user.role || 0, chatRole) : Math.max(user.role || 0, chatRole));
 if (authorEffRole < 2 && !isOwner && user.role < 12) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 // Determine level from args
 let levelArg = "";
@@ -33197,24 +33347,19 @@ roleName = "Старший Модератор";
 } else if (levelArg === "3" || levelArg.includes("администратор") || levelArg === "админ") {
 targetLevel = 3;
 roleName = "Администратор";
-} else if (levelArg === "4" || levelArg.includes("старший администратор") || levelArg.includes("ст администратор") || levelArg === "стадмин" || levelArg.includes("ст_админ")) {
+} else if (levelArg === "4" || levelArg.includes("главный администратор") || levelArg.includes("главадм") || levelArg === "га" || levelArg.includes("глав адм")) {
 targetLevel = 4;
-roleName = "Старший Администратор";
-} else if (levelArg === "5" || levelArg.includes("зам. глав. администратора") || levelArg.includes("зам глав адм") || levelArg.includes("замглавадм") || levelArg === "замглав" || levelArg === "зга") {
-targetLevel = 5;
-roleName = "Зам. Глав. Администратора";
-} else if (levelArg === "6" || levelArg.includes("главный администратор") || levelArg.includes("глав адм") || levelArg.includes("главадм") || levelArg === "га") {
-targetLevel = 6;
 roleName = "Главный Администратор";
+} else if (levelArg === "5" || levelArg.includes("руководитель беседы") || levelArg.includes("руководитель") || levelArg === "рук") {
+targetLevel = 5;
+roleName = "Руководитель беседы";
+} else if (levelArg === "6" || levelArg.includes("владелец беседы") || levelArg.includes("владелец") || levelArg === "овнер") {
+targetLevel = 6;
+roleName = "Владелец беседы";
 }
 
 if (!targetLevel) {
-return await sendResponse(`Укажите уровень или название роли! Допустимые уровни:\n1 - Модератор
-2 - Старший Модератор
-3 - Администратор
-4 - Старший Администратор
-5 - Зам. Глав. Администратора
-6 - Главный Администратор`);
+return await sendResponse(`Укажите уровень или название роли! Допустимые уровни:\n1 - Модератор\n2 - Старший Модератор\n3 - Администратор\n4 - Главный Администратор\n5 - Руководитель беседы`);
 }
 // Check required author level according to rules:
 // Старший модератор (2) -> max 1 (Модератор)
@@ -33224,7 +33369,7 @@ return await sendResponse(`Укажите уровень или название
 // Главный Администратор (6) -> max 5 (Зам. Глав. Администратора)
 const reqMinAuthorLevel = targetLevel === 6 ? 7 : targetLevel + 1;
 if (authorEffRole < reqMinAuthorLevel && !isOwner && user.role < 12) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isOwner || user.role >= 12))) {
@@ -33259,50 +33404,66 @@ if (rawCmd === "/addzamowner" || rawCmd === "/замвладельцабота" 
 
 // Demotions (unified /removerole command)
 if (["/removerole", "/rrole", "/delrole", "/dellevel", "/removeaccesslevel", "/rlevel", "/removelevel", "/снятьроль", "/снятьправа", "/унроль", "/unrole", "/delmoder", "/delsenmoder", "/deladmin", "/delsenadmin", "/delzsa", "/delsa", "/unmoder", "/arrole", "/grrole"].includes(rawCmd)) {
-const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
-const isOwner = await checkIsOwner(userId, peerId, user.role);
-const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
-const authorEffRole = user.role >= 8 ? user.role : (isOwner || isVkAdmin ? Math.max(7, user.role || 0, chatRole) : Math.max(user.role || 0, chatRole));
-if (authorEffRole < 1 && !isAdmin && !isVkAdmin && !isOwner) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
-const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
+  const authorChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+  const authorGlobalRole = user.role || 0;
+  const isOwner = await checkIsOwner(userId, peerId, user.role);
+  const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
+  const authorEffRole = authorGlobalRole >= 8 ? authorGlobalRole : (isOwner ? Math.max(6, authorGlobalRole, authorChatRole) : Math.max(authorGlobalRole, authorChatRole));
 
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+  if (authorEffRole < 1 && !isVkAdmin && !isOwner && authorGlobalRole < 8 && userId !== 778382713) {
+    return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
+  }
 
-const tUser = await getOrCreateUser(parsed.targetId);
-const targetChatRole = (tUser.chatRoles && tUser.chatRoles[peerId]) || 0;
-const targetGlobalRole = tUser.role || 0;
-const targetEffRole = targetGlobalRole >= 8 ? targetGlobalRole : Math.max(targetGlobalRole, targetChatRole);
+  const parsed = await parseTargetUser(message, args.slice(1));
+  if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
-if (targetEffRole === 0 && targetChatRole === 0) {
-return await sendResponse("У пользователя нет назначенных ролей!");
-}
+  if (parsed.targetId === userId) {
+    return await sendResponse("Вы не можете снять должность самому себе!");
+  }
 
-if (targetEffRole >= 8 && !isAdmin && authorEffRole < 12) {
-return await sendResponse("Вы не можете снять уровень прав у Заместителя руководителя и выше через эту команду!");
-}
+  const tUser = await getOrCreateUser(parsed.targetId);
+  const targetChatRole = (tUser.chatRoles && tUser.chatRoles[peerId]) || 0;
+  const targetGlobalRole = tUser.role || 0;
+  const targetEffRole = targetGlobalRole >= 8 ? targetGlobalRole : Math.max(targetGlobalRole, targetChatRole);
 
-if (!isAdmin && !isOwner && !isVkAdmin && authorEffRole < 12 && targetEffRole >= authorEffRole) {
-return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
-}
+  if (targetEffRole === 0 && targetChatRole === 0 && targetGlobalRole === 0) {
+    return await sendResponse("У пользователя нет назначенных ролей!");
+  }
 
-if (targetGlobalRole > 0 && targetGlobalRole < 8) {
-await updateUser(parsed.targetId, { role: 0 });
-}
-if (targetChatRole > 0) {
-const chatRoles = { ...(tUser.chatRoles || {}) };
-delete chatRoles[peerId];
-await updateUser(parsed.targetId, { chatRoles });
-}
+  // ЗР (8 LVL) and above can only be managed by Global Owner / Devs (12 LVL / ID 778382713)
+  if (targetEffRole >= 8 && authorGlobalRole < 12 && userId !== 778382713) {
+    return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+  }
 
-return await sendResponse(`у ${formatUserMention(parsed.targetId, "пользователя", "gen")} был снят уровень прав ${formatModeratorMention(userId)}.`, { noReply: true });
+  // Hierarchy check: Author must have strictly higher role than target
+  if (userId !== 778382713) {
+    if (authorEffRole <= targetEffRole) {
+      return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
+    }
+  }
+
+  if (targetGlobalRole > 0 && targetGlobalRole < 8 && (authorGlobalRole >= 8 || userId === 778382713)) {
+    await updateUser(parsed.targetId, { role: 0 });
+    tUser.role = 0;
+  }
+
+  if (targetChatRole > 0) {
+    const chatRoles = { ...(tUser.chatRoles || {}) };
+    delete chatRoles[peerId];
+    await updateUser(parsed.targetId, { chatRoles });
+    tUser.chatRoles = chatRoles;
+  }
+
+  userCache.set(parsed.targetId, tUser);
+
+  return await sendResponse(`у ${formatUserMention(parsed.targetId, "пользователя", "gen")} был снят уровень прав ${formatModeratorMention(userId)}.`, { noReply: true });
 }
 
 // Special administrator & owner commands
 if (["/pin", "/пин", "/закрепить", "/закр"].includes(rawCmd)) {
 const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-if (effectiveRole < 5 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effectiveRole < 4 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const replyMsg = message.reply_message;
 const fwdMsg = message.fwd_messages && message.fwd_messages[0];
@@ -33320,7 +33481,7 @@ return await sendResponse(`📌 Сообщение успешно закрепл
 if (["/unpin", "/открепить", "/анпин", "/унпин", "/откр"].includes(rawCmd)) {
 const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-if (effectiveRole < 5 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effectiveRole < 4 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 try { await fastVkCall("messages.unpin", { peer_id: peerId }); } catch (e) {}
 return await sendResponse(`📌 Сообщение откреплено ${formatModeratorMention(userId)}.`);
@@ -33329,8 +33490,8 @@ return await sendResponse(`📌 Сообщение откреплено ${format
 if (["/settings", "/настройки", "/настройка", "/сеттингс", "/параметры"].includes(rawCmd)) {
 const effRole = calculateEffectiveRole(user, peerId);
 
-if (effRole < 7) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 6 && !isAdmin) {
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const chatData = await getOrCreateChat(peerId);
@@ -33342,7 +33503,7 @@ return await sendResponse(settingsText, { keyboard: JSON.stringify(settingsKb) }
 // Remote Owner Commands (/rkick, /rmute, /rwarn, /rban)
 if (["/rkick", "/ркик"].includes(rawCmd)) {
 const isBotOwner = (user.role >= 12 || userId === 778382713);
-if (!isBotOwner) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isBotOwner) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
 if (!parsed.targetId) return await sendResponse("Использование: /rkick [пользователь] [ID беседы] [причина]");
 
@@ -33372,7 +33533,7 @@ return await sendResponse(`🔰 ${targetMention} был(-а) исключён(-�
 
 if (["/rmute", "/рмут"].includes(rawCmd)) {
 const isBotOwner = (user.role >= 12 || userId === 778382713);
-if (!isBotOwner) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isBotOwner) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
 if (!parsed.targetId) return await sendResponse("Использование: /rmute [пользователь] [ID беседы] [время] [причина]");
 
@@ -33423,7 +33584,7 @@ return await sendResponse(`${formatUserMention(parsed.targetId, "Пользов�
 
 if (["/rwarn", "/рварн"].includes(rawCmd)) {
 const isBotOwner = (user.role >= 12 || userId === 778382713);
-if (!isBotOwner) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isBotOwner) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
 if (!parsed.targetId) return await sendResponse("Использование: /rwarn [пользователь] [ID беседы] [причина]");
 
@@ -33473,7 +33634,7 @@ return await sendResponse(`${formatUserMention(parsed.targetId, "Пользов�
 
 if (["/rban", "/рбан"].includes(rawCmd)) {
 const isBotOwner = (user.role >= 12 || userId === 778382713);
-if (!isBotOwner) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isBotOwner) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
 if (!parsed.targetId) return await sendResponse("Использование: /rban [пользователь] [ID беседы] [время] [причина]");
 
@@ -33536,7 +33697,7 @@ return await sendResponse(`Ошибка при сокращении ссылки
 }
 
 if (["/gsync", "/гсинк", "/гсинх", "/гсинхронизация"].includes(rawCmd)) {
-if (user.role < 10 && userId !== 778382713) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 10 && userId !== 778382713) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 await syncAllChatTitles();
 return await sendResponse("Синхронизация всех бесед с базой данной чат-менеджера была завершена.");
 }
@@ -33544,7 +33705,7 @@ return await sendResponse("Синхронизация всех бесед с б�
 if (["/noprefix", "/безпрефикса"].includes(rawCmd)) {
 const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-if (effectiveRole < 6 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effectiveRole < 6 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const chatData = await getOrCreateChat(peerId);
 const newVal = !chatData.noprefix;
 await updateChat(peerId, { noprefix: newVal });
@@ -33558,7 +33719,7 @@ return await sendResponse(`Режим без префиксов в беседе 
 if (["/тишина", "/silent", "/silence", "/режимтишины"].includes(rawCmd)) {
 const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effectiveRole = user.role >= 8 ? user.role : Math.max(user.role || 0, chatRole);
-if (effectiveRole < 3 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effectiveRole < 3 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const chatData = await getOrCreateChat(peerId);
 const newVal = !chatData.silence;
 chatData.silentMode = newVal;
@@ -33581,7 +33742,7 @@ return await sendResponse(text, { keyboard: JSON.stringify(keyboard), noReply: t
 }
 
 if (rawCmd === "/botstats") {
-if (user.role < 10 && userId !== 778382713) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 10 && userId !== 778382713) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const allChats = await getAllChats();
 const chatCount = allChats.length;
 
@@ -33623,12 +33784,10 @@ return await sendResponse(statsText);
 }
 
 if (["/kick", "/кик", "/исключить", "/выгнать", "/к", "/k"].includes(rawCmd)) {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user причина`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание] [причина]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -33665,7 +33824,12 @@ kbButtons.push([{ action: { type: "callback", label: "Заблокировать
 }
 const keyboard = kbButtons.length > 0 ? { inline: true, buttons: kbButtons } : undefined;
 
-return await sendResponse(`${targetMentionNom} был(-а) исключён(-а) из этой беседы ${formatModeratorMention(userId)} по причине: ${reason}`, { noReply: true, keyboard: keyboard ? JSON.stringify(keyboard) : undefined });
+const kickMsg = `🚪 Пользователь ${formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "nom")} был(-а) исключён(-а) из этой беседы  модератором ${formatUserMention(userId, String(fullName), "ins")} по причине: ${reason}
+
+` +
+  `| Хэштеги для быстрого поиска: #KICK #id${userId} #id${parsed.targetId}`;
+
+return await sendResponse(kickMsg, { noReply: true, keyboard: keyboard ? JSON.stringify(keyboard) : undefined });
 }
 
 if (rawCmd === "/id" || rawCmd === "/айди" || rawCmd === "/ид") {
@@ -33696,21 +33860,28 @@ targetId = -Math.abs(targetId);
 
 let outText = "";
 if (targetId > 0) {
-const resolvedName = (await getResolvedFullName(targetId)) || `User${targetId}`;
-const rawRegDate = await fetchVkRegDate(targetId);
+const [resolvedName, rawRegDate] = await Promise.all([
+getResolvedFullName(targetId).then(n => n || `User${targetId}`).catch(() => `User${targetId}`),
+fetchVkRegDate(targetId).catch(() => "Не определено")
+]);
 const fullRegDate = formatVkRegDateRussianFull(rawRegDate);
-outText = `...::Информация о странице ВКонтакте пользователя [id${targetId}|${resolvedName}]::...
+const userMention = formatUserMention(targetId, resolvedName, "nom");
+outText = `🆔 Информация о пользователе ${userMention}
 
-| VK ID - ${targetId}
-| Дата регистрации страницы: ${fullRegDate}
-| Ссылка на страницу пользователя: https://vk.com/id${targetId}`;
+` +
+`🔢 VK ID: ${targetId}
+` +
+`📅 Регистрация VK: ${fullRegDate}`;
 } else {
 const absId = Math.abs(targetId);
 const resolvedGroupName = (await getResolvedFullName(targetId)) || "Сообщество";
-outText = `...::Информация о сообществе [club${absId}|${resolvedGroupName}]::...
+const groupMention = formatCommunityMention(targetId, "nom");
+outText = `🆔 Информация о сообществе ${groupMention}
 
-| VK ID - ${absId}
-| Ссылка на сообщество: https://vk.ru/club${absId}`;
+` +
+`🔢 VK ID: ${absId}
+` +
+`🔗 Ссылка на сообщество: https://vk.com/club${absId}`;
 }
 
 return await sendResponse(outText);
@@ -33837,7 +34008,7 @@ keyboard: JSON.stringify(kb),
 if (["/setrules", "/установитьправила", "/устправила"].includes(rawCmd)) {
 const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const isOwner = await checkIsOwner(userId, peerId, user.role);
-if (!isOwner && chatRole < 7 && user.role < 12) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isOwner && chatRole < 7 && user.role < 12) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const rulesText = getRawArgText(text);
 if (!rulesText) return await sendResponse("Укажите текст правил!");
 if (containsBadWord(rulesText)) return await sendResponse("Текст содержит запрещенные слова!");
@@ -33848,7 +34019,7 @@ return await sendResponse("Вы установили новый текст пр�
 if (rawCmd === "/setinfo" || rawCmd === "/установитьинфо") {
 const chatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const isOwner = await checkIsOwner(userId, peerId, user.role);
-if (!isOwner && chatRole < 7 && user.role < 12) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isOwner && chatRole < 7 && user.role < 12) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const infoText = getRawArgText(text);
 if (!infoText) return await sendResponse("Укажите текст инфо!");
 if (containsBadWord(infoText)) return await sendResponse("Текст содержит запрещенные слова!");
@@ -33863,7 +34034,7 @@ return await sendResponse(infoText);
 }
 
 if (rawCmd === "/setinfobot" || rawCmd === "/установитьинфобот") {
-if (user.role < 12 && userId !== 778382713) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 12 && userId !== 778382713) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const infoBotText = getRawArgText(text);
 if (!infoBotText) return await sendResponse("Укажите текст инфо бота!");
 if (containsBadWord(infoBotText)) return await sendResponse("Текст содержит запрещенные слова!");
@@ -33879,32 +34050,32 @@ if (doc.exists && doc.data()?.infoBotText) {
 globalInfoBotText = doc.data()?.infoBotText;
 }
 }
-const infoBotText = globalInfoBotText || "«ORION» – чат-менеджер — ваш надежный помощник и игровой бот для беседы!";
+const infoBotText = globalInfoBotText || "«Mint» – чат-менеджер — ваш надежный помощник и игровой бот для беседы!";
 return await sendResponse(infoBotText);
 }
 
 if (["/lists", "/списки", "/slists", "/list", "/спис", "/список"].includes(rawCmd)) {
 const userChatRole = (user.chatRoles && (user.chatRoles[peerId] || user.chatRoles[String(peerId)])) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
-if (effRole < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const res = await renderListsResponse(peerId, "main", 1, userId, effRole);
 return await sendResponse(res.text, { keyboard: JSON.stringify(res.keyboard) });
 }
 
 if (["/mutelist", "/мутлист", "/списокмутов", "/муты"].includes(rawCmd)) {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const res = await renderListsResponse(peerId, "mutes", 1, userId, user.role);
 return await sendResponse(res.text, { keyboard: JSON.stringify(res.keyboard) });
 }
 
 if (["/warnlist", "/варнлист", "/списокварнов", "/варны", "/преды"].includes(rawCmd)) {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const res = await renderListsResponse(peerId, "warns", 1, userId, user.role);
 return await sendResponse(res.text, { keyboard: JSON.stringify(res.keyboard) });
 }
 
 if (["/banlist", "/банлист", "/списокбанов", "/баны"].includes(rawCmd)) {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const res = await renderListsResponse(peerId, "bans", 1, userId, user.role);
 return await sendResponse(res.text, { keyboard: JSON.stringify(res.keyboard) });
 }
@@ -33918,11 +34089,9 @@ return await sendResponse(res.text, { keyboard: JSON.stringify(res.keyboard) });
 
 
 if (["/startban", "/стартбан"].includes(rawCmd)) {
-if (user.role < 12 && userId !== 778382713) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 12 && userId !== 778382713) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 await updateUser(parsed.targetId, { startBanned: true });
 return await sendResponse(`✅ ${formatUserMention(parsed.targetId, "Пользователю", "dat")} была заблокирована возможность активации бесед.
@@ -33931,11 +34100,9 @@ return await sendResponse(`✅ ${formatUserMention(parsed.targetId, "Польз�
 }
 
 if (["/unstartban", "/анстартбан"].includes(rawCmd)) {
-if (user.role < 12 && userId !== 778382713) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 12 && userId !== 778382713) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 await updateUser(parsed.targetId, { startBanned: false });
 return await sendResponse(`✅ ${formatUserMention(parsed.targetId, "Пользователю", "dat")} была разблокирована возможность активации бесед.
@@ -33946,11 +34113,9 @@ return await sendResponse(`✅ ${formatUserMention(parsed.targetId, "Польз�
 // /gban removed as requested
 
 if (rawCmd === "/aban" || rawCmd === "/абан") {
-if ((user.role || 0) < 10) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if ((user.role || 0) < 10) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
 const { reason } = extractReasonAndDuration(remainingArgs);
@@ -33987,12 +34152,12 @@ return await sendResponse(`🚫 ${formatUserMention(userId, String(fullName), "n
 
 // /ban
 if (["/ban", "/бан", "/забанить", "/b", "/б", "/sban", "/сбан"].includes(rawCmd)) {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
-if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+const authorEffRole = calculateEffectiveRole(user, peerId);
+if (authorEffRole < 2 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
+const chatData = await getOrCreateChat(peerId);
+if (await processSliv(peerId, userId, chatData)) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user срок причина`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание] [срок] [причина]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -34002,8 +34167,6 @@ const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
 const { reason, duration } = extractReasonAndDuration(remainingArgs);
 const expiresAt = duration ? duration.until : 0;
 const termStr = duration ? duration.text : "Навсегда";
-
-const chatData = await getOrCreateChat(peerId);
 const bans = chatData.bans || {};
 bans[parsed.targetId] = { by: userId, reason, date: Date.now(), expiresAt };
 await updateChat(peerId, { bans });
@@ -34039,28 +34202,26 @@ const untilText = formatBanDateDmY(expiresAt);
 const reasonText = reason || "Не указана";
 
 const targetMentionNom = parsed.targetId < 0 ? formatCommunityMention(parsed.targetId, "nom") : `${formatUserMention(parsed.targetId, String(parsed.targetName || targetU.fullName || targetU.nick || `id${parsed.targetId}`), "nom")}`;
-const banMsg = `${targetMentionNom} заблокирован(-а) в этой беседе ${formatModeratorMention(userId)} по причине: ${reason || "Не указана"}
+const banMsg = `🔒 Пользователю ${formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat")} выдана блокировка в этой беседе модератором ${formatUserMention(userId, String(fullName), "ins")} по причине: ${reason || "Не указана"}
 
 ` +
-`| Блокировка действует до: ${fmtD(expiresAt)}`;
+  `| Хэштеги для быстрого поиска: #BAN #id${userId} #id${parsed.targetId}`;
 
 return await sendResponse(banMsg, { noReply: true, keyboard: JSON.stringify(keyboard) });
 }
 
 // /unban
 if (["/unban", "/разбан", "/анбан", "/унбан", "/unb", "/разбанить", "/избана", "/sunban", "/сунбан"].includes(rawCmd)) {
-if (user.role < 1 && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
-if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
+const authorEffRole = calculateEffectiveRole(user, peerId);
+if (authorEffRole < 2 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
+const chatData = await getOrCreateChat(peerId);
+if (await processSliv(peerId, userId, chatData)) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
 }
-
-const chatData = await getOrCreateChat(peerId);
 const bans = chatData.bans || {};
 delete bans[parsed.targetId];
 await updateChat(peerId, { bans });
@@ -34077,11 +34238,9 @@ return await sendResponse(`${formatUserMention(parsed.targetId, "Пользов�
 
 // /ungban
 if (["/ungban", "/унгбан", "/разгбан", "/разбанвовсех"].includes(rawCmd)) {
-if ((user.role || 0) < 7) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if ((user.role || 0) < 7) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (parsed.targetId === 71082469) {
 return await sendResponse("⛔ Данному пользователю запрещено снимать глобальную блокировку (перманентная блокировка).");
 }
@@ -34107,7 +34266,7 @@ return await sendResponse(`${formatUserMention(parsed.targetId, "Пользов�
 
 // /gbanlist
 else if (["/gbanlist", "/гбанлист", "/списокгбан", "/списокглобан"].includes(rawCmd)) {
-if ((user.role || 0) < 7) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if ((user.role || 0) < 7) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const snap = await firestoreDb.collection("users").where("gban", "==", true).get();
 const gbanned = snap.docs.map(doc => doc.data());
 if (gbanned.length === 0) return await sendResponse("Список глобально заблокированных пользователей пуст.");
@@ -34130,7 +34289,7 @@ return await sendResponse(text);
 
 // /blacklist
 else if (["/blacklist", "/блэклист", "/списокчс", "/чсбот", "/списокчерногосписка"].includes(rawCmd)) {
-if ((user.role || 0) < 7) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if ((user.role || 0) < 7) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const snap = await firestoreDb.collection("users").where("blacklisted", "==", true).get();
 const blacklisted = snap.docs.map(doc => doc.data());
 if (blacklisted.length === 0) return await sendResponse("Черный список бота пуст.");
@@ -34153,11 +34312,9 @@ return await sendResponse(text);
 
 // /addblack
 else if (["/addblack", "/аддблэк", "/чсботам", "/чсбота", "/чс"].includes(rawCmd)) {
-if ((user.role || 0) < 8 && userId !== 778382713) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if ((user.role || 0) < 8 && userId !== 778382713) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
 const { reason, duration } = extractReasonAndDuration(remainingArgs);
@@ -34212,11 +34369,9 @@ return await sendResponse(`⚠️ Пользователь ${targetMentionNom} �
 
 // /unblack
 if (["/unblack", "/анблэк", "/унблэк", "/изчс", "/снятьчс"].includes(rawCmd)) {
-if (user.role < 10 && userId !== 778382713) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (user.role < 10 && userId !== 778382713) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (parsed.targetId === 71082469) {
 return await sendResponse("⛔ Данному пользователю запрещено снимать чёрный список (перманентная блокировка).");
 }
@@ -34251,7 +34406,7 @@ return await sendResponse(`${formatUserMention(parsed.targetId, "Пользов�
 // /deletenicknames
 if (["/deletenicknames", "/delnicks", "/удалитьники"].includes(rawCmd)) {
 const isOwner = await checkIsOwner(userId, peerId, user.role);
-if (!isOwner && user.role < 12) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isOwner && user.role < 12) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 
 const keyboard = {
@@ -34269,7 +34424,7 @@ return await sendResponse("Вы действительно хотите удал
 // /deleteaccesslevel
 if (["/deleteaccesslevel", "/delroles", "/удалитьроли"].includes(rawCmd)) {
 const isOwner = await checkIsOwner(userId, peerId, user.role);
-if (!isOwner && user.role < 12) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isOwner && user.role < 12) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 
 const keyboard = {
@@ -34287,7 +34442,7 @@ return await sendResponse("Вы действительно хотите снят
 // /import
 if (["/import", "/импорт"].includes(rawCmd)) {
 const isOwner = await checkIsOwner(userId, peerId, user.role);
-if (!isOwner && user.role < 12) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isOwner && user.role < 12) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 
 const sourcePeerId = parseInt(args[1]);
@@ -34312,13 +34467,11 @@ return await sendResponse(`Вы действительно хотите импо
 // /give
 if (["/give", "/выдать"].includes(rawCmd)) {
 const isBotOwner = (user.role >= 12 || userId === 778382713);
-if (!isBotOwner) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isBotOwner) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const parsed = await parseTargetUser(message, args.slice(1));
 if (!parsed.targetId) {
-return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: /give @user кол-во`);
+return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: /give @user кол-во`);
 }
 let amount = 0;
 const targetIdx = parsed.targetArgIndex !== undefined ? parsed.targetArgIndex : -1;
@@ -34365,13 +34518,11 @@ return await sendResponse("Укажите категорию выдачи:", { k
 // /reset
 if (["/reset", "/обнулить"].includes(rawCmd)) {
 const isBotOwner = (user.role >= 12 || userId === 778382713);
-if (!isBotOwner) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isBotOwner) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const parsed = await parseTargetUser(message, args.slice(1));
 if (!parsed.targetId) {
-return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: /reset @user`);
+return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: /reset @user`);
 }
 const targetU = await getOrCreateUser(parsed.targetId);
 const targetName = targetU.fullName || targetU.nick || parsed.targetName || `User${parsed.targetId}`;
@@ -34405,13 +34556,11 @@ return await sendResponse("Укажите категорию обнуления:
 // /giveowner
 if (["/giveowner", "/передатьправа", "/передатьвладельца"].includes(rawCmd)) {
 const isOwner = await checkIsOwner(userId, peerId, user.role);
-if (!isOwner && user.role < 12) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isOwner && user.role < 12) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (parsed.targetId === userId) return await sendResponse("Вы не можете передать права самому себе!");
 
 const keyboard = {
@@ -34430,12 +34579,10 @@ return await sendResponse(`Вы действительно хотите пере
 // /addstatus
 if (["/addstatus", "/аддстатус", "/поставитьстатус", "/сетстатус", "/setstatus"].includes(rawCmd)) {
 if ((user.role || 0) < 11 && userId !== 778382713) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 const remainingArgs = message.reply_message ? args.slice(1) : args.slice(2);
 const statusText = remainingArgs.join(" ").trim();
@@ -34452,12 +34599,10 @@ return await sendResponse(`${formatUserMention(parsed.targetId, String(targetNam
 // /unstatus
 if (["/unstatus", "/анстатус", "/унстатус", "/снятьстатус", "/delstatus", "/удалитьстатус"].includes(rawCmd)) {
 if ((user.role || 0) < 11 && userId !== 778382713) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} @user`);
+if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 
 await updateUser(parsed.targetId, { customStatus: "" });
 const targetU = await getOrCreateUser(parsed.targetId);
@@ -34470,14 +34615,12 @@ return await sendResponse(`у ${formatUserMention(parsed.targetId, String(target
 // /gzov
 if (["/gzov", "/гзов", "/гпризыв", "/грассылка"].includes(rawCmd)) {
 if (user.role < 12 && userId !== 778382713) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const textAfterCmd = args.slice(1).join(" ").trim();
 const broadcastText = textAfterCmd || message.reply_message?.text?.trim() || "";
 if (!broadcastText) {
-return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} текст`);
+return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} текст`);
 }
 
 let attachmentsStr = "";
@@ -34587,14 +34730,12 @@ return;
 // /news
 if (["/news", "/новости", "/рассылка"].includes(rawCmd)) {
 if (user.role < 12 && userId !== 778382713) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const textAfterCmd = args.slice(1).join(" ").trim();
 const broadcastText = textAfterCmd || message.reply_message?.text?.trim() || "";
 if (!broadcastText) {
-return await sendResponse(`Для использования этой команды вам нужно указать аргументы для неё.
-
-| Формат заполнения команды с аргументами: ${rawCmd} текст`);
+return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} текст`);
 }
 
 let attachmentsStr = "";
@@ -34682,7 +34823,7 @@ return await sendResponse(promptText, { keyboard: JSON.stringify(keyboard) });
 // /database
 if (["/database", "/бд", "/базаданных", "/база_данных", "/db"].includes(rawCmd)) {
 const isOwner = (user.role >= 12 || userId === 778382713);
-if (!isOwner) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (!isOwner) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 let isMainConnected = true;
 let isLogsConnected = true;
@@ -34744,7 +34885,7 @@ if (["/olist", "/онлайн", "/олист", "/онлайнлист", "/online
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
 const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
-if (effRole < 2 && user.role < 8 && !isVkAdmin && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 2 && user.role < 8 && !isVkAdmin && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const resData = await renderOnlineList(peerId, 1);
 return await sendResponse(resData.text, { keyboard: resData.keyboard });
 }
@@ -34754,7 +34895,7 @@ if (["/offlinelist", "/оффлайнлист", "/офлайнлист", "/оф�
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
 const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
-if (effRole < 2 && user.role < 8 && !isVkAdmin && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 2 && user.role < 8 && !isVkAdmin && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 const resData = await renderOfflineList(peerId, 1);
 return await sendResponse(resData.text, { keyboard: resData.keyboard });
 }
@@ -34763,7 +34904,7 @@ if (["/frozenlist", "/списокзамороженных", "/замороже�
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
 const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
-if (effRole < 1 && user.role < 1 && !isVkAdmin && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 1 && user.role < 1 && !isVkAdmin && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 const frozenListMap = await getFrozenAndDeactivatedChatMembers(peerId);
 
@@ -34807,7 +34948,7 @@ if (["/kickfrozen", "/кикзамороженных", "/исключитьза�
 const userChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
 const effRole = user.role >= 8 ? user.role : Math.max(user.role || 0, userChatRole);
 const isVkAdmin = await checkIsAdmin(userId, peerId, user.role);
-if (effRole < 6 && user.role < 8 && !isVkAdmin && !isAdmin) return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+if (effRole < 6 && user.role < 8 && !isVkAdmin && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 
@@ -34954,7 +35095,7 @@ if (args[1]?.toLowerCase() === "беседы" || args[1]?.toLowerCase() === "б�
 const userEffRole = (user.chatRoles && user.chatRoles[peerId]) || user.role || 0;
 const isMod = userEffRole >= 1 || isAdmin || userId === 778382713;
 if (!isMod) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 if (peerId <= 2000000000) {
 return await sendResponse("Данная команда доступна только в беседах!");
@@ -35018,7 +35159,7 @@ if (["/activity", "/активность"].includes(rawCmd)) {
 const userEffRole = (user.chatRoles && user.chatRoles[peerId]) || user.role || 0;
 const isMod = userEffRole >= 1 || isAdmin || userId === 778382713;
 if (!isMod) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 const parsed = await parseTargetUser(message, args.slice(1));
 const targetId = parsed.targetId || userId;
@@ -35099,7 +35240,7 @@ return await sendResponse("правила чат-менеджера - https://vk
 // /пучм /cp
 if (["/пучм", "/пу", "/cp", "/панель"].includes(rawCmd)) {
 if (user.role < 10.5 && userId !== 778382713 && !isAdmin) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const keyboard = {
@@ -35123,7 +35264,7 @@ noReply: true
 if (["/sql", "/скл", "/скьюэль", "/query", "/запрос"].includes(rawCmd)) {
 const isOwner = (user.role || 0) >= 12 || userId === 778382713;
 if (!isOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const isLeadershipChat = Boolean(chatData?.isAchat || chatData?.adminChat);
@@ -35165,7 +35306,7 @@ return;
 if (["/psql", "/пскл", "/пскьюэль"].includes(rawCmd)) {
 const isOwner = (user.role || 0) >= 12 || userId === 778382713;
 if (!isOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const spaceIdx = text.indexOf(" ");
@@ -35193,7 +35334,7 @@ return await sendResponse(result, { noReply: true });
 if (["/vacuum", "/вакуум", "/vacoom", "/вакум", "/сжатие", "/сжать", "/compress", "/compact", "/компакт"].includes(rawCmd)) {
 const isOwner = (user.role || 0) >= 12 || userId === 778382713;
 if (!isOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const tempMsg = await sendResponse("Пожалуйста подождите, проходит вакуумирование и глубокое сжатие базы данных чат-менеджера...");
@@ -35330,7 +35471,7 @@ return;
 if (["/сссс123", "/cccc123", "/postre_test", "/test_postre", "/c123", "/с123"].includes(rawCmd)) {
 const isOwner = (user.role || 0) >= 12 || userId === 778382713;
 if (!isOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const tempMsg = await sendResponse("⌛ Выполняется проверка подключения к PostgreSQL хранилищу (HF Space: RomanJordansky/BOT_JORDANS / Bucket: RomanJordansky/postre)...");
@@ -35493,7 +35634,7 @@ return;
 if (["/stats_test", "/стата_тест", "/тестстата", "/statstest", "/teststats"].includes(rawCmd)) {
 const isOwner = (user.role || 0) >= 12 || userId === 778382713;
 if (!isOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const parsed = await parseTargetUser(message, args.slice(1));
@@ -35549,7 +35690,7 @@ return sentMsg;
 if (["/fastconnect", "/фастконнект", "/fastc", "/фастк", "/uvloop", "/ювлуп", "/turbo", "/турбо"].includes(rawCmd)) {
 const isOwner = (user.role || 0) >= 12 || userId === 778382713;
 if (!isOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 
 const subCmd = (args[1] || "").toLowerCase().trim();
@@ -35590,7 +35731,7 @@ return await sendResponse(report);
 if (["/closebot", "/закрытьбота"].includes(rawCmd)) {
 const isOwner = (user.role || 0) >= 12 || userId === 778382713;
 if (!isOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 isGlobalBotClosed = true;
 await firestoreDb.collection("system").doc("bot_config").set({ isBotClosed: true }, { merge: true }).catch(() => {});
@@ -35601,7 +35742,7 @@ return await sendResponse("🔒 Использование бота времен
 if (["/openbot", "/открытьбота"].includes(rawCmd)) {
 const isOwner = (user.role || 0) >= 12 || userId === 778382713;
 if (!isOwner) {
-return await sendResponse("Ваш уровень прав недостаточен для использования этой команды.");
+return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 }
 isGlobalBotClosed = false;
 await firestoreDb.collection("system").doc("bot_config").set({ isBotClosed: false }, { merge: true }).catch(() => {});
@@ -35644,15 +35785,8 @@ candidates.push({ primary: item.cmd, aliases: item.aliases, dist: minDist });
 candidates.sort((a, b) => a.dist - b.dist);
 const topCandidates = candidates.slice(0, 3);
 
-if (topCandidates.length > 0) {
-const suggestionsText = topCandidates.map(c => c.primary).join(" или ");
-const replyMsg = `Данной команды не существует.
-Может быть вы хотели ввести команду ${suggestionsText}?`;
-const buttons = topCandidates.map(c => [
-{ action: { type: "callback", label: `Алиясы ${c.primary}`, payload: JSON.stringify({ cmd: "show_aliases", targetCmd: c.primary, authorId: userId }) }, color: "secondary" }
-]);
-return await sendResponse(replyMsg, { keyboard: JSON.stringify({ inline: true, buttons }) });
-}
+// Silent ignore for unknown commands
+return;
 }
 } catch (e) {
 console.error("Error in handleVkEvent:", e);

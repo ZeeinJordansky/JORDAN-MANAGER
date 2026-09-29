@@ -107,7 +107,7 @@ async function generateBalanceChartBuffer(targetName: string, balance: number, b
   ctx.fillStyle = "#94a3b8";
   ctx.font = "11px NotoSans, sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText("By. Orion | Чат-менеджер (@orion_manager)", leftX, height - 12);
+  ctx.fillText("By. Mint | Чат-менеджер (@cm_mint)", leftX, height - 12);
 
   return canvas.toBuffer("image/jpeg", { quality: 0.65 });
 }

@@ -168,11 +168,11 @@ async function generateUserDailyStatsChartBuffer(
   ctx.lineTo(width - leftX, height - 38);
   ctx.stroke();
 
-  // Bottom Left text ONLY: By. Orion | Чат-менеджер (@orion_manager)
+  // Bottom Left text ONLY: By. Mint | Чат-менеджер (@cm_mint)
   ctx.fillStyle = "#94a3b8";
   ctx.font = "12px NotoSans, sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText("By. Orion | Чат-менеджер (@orion_manager)", leftX, height - 16);
+  ctx.fillText("By. Mint | Чат-менеджер (@cm_mint)", leftX, height - 16);
 
   return canvas.toBuffer("image/jpeg", { quality: 0.88 });
 }
