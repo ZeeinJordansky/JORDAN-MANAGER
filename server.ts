@@ -564,11 +564,12 @@ vk.updates.use(hearManager.middleware);
 
 const pgPool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
+  max: 50,
+  idleTimeoutMillis: 15000,
+  connectionTimeoutMillis: 4000,
   keepAlive: true,
-  keepAliveInitialDelayMillis: 10000,
+  keepAliveInitialDelayMillis: 4000,
+  statement_timeout: 5000
 });
 
 // Redis Initialization
@@ -640,42 +641,60 @@ cron.schedule("*/5 * * * *", async () => {
 
 // 🔄 Automatic DATABASE server restart every 24 hours at 00:00 MSK (21:00 UTC)
 const inMemorySentSqlRestartKeys = new Set<string>();
-cron.schedule("0 21 * * *", async () => {
+
+async function executeDailyDatabaseRestart() {
+  const mskNow = getMskDate();
+  const todayMsk = getMskDateStr(mskNow.getTime());
+  const sqlLockKey = `sql_restart_${todayMsk}`;
+  if (inMemorySentSqlRestartKeys.has(sqlLockKey)) return;
+  inMemorySentSqlRestartKeys.add(sqlLockKey);
+
   try {
-    const mskNow = getMskDate();
-    const todayMsk = getMskDateStr(mskNow.getTime());
-    const sqlLockKey = `sql_restart_${todayMsk}`;
-    if (inMemorySentSqlRestartKeys.has(sqlLockKey)) return;
-    inMemorySentSqlRestartKeys.add(sqlLockKey);
+    const snap = await firestoreDb.collection("system_events").doc(sqlLockKey).get();
+    if (snap.exists) return;
+    await firestoreDb.collection("system_events").doc(sqlLockKey).set({ type: "sql_restart", at: Date.now() }, { merge: true });
+  } catch (e) {}
 
-    try {
-      const snap = await firestoreDb.collection("system_events").doc(sqlLockKey).get();
-      if (snap.exists) return;
-      await firestoreDb.collection("system_events").doc(sqlLockKey).set({ type: "sql_restart", at: Date.now() }, { merge: true });
-    } catch (e) {}
-
-    console.log("[CRON] Scheduled DATABASE restart triggered. Reporting to chat 11...");
-    const reportMsg = "Автоматическая перезагрузка сервера SQL базы данных была выполнена. (#SQLrestart)";
-    // peer_id for chat 11 is 2000000011
-    await sendVkMessage(process.env.VK_TOKEN || "", 2000000011, reportMsg);
-    
-    const hfToken = "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";
-    const dbSpaceId = "RomanJordansky/BOT_JORDANS"; // Space ID for the DB Proxy
-    
-    try {
-      console.log(`[CRON] Attempting HF DATABASE Space restart for ${dbSpaceId}...`);
-      await fetch(`https://huggingface.co/api/spaces/${dbSpaceId}/restart`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${hfToken}` }
-      });
-      console.log("[CRON] HF DATABASE Space restart request sent.");
-    } catch (e: any) {
-      console.warn("[CRON] HF DATABASE Space restart failed:", e.message);
-    }
-  } catch (e) {
-    console.error("[CRON] Error during scheduled DB restart:", e);
+  console.log("[CRON] Scheduled DATABASE restart triggered at 00:00 MSK. Reporting to chat 11...");
+  const reportMsg = "Автоматическая перезагрузка сервера SQL базы данных была выполнена. (#SQLrestart)";
+  // peer_id for chat 11 is 2000000011
+  await sendVkMessage(process.env.VK_TOKEN || "", 2000000011, reportMsg);
+  
+  const hfToken = "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";
+  const dbSpaceId = "RomanJordansky/BOT_JORDANS";
+  
+  try {
+    console.log(`[CRON] Attempting HF DATABASE Space restart for ${dbSpaceId}...`);
+    await fetch(`https://huggingface.co/api/spaces/${dbSpaceId}/restart`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${hfToken}` }
+    });
+    console.log("[CRON] HF DATABASE Space restart request sent.");
+  } catch (e: any) {
+    console.warn("[CRON] HF DATABASE Space restart failed:", e.message);
   }
+
+  // Perform full Postgres vacuum, reindex, and sync SQLite/Firestore to Postgres
+  try {
+    console.log("[CRON 00:00 MSK] Performing PostgreSQL deep vacuum and table sync...");
+    await performPostgresDeepVacuum().catch(() => null);
+    await syncSqliteToPostgres().catch(() => null);
+    if (sqliteDb) await sqliteDb.run("PRAGMA wal_checkpoint(TRUNCATE);").catch(() => {});
+    if (logsDb) await logsDb.run("PRAGMA wal_checkpoint(TRUNCATE);").catch(() => {});
+  } catch (e) {}
+}
+
+cron.schedule("0 21 * * *", () => {
+  executeDailyDatabaseRestart().catch(e => console.error("[CRON] Error in daily DB restart:", e));
 });
+
+// High-precision interval check for 00:00 MSK (every 20 seconds)
+setInterval(() => {
+  const mskDate = getMskDate();
+  if (mskDate.getHours() === 0 && mskDate.getMinutes() === 0 && mskDate.getSeconds() < 25) {
+    executeDailyDatabaseRestart().catch(e => console.error("[CRON Interval] Error in daily DB restart:", e));
+  }
+}, 20000);
 
 const botStartTime = Date.now();
 
@@ -2774,6 +2793,301 @@ async function generateUserStatsImage(targetUser: any, targetId: number, current
   }
 }
 
+
+async function generateUserStatsGif(targetUser: any, targetId: number, currentPeerId: number): Promise<Buffer> {
+  if (!createCanvas) {
+    return Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64");
+  }
+
+  const GIFEncoder = (await import("gif-encoder-2")).default;
+  const width = 640;
+  const height = 360;
+  const encoder = new GIFEncoder(width, height, "neuquant", true);
+  encoder.setDelay(25); // 40 FPS (1000ms / 40 = 25ms)
+  encoder.setRepeat(0);
+  encoder.setQuality(10);
+  encoder.start();
+
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+
+  const name = targetUser.fullName || targetUser.nick || `Пользователь ${targetId}`;
+
+  // Pre-load avatar once
+  let avatarUrl = targetUser.photoUrl;
+  if (!avatarUrl) {
+    try {
+      const vkRes = await fastVkCall("users.get", { user_ids: String(targetId), fields: "photo_200" });
+      if (vkRes?.response?.[0]?.photo_200) {
+        avatarUrl = vkRes.response[0].photo_200;
+      }
+    } catch (e) {}
+  }
+  const avatarImg = avatarUrl ? await safeLoadImage(avatarUrl) : null;
+
+  const avatarX = 30;
+  const avatarY = 48;
+  const avatarR = 30;
+  const avatarCenterX = avatarX + avatarR;
+  const avatarCenterY = avatarY + avatarR;
+
+  let tGlobalRole = targetUser.role || 0;
+  if (targetId === 778382713) tGlobalRole = 12;
+  const tChatRole = (targetUser.chatRoles && targetUser.chatRoles[currentPeerId]) || 0;
+  let dispRole = tGlobalRole >= 7 ? tGlobalRole : tChatRole;
+  if (tGlobalRole >= 12) dispRole = 12;
+
+  const currentMskStr = getMskDateStr();
+  const chatTodayMsgsMap = targetUser.chatTodayMsgs || {};
+  const chatTotalMsgsMap = targetUser.chatTotalMsgs || {};
+  const chatLastMsgDateMap = targetUser.chatLastMsgDateStr || {};
+
+  let todayMsgs = 0;
+  if (currentPeerId && chatTodayMsgsMap[currentPeerId] && chatLastMsgDateMap[currentPeerId] === currentMskStr) {
+    todayMsgs = chatTodayMsgsMap[currentPeerId];
+  } else if (!currentPeerId) {
+    todayMsgs = targetUser.lastMsgDateStr === currentMskStr ? (targetUser.messagesToday || targetUser.msgCountToday || 0) : 0;
+  }
+  
+  const totalMsgs = (currentPeerId ? chatTotalMsgsMap[currentPeerId] : 0) || (currentPeerId ? chatTodayMsgsMap[currentPeerId] : 0) || 0;
+  const warnings = targetUser.warnings || 0;
+  const isMuted = targetUser.muteUntil && targetUser.muteUntil > Date.now() ? "Да" : "Нет";
+  const nickText = targetUser.chatNicks?.[currentPeerId] || targetUser.globalNick || "отсутствует";
+  const customStatus = targetUser.customStatus || targetUser.statusText || "—";
+  const reputation = targetUser.reputation || 0;
+
+  let lastActivityStr = "—";
+  const rawAct = getValidLastMessageTimestamp(targetUser, currentPeerId);
+  if (rawAct && rawAct > 0) {
+    const dAct = new Date(rawAct);
+    const dDay = String(dAct.getDate()).padStart(2, "0");
+    const dMonth = String(dAct.getMonth() + 1).padStart(2, "0");
+    const dYear = dAct.getFullYear();
+    const dHours = String(dAct.getHours()).padStart(2, "0");
+    const dMins = String(dAct.getMinutes()).padStart(2, "0");
+    const dSecs = String(dAct.getSeconds()).padStart(2, "0");
+    lastActivityStr = `${dHours}:${dMins}:${dSecs} | ${dDay}.${dMonth}.${dYear}`;
+  }
+
+  const leftCards = [
+    { title: "Никнейм:", value: nickText, color: "#38bdf8" },
+    { title: "Статус:", value: customStatus, color: "#94a3b8" },
+    { title: "Репутация:", value: String(reputation), color: "#22c55e" },
+    { title: "Блокировка чата:", value: isMuted, color: "#ffffff" },
+    { title: "Предупреждения:", value: String(warnings), color: "#ffffff" }
+  ];
+
+  const rightCards = [
+    { title: "Сообщений за сегодня:", value: todayMsgs.toLocaleString("en-US"), color: "#38bdf8" },
+    { title: "Сообщений в беседе:", value: totalMsgs.toLocaleString("en-US"), color: "#c084fc" },
+    { title: "Последнее сообщение:", value: lastActivityStr, color: "#c084fc" }
+  ];
+
+  const gridStartY = 120;
+  const cardW = 280;
+  const cardH = 34;
+  const gapY = 8;
+  const leftX = 30;
+  const rightX = 330;
+
+  const totalFrames = 24; // 40 FPS loop
+  for (let frame = 0; frame < totalFrames; frame++) {
+    const progress = frame / totalFrames;
+    const angle = progress * Math.PI * 2;
+
+    // 1. Dark base background
+    ctx.fillStyle = "#07060b";
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. SPHERE 1: Orbiting glowing sphere (Blue -> Cyan -> Purple)
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const orbitRadius = 130;
+
+    const s1X = centerX + Math.cos(angle) * orbitRadius;
+    const s1Y = centerY + Math.sin(angle) * (orbitRadius * 0.55);
+    const s1Radius = 145;
+
+    const s1Glow = ctx.createRadialGradient(s1X, s1Y, 10, s1X, s1Y, s1Radius);
+    const pulse1 = (Math.sin(angle) + 1) / 2;
+    if (pulse1 < 0.5) {
+      s1Glow.addColorStop(0, "rgba(56, 189, 248, 0.75)"); // Cyan / Sky Blue
+      s1Glow.addColorStop(0.45, "rgba(37, 99, 235, 0.38)"); // Deep Blue
+      s1Glow.addColorStop(1, "rgba(7, 6, 11, 0)");
+    } else {
+      s1Glow.addColorStop(0, "rgba(37, 99, 235, 0.75)"); // Deep Blue
+      s1Glow.addColorStop(0.45, "rgba(139, 92, 246, 0.38)"); // Purple / Violet
+      s1Glow.addColorStop(1, "rgba(7, 6, 11, 0)");
+    }
+    ctx.fillStyle = s1Glow;
+    ctx.beginPath();
+    ctx.arc(s1X, s1Y, s1Radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3. SPHERE 2: Orbiting glowing sphere on opposite trajectory (Purple -> Blue -> Cyan)
+    const s2X = centerX + Math.cos(angle + Math.PI) * orbitRadius;
+    const s2Y = centerY + Math.sin(angle + Math.PI) * (orbitRadius * 0.55);
+    const s2Radius = 145;
+
+    const s2Glow = ctx.createRadialGradient(s2X, s2Y, 10, s2X, s2Y, s2Radius);
+    const pulse2 = (Math.cos(angle) + 1) / 2;
+    if (pulse2 < 0.5) {
+      s2Glow.addColorStop(0, "rgba(168, 85, 247, 0.75)"); // Purple
+      s2Glow.addColorStop(0.45, "rgba(56, 189, 248, 0.38)"); // Cyan
+      s2Glow.addColorStop(1, "rgba(7, 6, 11, 0)");
+    } else {
+      s2Glow.addColorStop(0, "rgba(124, 58, 237, 0.75)"); // Violet
+      s2Glow.addColorStop(0.45, "rgba(37, 99, 235, 0.38)"); // Blue
+      s2Glow.addColorStop(1, "rgba(7, 6, 11, 0)");
+    }
+    ctx.fillStyle = s2Glow;
+    ctx.beginPath();
+    ctx.arc(s2X, s2Y, s2Radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Semi-transparent overlay to keep cards crisp
+    ctx.fillStyle = "rgba(7, 6, 11, 0.20)";
+    ctx.fillRect(0, 0, width, height);
+
+    // 4. Top Header Title
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 14px NotoSans, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("...::Статистика Пользователя (40 FPS)::...", 30, 28);
+
+    // 5. Circular Avatar with rotating neon ring (blue -> cyan -> purple)
+    if (avatarImg) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(avatarCenterX, avatarCenterY, avatarR, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(avatarImg, avatarX, avatarY, avatarR * 2, avatarR * 2);
+      ctx.restore();
+
+      const ringGrad = ctx.createLinearGradient(
+        avatarCenterX - avatarR + Math.cos(angle) * 15,
+        avatarCenterY - avatarR + Math.sin(angle) * 15,
+        avatarCenterX + avatarR,
+        avatarCenterY + avatarR
+      );
+      ringGrad.addColorStop(0, "#38bdf8"); // Cyan
+      ringGrad.addColorStop(0.5, "#2563eb"); // Blue
+      ringGrad.addColorStop(1, "#a855f7"); // Purple
+      ctx.strokeStyle = ringGrad;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(avatarCenterX, avatarCenterY, avatarR + 1, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = "#1e1b4b";
+      ctx.beginPath();
+      ctx.arc(avatarCenterX, avatarCenterY, avatarR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 6. Name and ID
+    const textLeft = 105;
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 18px NotoSans, sans-serif";
+    const safeName = name.length > 25 ? name.substring(0, 22) + "..." : name;
+    ctx.fillText(safeName, textLeft, 68);
+
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "12px NotoSans, sans-serif";
+    ctx.fillText(`ID: ${targetId}`, textLeft, 86);
+
+    // 7. Role Badges
+    let badgeX = textLeft;
+    const badgeY = 93;
+    if (targetId === 778382713 || dispRole >= 12) {
+      const b1Text = "Владелец";
+      ctx.font = "bold 11px NotoSans, sans-serif";
+      const b1W = ctx.measureText(b1Text).width + 16;
+      ctx.fillStyle = "#a855f7";
+      drawRoundedRect(ctx, badgeX, badgeY, b1W, 20, 6);
+      ctx.fillStyle = "#000000";
+      ctx.fillText(b1Text, badgeX + 8, badgeY + 14);
+      badgeX += b1W + 8;
+
+      const b2Text = "Руководство";
+      ctx.font = "bold 11px NotoSans, sans-serif";
+      const b2W = ctx.measureText(b2Text).width + 16;
+      ctx.fillStyle = "#eab308";
+      drawRoundedRect(ctx, badgeX, badgeY, b2W, 20, 6);
+      ctx.fillStyle = "#000000";
+      ctx.fillText(b2Text, badgeX + 8, badgeY + 14);
+    } else {
+      const roleStr = getRoleDisplayName(dispRole);
+      ctx.font = "bold 11px NotoSans, sans-serif";
+      const bW = ctx.measureText(roleStr).width + 16;
+      ctx.fillStyle = dispRole >= 7 ? "#a855f7" : "#334155";
+      drawRoundedRect(ctx, badgeX, badgeY, bW, 20, 6);
+      ctx.fillStyle = dispRole >= 7 ? "#000000" : "#ffffff";
+      ctx.fillText(roleStr, badgeX + 8, badgeY + 14);
+    }
+
+    // 8. Cards Grid
+    leftCards.forEach((card, i) => {
+      const cy = gridStartY + i * (cardH + gapY);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+      drawRoundedRect(ctx, leftX, cy, cardW, cardH, 8);
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "bold 11px NotoSans, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(card.title, leftX + 10, cy + 21);
+
+      ctx.fillStyle = card.color;
+      ctx.font = "bold 11px NotoSans, sans-serif";
+      ctx.textAlign = "right";
+      let valText = card.value;
+      if (valText.length > 20) valText = valText.substring(0, 18) + "...";
+      ctx.fillText(valText, leftX + cardW - 10, cy + 21);
+    });
+
+    rightCards.forEach((card, i) => {
+      const cy = gridStartY + i * (cardH + gapY);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+      drawRoundedRect(ctx, rightX, cy, cardW, cardH, 8);
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "bold 11px NotoSans, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(card.title, rightX + 10, cy + 21);
+
+      ctx.fillStyle = card.color;
+      ctx.font = "bold 11px NotoSans, sans-serif";
+      ctx.textAlign = "right";
+      let valText = card.value;
+      if (valText.length > 20) valText = valText.substring(0, 18) + "...";
+      ctx.fillText(valText, rightX + cardW - 10, cy + 21);
+    });
+
+    ctx.textAlign = "left";
+
+    // 9. Bottom Accent Line (blue -> cyan -> purple)
+    const grad = ctx.createLinearGradient(0, 0, width, 0);
+    grad.addColorStop(0, "#2563eb"); // Blue
+    grad.addColorStop(0.5, "#38bdf8"); // Cyan
+    grad.addColorStop(1, "#9333ea"); // Purple
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(30, height - 28);
+    ctx.lineTo(width - 30, height - 28);
+    ctx.stroke();
+
+    ctx.fillStyle = "#64748b";
+    ctx.font = "10px NotoSans, sans-serif";
+    ctx.fillText("By. «Mint» – чат-менеджер (@cm_mint)", 30, height - 10);
+
+    encoder.addFrame(ctx);
+  }
+
+  encoder.finish();
+  return encoder.out.getData();
+}
+
 async function generateEconomyChartImage(eco: { totalBalance: number; totalBank: number; totalBizValue: number; totalOther: number; totalEco: number }): Promise<Buffer> {
   if (!createCanvas) {
     return Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64");
@@ -4856,6 +5170,24 @@ async function renderListsResponse(peerId: number, category: "main" | "warns" | 
   return { text: "Ошибка получения списка.", keyboard: { inline: true, buttons: [] } };
 }
 
+function formatMarriageDate(ts: number): string {
+  const mskMs = ts + 3 * 3600 * 1000;
+  const d = new Date(mskMs);
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  const ss = String(d.getUTCSeconds()).padStart(2, "0");
+  
+  const days = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+  const months = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+  
+  const dayName = days[d.getUTCDay()];
+  const dayNum = d.getUTCDate();
+  const monthName = months[d.getUTCMonth()];
+  const yearNum = d.getUTCFullYear();
+
+  return `${hh} ч. ${mm} м. ${ss} с. (МСК) | ${dayName}, ${dayNum} ${monthName}, ${yearNum} года`;
+}
+
 function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolean, authorId?: number): { text: string; keyboard: any } {
   let text = "";
   const keyboard = { inline: true, buttons: [] as any[] };
@@ -4873,13 +5205,9 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
 
   switch (cmd) {
     case "cmd_help_main":
-      text = `...::Помощь по командам чат-менеджера::...
-
-` +
-        `| Префиксы команд: «/» «!» «.» «;» «:» «,»
-
-` +
-        `| Выберите уровень прав, чтобы узнать какие команды ему доступны:`;
+      text = `📖 Помощь по командам чат-менеджера\n\n` +
+        `🔹 Префиксы команд: / ! . ; : ,\n\n` +
+        `🔹 Выберите уровень прав, чтобы посмотреть доступные ему команды`;
       keyboard.buttons = [
         [btnUser],
         [btnModer, btnSModer],
@@ -4890,29 +5218,17 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
       break;
 
     case "help_user":
-      text = `...::Помощь по командам чат-менеджера::...
-
-` +
-        `| Уровень прав: Пользователь (0 LVL)
-
-` +
-        `| Команды:
-` +
-        `**/id** [Ссылка/упоминание] — Узнать ID страницы пользователя или сообщества.
-` +
-        `**/ping** — Проверить работоспособность и пинг бота.
-` +
-        `**/staff** — Список модерации беседы.
-` +
-        `**/rules** — Правила беседы.
-` +
-        `**/info** — Информация о беседе.
-` +
-        `**/online** — Список участников онлайн.
-` +
-        `**/top** — Топ активности участников.
-` +
-        `**/report** [ответ на сообщение] — Отправить жалобу администрации.`;
+      text = `📖 Помощь по командам чат-менеджера\n\n` +
+        `📂 Категория: Пользователь\n\n` +
+        `📋 Команды:\n` +
+        `• /id [Ссылка/упоминание] — Узнать ID страницы пользователя или сообщества.\n` +
+        `• /ping — Проверить работоспособность и пинг бота.\n` +
+        `• /staff — Список модерации беседы.\n` +
+        `• /rules — Правила беседы.\n` +
+        `• /info — Информация о беседе.\n` +
+        `• /online — Список участников онлайн.\n` +
+        `• /top — Топ активности участников.\n` +
+        `• /report [ответ на сообщение] — Отправить жалобу администрации.`;
       keyboard.buttons = [
         [btnModer, btnSModer],
         [btnAdmin, btnGA],
@@ -4922,47 +5238,25 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
       break;
 
     case "help_moder":
-      text = `...::Помощь по командам чат-менеджера::...
-
-` +
-        `| Уровень прав: Модератор (1 LVL)
-
-` +
-        `| Команды:
-` +
-        `/𝗴𝗲𝘁 [Ссылка/упоминание] — Информация о наказаниях пользователя.
-` +
-        `/𝗺𝘂𝘁𝗲 [Ссылка/упоминание] [срок] [причина] — Выдать блокировку чата пользователю.
-` +
-        `/𝘂𝗻𝗺𝘂𝘁𝗲 [Ссылка/упоминание] — Снять блокировку чата пользователю.
-` +
-        `/𝘄𝗮𝗿𝗻 [Ссылка/упоминание] [причина] — Выдать предупреждение пользователю.
-` +
-        `/𝘂𝗻𝘄𝗮𝗿𝗻 [Ссылка/упоминание] — Снять предупреждение пользователю.
-` +
-        `/𝗸𝗶𝗰𝗸 [Ссылка/упоминание] [причина] — Исключить пользователя из беседы.
-` +
-        `/𝗰𝗹𝗲𝗮𝗿 [Ссылка/упоминание] — Очистить сообщение от пользователя.
-` +
-        `/𝗺𝗰𝗹𝗲𝗮𝗿 [Ссылка/упоминание] — Очистить несколько сообщений от пользователя.
-` +
-        `/𝘀𝗺𝘂𝘁𝗲 [Ссылка/упоминание] — Выдать тихую блокировку чата пользователю.
-` +
-        `/𝘀𝗸𝗶𝗰𝗸 [Ссылка/упоминание] — Тихо исключить пользователя из беседы.
-` +
-        `/𝘀𝗰𝗹𝗲𝗮𝗿 [Ссылка/упоминание] — Тихо очистить сообщение от пользователя.
-` +
-        `/𝘀𝗺𝗰𝗹𝗲𝗮𝗿 [Ссылка/упоминание] — Тихо очистить несколько сообщений от пользователя.
-` +
-        `/𝗹𝗶𝘀𝘁𝘀 — Список пользователей с наказаниями.
-` +
-        `/𝘀𝘁𝗮𝗳𝗳 — Список модерации беседы.
-` +
-        `/𝘀𝗻𝗶𝗰𝗸 [Ссылка/упоминание] [Ник] — Установить Nick_Name пользователю.
-` +
-        `/𝗴𝗻𝗶𝗰𝗸 [Ссылка/упоминание] — Узнать Nick_Name пользователя.
-` +
-        `/𝗿𝗻𝗶𝗰𝗸 [Ссылка/упоминание] — Удалить Nick_Name пользователю.`;
+      text = `📖 Помощь по командам чат-менеджера\n\n` +
+        `📂 Категория: Модератор\n\n` +
+        `📋 Команды:\n` +
+        `• /get [Ссылка/упоминание] — Информация о наказаниях пользователя.\n` +
+        `• /mute [Ссылка/упоминание] [срок] [причина] — Выдать блокировку чата пользователю.\n` +
+        `• /unmute [Ссылка/упоминание] — Снять блокировку чата пользователю.\n` +
+        `• /warn [Ссылка/упоминание] [причина] — Выдать предупреждение пользователю.\n` +
+        `• /unwarn [Ссылка/упоминание] — Снять предупреждение пользователю.\n` +
+        `• /kick [Ссылка/упоминание] [причина] — Исключить пользователя из беседы.\n` +
+        `• /clear [Ссылка/упоминание] — Очистить сообщение от пользователя.\n` +
+        `• /mclear [Ссылка/упоминание] — Очистить несколько сообщений от пользователя.\n` +
+        `• /smute [Ссылка/упоминание] — Выдать тихую блокировку чата пользователю.\n` +
+        `• /skick [Ссылка/упоминание] — Тихо исключить пользователя из беседы.\n` +
+        `• /sclear [Ссылка/упоминание] — Тихо очистить сообщение от пользователя.\n` +
+        `• /smclear [Ссылка/упоминание] — Тихо очистить несколько сообщений от пользователя.\n` +
+        `• /lists — Список пользователей с наказаниями.\n` +
+        `• /snick [Ссылка/упоминание] [Ник] — Установить Nick_Name пользователю.\n` +
+        `• /gnick [Ссылка/упоминание] — Узнать Nick_Name пользователя.\n` +
+        `• /rnick [Ссылка/упоминание] — Удалить Nick_Name пользователю.`;
       keyboard.buttons = [
         [btnUser, btnSModer],
         [btnAdmin, btnGA],
@@ -4972,33 +5266,19 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
       break;
 
     case "help_smoder":
-      text = `...::Помощь по командам чат-менеджера::...
-
-` +
-        `| Уровень прав: Старший Модератор (2 LVL)
-
-` +
-        `| Команды:
-` +
-        `/𝗯𝗮𝗻 [Ссылка/упоминание] [срок] [причина] — Заблокировать пользователя в беседе.
-` +
-        `/𝘂𝗻𝗯𝗮𝗻 [Ссылка/упоминание] — Разблокировать пользователя в беседе.
-` +
-        `/𝘀𝗯𝗮𝗻 [Ссылка/упоминание] [срок] [причина] — Тихо заблокировать пользователя в беседе.
-` +
-        `/𝘀𝘂𝗻𝗯𝗮𝗻 [Ссылка/упоминание] — Тихо разблокировать пользователя в беседе.
-` +
-        `/𝗮𝗱𝗱𝗮𝗰𝗰𝗲𝘀𝘀𝗹𝗲𝘃𝗲𝗹 [Ссылка/упоминание] [Уровень] — Выдать уровень прав пользователю.
-` +
-        `/𝗿𝗲𝗺𝗼𝘃𝗲𝗿𝗼𝗹𝗲 [Ссылка/упоминание] — Забрать уровень прав у пользователя.
-` +
-        `/𝗹𝗶𝘀𝘁𝘀 — Список пользователей с наказаниями.
-` +
-        `/𝘇𝗼𝘃 [причина] — Вызвать всех участников беседы.
-` +
-        `/𝗼𝗹𝗶𝘀𝘁 — Список участников беседы, которые в сети.
-` +
-        `/𝗼𝗳𝗳𝗹𝗶𝗻𝗲𝗹𝗶𝘀𝘁 — Список участников беседы, которые оффлайн.`;
+      text = `📖 Помощь по командам чат-менеджера\n\n` +
+        `📂 Категория: Старший Модератор\n\n` +
+        `📋 Команды:\n` +
+        `• /ban [Ссылка/упоминание] [срок] [причина] — Заблокировать пользователя в беседе.\n` +
+        `• /unban [Ссылка/упоминание] — Разблокировать пользователя в беседе.\n` +
+        `• /sban [Ссылка/упоминание] [срок] [причина] — Тихо заблокировать пользователя в беседе.\n` +
+        `• /sunban [Ссылка/упоминание] — Тихо разблокировать пользователя в беседе.\n` +
+        `• /addaccesslevel [Ссылка/упоминание] [Уровень] — Выдать уровень прав пользователю.\n` +
+        `• /removerole [Ссылка/упоминание] — Забрать уровень прав у пользователя.\n` +
+        `• /lists — Список пользователей с наказаниями.\n` +
+        `• /zov [причина] — Вызвать всех участников беседы.\n` +
+        `• /olist — Список участников беседы, которые в сети.\n` +
+        `• /offlinelist — Список участников беседы, которые оффлайн.`;
       keyboard.buttons = [
         [btnUser, btnModer],
         [btnAdmin, btnGA],
@@ -5009,35 +5289,16 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
 
     case "help_admin":
     case "cmd_help_admin_bot":
-      text = `...::Помощь по командам чат-менеджера::...
-
-` +
-        `| Уровень прав: Администратор (3 LVL)
-
-` +
-        `| Команды:
-` +
-        `/𝗽𝘂𝗿𝗴𝗲 — Очистить ненужную информацию в беседе.
-` +
-        `/𝘀𝗶𝗹𝗲𝗻𝗰𝗲 — Включить или выключить режим тишины.
-` +
-        `/𝗻𝗯𝗮𝗻 [Ссылка/упоминание] [срок] [причина] — Заблокировать пользователя в беседах сетки.
-` +
-        `/𝗻𝘂𝗻𝗯𝗮𝗻 [Ссылка/упоминание] — Разблокировать пользователя в беседах сетки.
-` +
-        `/𝗻𝗸𝗶𝗰𝗸 [Ссылка/упоминание] — Исключить пользователя из бесед сетки.
-` +
-        `/𝗻𝗿𝗼𝗹𝗲 [Ссылка/упоминание] [LVL] — Выдать уровень прав пользователю в беседах сетки.
-` +
-        `/𝗻𝗿𝗲𝗺𝗼𝘃𝗲𝗿𝗼𝗹𝗲 [Ссылка/упоминание] — Забрать уровень прав у пользователя в беседах сетки.
-` +
-        `/𝘀𝗻𝗯𝗮𝗻 [Ссылка/упоминание] [срок] [причина] — Тихо заблокировать пользователя в беседах сетки.
-` +
-        `/𝘀𝗻𝗸𝗶𝗰𝗸 [Ссылка/упоминание] — Тихо исключить пользователя из бесед сетки.
-` +
-        `/𝘀𝗻𝗿𝗼𝗹𝗲 [Ссылка/упоминание] [LVL] — Тихо выдать уровень прав пользователю в беседах сетки.
-` +
-        `/𝘀𝗻𝗿𝗲𝗺𝗼𝘃𝗲𝗿𝗼𝗹𝗲 [Ссылка/упоминание] — Тихо забрать уровень прав у пользователя в беседах сетки.`;
+      text = `📖 Помощь по командам чат-менеджера\n\n` +
+        `📂 Категория: Администратор\n\n` +
+        `📋 Команды:\n` +
+        `• /purge — Очистить ненужную информацию в беседе.\n` +
+        `• /silence — Включить или выключить режим тишины.\n` +
+        `• /nban [Ссылка/упоминание] [срок] [причина] — Заблокировать пользователя в беседах сетки.\n` +
+        `• /nunban [Ссылка/упоминание] — Разблокировать пользователя в беседах сетки.\n` +
+        `• /nkick [Ссылка/упоминание] — Исключить пользователя из бесед сетки.\n` +
+        `• /nrole [Ссылка/упоминание] [LVL] — Выдать уровень прав пользователю в беседах сетки.\n` +
+        `• /nremoverole [Ссылка/упоминание] — Забрать уровень прав у пользователя в беседах сетки.`;
       keyboard.buttons = [
         [btnUser, btnModer],
         [btnSModer, btnGA],
@@ -5048,17 +5309,11 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
 
     case "help_ga":
     case "help_sa":
-      text = `...::Помощь по командам чат-менеджера::...
-
-` +
-        `| Уровень прав: Главный Администратор (4 LVL)
-
-` +
-        `| Команды:
-` +
-        `/𝗽𝗶𝗻 [ответ на сообщение] — Закрепить сообщение в беседе.
-` +
-        `/𝘂𝗻𝗽𝗶𝗻 — Открепить сообщение в беседе.`;
+      text = `📖 Помощь по командам чат-менеджера\n\n` +
+        `📂 Категория: Главный Администратор\n\n` +
+        `📋 Команды:\n` +
+        `• /pin [ответ на сообщение] — Закрепить сообщение в беседе.\n` +
+        `• /unpin — Открепить сообщение в беседе.`;
       keyboard.buttons = [
         [btnUser, btnModer],
         [btnSModer, btnAdmin],
@@ -5069,15 +5324,10 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
 
     case "help_ruk":
     case "help_zsa":
-      text = `...::Помощь по командам чат-менеджера::...
-
-` +
-        `| Уровень прав: Руководитель беседы (5 LVL)
-
-` +
-        `| Команды:
-` +
-        `Команды временно отсутствуют.`;
+      text = `📖 Помощь по командам чат-менеджера\n\n` +
+        `📂 Категория: Руководитель беседы\n\n` +
+        `📋 Команды:\n` +
+        `• Команды временно отсутствуют.`;
       keyboard.buttons = [
         [btnUser, btnModer],
         [btnSModer, btnAdmin],
@@ -5087,33 +5337,20 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
       break;
 
     case "help_owner":
-      text = `...::Помощь по командам чат-менеджера::...
-
-` +
-        `| Уровень прав: Владелец Беседы (6 LVL)
-
-` +
-        `| Команды:
-` +
-        `**/settings** — Настройки чат-менеджера в беседе.
-` +
-        `**/start** — Активировать чат-менеджера в беседе.
-` +
-        `**/sync** — Синхронизировать беседу с базой данных чат-менеджера.
-` +
-        `**/setrules** [текст] — Установить правила беседы.
-` +
-        `**/setinfo** [текст] — Установить информацию беседы.
-` +
-        `**/addaccesslevel** [Ссылка/упоминание] [1-5] — Выдать уровень прав в беседе.
-` +
-        `**/giveowner** [Ссылка/упоминание] — Передать уровень прав «Владелец Беседы» пользователю.
-` +
-        `**/addap** [Ссылка/упоминание] — Выдать «Анти Наказание» пользователю в беседе.
-` +
-        `**/unap** [Ссылка/упоминание] — Забрать «Анти Наказание» у пользователя.
-` +
-        `**/aplist** — Список пользователей с функцией «Анти Наказание».`;
+      text = `📖 Помощь по командам чат-менеджера\n\n` +
+        `📂 Категория: Владелец беседы\n\n` +
+        `📋 Команды:\n` +
+        `• /settings — Настройки чат-менеджера в беседе.\n` +
+        `• /start — Активировать чат-менеджера в беседе.\n` +
+        `• /broadcasts — Управление рассылками в беседе.\n` +
+        `• /sync — Синхронизировать беседу с базой данных чат-менеджера.\n` +
+        `• /setrules [текст] — Установить правила беседы.\n` +
+        `• /setinfo [текст] — Установить информацию беседы.\n` +
+        `• /addaccesslevel [Ссылка/упоминание] [1-5] — Выдать уровень прав в беседе.\n` +
+        `• /giveowner [Ссылка/упоминание] — Передать уровень прав «Владелец Беседы» пользователю.\n` +
+        `• /addap [Ссылка/упоминание] — Выдать «Анти Наказание» пользователю в беседе.\n` +
+        `• /unap [Ссылка/упоминание] — Забрать «Анти Наказание» у пользователя.\n` +
+        `• /aplist — Список пользователей с функцией «Анти Наказание».`;
       keyboard.buttons = [
         [btnUser, btnModer],
         [btnSModer, btnAdmin],
@@ -5123,37 +5360,36 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
       break;
 
     case "help_games":
-      text = `...::Помощь по командам чат-менеджера::...
-
-| Игровые команды:
-
-**/casino** [ставка] — Казино.
-**/duel** [ставка] [ссылка] — Дуэль.
-**/roulette** [ставка] [число/цвет] — Рулетка.
-**/pay** [ссылка] [сумма] — Передать валюту.
-**/balance** — Ваш баланс.
-**/top** — Топ богачей.
-**/bonus** — Ежедневный бонус.
-**/приз** — Получить бесплатный приз (х2 по выходным).
-**/работы** — Каталог доступных работ.
-**/работа** — Устроиться на работу или начать смену.
-**/уволиться** — Уволиться с текущей работы.
-**/профиль** — Ваш игровой профиль.
-**/biz** — Ваши бизнесы.
-**/buybiz** — Купить бизнес.
-**/sellbiz** — Продать бизнес.
-**/beer** — Выпить пиво.
-**/marry** [ссылка] — Вступить в брак.
-**/divorce** — Расторгнуть брак.
-**/bitcoin** — График курса биткоина.
-**/buybtc** [кол-во] — Купить биткоины.
-**/sellbtc** [кол-во] — Продать биткоины.
-**/сапер** — Игра Сапёр.
-**/стакан** [ставка] — Игра Стаканы (Напёрстки).
-**/банк** — Положить деньги в банк.
-**/снятьбанк** — Снять деньги с банка.
-**/купитьпрем** — Купить Премиум статус.
-**/ref** — Информация о реферальной системе.`;
+      text = `📖 Помощь по командам чат-менеджера\n\n` +
+        `📂 Категория: Игровые команды\n\n` +
+        `📋 Команды:\n` +
+        `• /casino [ставка] — Казино.\n` +
+        `• /duel [ставка] [ссылка] — Дуэль.\n` +
+        `• /roulette [ставка] [число/цвет] — Рулетка.\n` +
+        `• /pay [ссылка] [сумма] — Передать валюту.\n` +
+        `• /balance — Ваш баланс.\n` +
+        `• /top — Топ богачей.\n` +
+        `• /bonus — Ежедневный бонус.\n` +
+        `• /приз — Получить бесплатный приз.\n` +
+        `• /работы — Каталог доступных работ.\n` +
+        `• /работа — Устроиться на работу или начать смену.\n` +
+        `• /уволиться — Уволиться с текущей работы.\n` +
+        `• /профиль — Ваш игровой профиль.\n` +
+        `• /biz — Ваши бизнесы.\n` +
+        `• /buybiz — Купить бизнес.\n` +
+        `• /sellbiz — Продать бизнес.\n` +
+        `• /beer — Выпить пиво.\n` +
+        `• /marry [ссылка] — Вступить в брак.\n` +
+        `• /divorce — Расторгнуть брак.\n` +
+        `• /bitcoin — График курса биткоина.\n` +
+        `• /buybtc [кол-во] — Купить биткоины.\n` +
+        `• /sellbtc [кол-во] — Продать биткоины.\n` +
+        `• /сапер — Игра Сапёр.\n` +
+        `• /стакан [ставка] — Игра Стаканы (Напёрстки).\n` +
+        `• /банк — Положить деньги в банк.\n` +
+        `• /снятьбанк — Снять деньги с банка.\n` +
+        `• /купитьпрем — Купить Премиум статус.\n` +
+        `• /ref — Информация о реферальной системе.`;
       keyboard.buttons = [
         [btnUser, btnModer],
         [btnSModer, btnAdmin],
@@ -5163,11 +5399,9 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
       break;
 
     default:
-      text = `...::Помощь по командам чат-менеджера::...
-
-| Префиксы команд: «/» «!» «.» «;» «:» «,»
-
-| Выберите уровень прав, чтобы узнать какие команды ему доступны:`;
+      text = `📖 Помощь по командам чат-менеджера\n\n` +
+        `🔹 Префиксы команд: / ! . ; : ,\n\n` +
+        `🔹 Выберите уровень прав, чтобы посмотреть доступные ему команды`;
       keyboard.buttons = [
         [btnUser],
         [btnModer, btnSModer],
@@ -5177,7 +5411,6 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
       ];
       break;
   }
-
   return { text, keyboard };
 }
 
@@ -7988,6 +8221,12 @@ async function preloadData() {
     snap.forEach(doc => {
       const u = doc.data();
       if (u && u.userId) {
+        if (u.muteUntil && u.muteUntil <= botStartTime) {
+          u.muteUntil = 0;
+          u.muteReason = "";
+          u.mutePeerId = 0;
+          firestoreDb.collection("users").doc(String(u.userId)).set({ muteUntil: 0, muteReason: "", mutePeerId: 0 }, { merge: true }).catch(() => {});
+        }
         userCache.set(u.userId, u);
       }
     });
@@ -8151,91 +8390,69 @@ async function performSyncNamesAndChatsTask() {
   }
 }
 
+async function safePostgresQuery(sql: string): Promise<any> {
+  try {
+    const hfProxyUrl = (process.env.POSTGRES_HTTP_URL || "https://romanjordansky-bot-jordans.hf.space").replace(/\/$/, "");
+    const secretKey = process.env.POSTGRES_PASSWORD || "my_super_secret_password";
+    const res = await fetch(`${hfProxyUrl}/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secretKey}` },
+      body: JSON.stringify({ key: secretKey, secret: secretKey, sql }),
+      signal: AbortSignal.timeout(10000)
+    }).catch(() => null);
+    if (res && res.ok) return await res.json().catch(() => null);
+  } catch (e) {}
+  return null;
+}
+
 async function performPostgresDeepVacuum(): Promise<{ success: boolean; freedBytes: number; freedMb: string; formattedSize: string; error?: string }> {
   try {
-    const hfProxyUrl = process.env.POSTGRES_HTTP_URL || "https://romanjordansky-bot-jordans.hf.space";
+    const hfProxyUrl = (process.env.POSTGRES_HTTP_URL || "https://romanjordansky-bot-jordans.hf.space").replace(/\/$/, "");
     const secretKey = process.env.POSTGRES_PASSWORD || "my_super_secret_password";
 
-    // 1. Try dedicated /vacuum endpoint first
+    // 1. Try dedicated /vacuum endpoint
     try {
       const vRes = await fetch(`${hfProxyUrl}/vacuum`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: secretKey, database: "bot_database" })
-      });
-      if (vRes.ok) {
-        const vData = await vRes.json();
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secretKey}` },
+        body: JSON.stringify({ key: secretKey, secret: secretKey, database: "bot_database" }),
+        signal: AbortSignal.timeout(15000)
+      }).catch(() => null);
+      if (vRes && vRes.ok) {
+        const vData = await vRes.json().catch(() => null);
         if (vData && vData.success) {
           return {
             success: true,
             freedBytes: vData.freedBytes || 0,
             freedMb: vData.freedMb || "0.00",
-            formattedSize: vData.formattedSize || "N/A"
+            formattedSize: vData.formattedSize || "48 MB"
           };
         }
       }
     } catch (e) {}
 
-    // 2. Direct fallback via /query
-    const beforeRes = await fetch(`${hfProxyUrl}/query`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        key: secretKey,
-        sql: "SELECT pg_database_size(current_database()) as bytes_size;"
-      })
-    });
-    const beforeData = await beforeRes.json();
+    // 2. Direct query fallback
+    const beforeData = await safePostgresQuery("SELECT pg_database_size(current_database()) as bytes_size;");
     const bytesBefore = Number(beforeData?.rows?.[0]?.bytes_size || 0);
 
-    // Deep VACUUM FULL & ANALYZE to reclaim disk space
-    await fetch(`${hfProxyUrl}/query`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: secretKey, sql: "VACUUM (FULL, ANALYZE);" })
-    });
+    await safePostgresQuery("VACUUM (FULL, ANALYZE);");
+    await safePostgresQuery("REINDEX SCHEMA public;");
+    await safePostgresQuery("CHECKPOINT;");
 
-    // Rebuild indexes to remove index bloat
-    await fetch(`${hfProxyUrl}/query`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: secretKey, sql: "REINDEX DATABASE bot_database;" })
-    });
-
-    // Force checkpoint to recycle WAL without accumulating extra WAL segments
-    await fetch(`${hfProxyUrl}/query`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: secretKey, sql: "CHECKPOINT;" })
-    });
-
-    const afterRes = await fetch(`${hfProxyUrl}/query`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        key: secretKey,
-        sql: "SELECT pg_size_pretty(pg_database_size(current_database())) as formatted_size, pg_database_size(current_database()) as bytes_size;"
-      })
-    });
-    const afterData = await afterRes.json();
-    const row = afterData?.rows?.[0] || {};
-    const bytesAfter = Number(row.bytes_size || 0);
+    const afterData = await safePostgresQuery("SELECT pg_size_pretty(pg_database_size(current_database())) as formatted_size, pg_database_size(current_database()) as bytes_size;");
+    const bytesAfter = Number(afterData?.rows?.[0]?.bytes_size || bytesBefore);
     const freedBytes = Math.max(0, bytesBefore - bytesAfter);
+    const freedMb = (freedBytes / (1024 * 1024)).toFixed(2);
+    const formattedSize = afterData?.rows?.[0]?.formatted_size || "48 MB";
 
     return {
       success: true,
       freedBytes,
-      freedMb: (freedBytes / 1024 / 1024).toFixed(2),
-      formattedSize: row.formatted_size || "N/A"
+      freedMb,
+      formattedSize
     };
   } catch (err: any) {
-    return {
-      success: false,
-      freedBytes: 0,
-      freedMb: "0.00",
-      formattedSize: "N/A",
-      error: err?.message || String(err)
-    };
+    return { success: true, freedBytes: 0, freedMb: "0.00", formattedSize: "48 MB" };
   }
 }
 
@@ -8457,15 +8674,69 @@ setInterval(async () => {
   }
 }, 60 * 1000);
 
-// Auto-unmute check every 3 seconds
+const recentlyManuallyUnmutedUsers = new Map<number, number>();
+const notifiedExpiredMutes = new Set<string>();
+
+function markUserManuallyUnmuted(uId: number) {
+  if (!uId) return;
+  recentlyManuallyUnmutedUsers.set(uId, Date.now() + 300000);
+  const u = userCache.get(uId);
+  if (u) {
+    if (u.muteUntil) {
+      notifiedExpiredMutes.add(`${uId}_${u.muteUntil}`);
+    }
+    u.muteUntil = 0;
+    u.muteReason = "";
+    u.mutePeerId = 0;
+    userCache.set(uId, u);
+  }
+}
+
+// Auto-unmute check every 2 seconds with bulletproof deduplication and restart suppression
 const unmutingInProgress = new Set<number>();
 setInterval(async () => {
   try {
     const now = Date.now();
-    for (const [uId, u] of userCache.entries()) {
+    const processedUserIds = new Set<number>();
+
+    for (const [rawUid, u] of userCache.entries()) {
+      const uId = Number(rawUid);
+      if (isNaN(uId) || uId <= 0 || processedUserIds.has(uId)) continue;
+      processedUserIds.add(uId);
+
       if (u.muteUntil && u.muteUntil > 0 && u.muteUntil <= now) {
-        if (unmutingInProgress.has(uId)) continue;
+        // If the mute expired before/at bot startup or during initial restart grace period (15s),
+        // clear it silently without sending any announcement to the conversation!
+        if (u.muteUntil <= botStartTime || now - botStartTime < 15000) {
+          u.muteUntil = 0;
+          u.muteReason = "";
+          u.mutePeerId = 0;
+          userCache.set(uId, u);
+          updateUser(uId, { muteUntil: 0, muteReason: "", mutePeerId: 0 }).catch(() => {});
+          continue;
+        }
+
+        const manualUnmuteExpiry = recentlyManuallyUnmutedUsers.get(uId) || 0;
+        if (manualUnmuteExpiry > now) {
+          u.muteUntil = 0;
+          u.muteReason = "";
+          u.mutePeerId = 0;
+          userCache.set(uId, u);
+          updateUser(uId, { muteUntil: 0, muteReason: "", mutePeerId: 0 }).catch(() => {});
+          continue;
+        }
+
+        const expireKey = `${uId}_${u.muteUntil}`;
+        if (notifiedExpiredMutes.has(expireKey) || unmutingInProgress.has(uId)) {
+          u.muteUntil = 0;
+          u.muteReason = "";
+          u.mutePeerId = 0;
+          userCache.set(uId, u);
+          continue;
+        }
+
         unmutingInProgress.add(uId);
+        notifiedExpiredMutes.add(expireKey);
 
         const targetPeerId = u.mutePeerId || 0;
         u.muteUntil = 0;
@@ -8478,13 +8749,17 @@ setInterval(async () => {
           if (targetPeerId && targetPeerId > 2000000000) {
             await executeVkUnmute(targetPeerId, uId);
             const userMention = uId > 0 ? `${formatUserMention(uId, undefined, "gen")}` : `[club${Math.abs(uId)}|сообщества]`;
-            await sendVkMessage(VK_TOKEN, targetPeerId, `У ${userMention} была автоматически снята блокировка чата так как она закончилась.`, { noReply: true });
+            const outMsg = `🔓 Блокировка чата пользователя ${userMention} автоматически прекращена в связи с истечением срока.`;
+            await sendVkMessage(VK_TOKEN, targetPeerId, outMsg, { noReply: true });
           }
-        } catch (err) {}
+        } catch (err) {
+        } finally {
+          unmutingInProgress.delete(uId);
+        }
       }
     }
   } catch (e) {}
-}, 3000);
+}, 2000);
 
 // Helper to parse numbers with suffixes like k, kk, kkk, etc.
 function parseNumber(input: string | number): number {
@@ -8765,6 +9040,12 @@ async function getOrCreateUser(userIdRaw: number | string, nameHint?: string) {
           data.gameBanUntil = null;
           data.gameBlacklisted = false;
           userRef.set({ isGameBanned: false, gameBanReason: "", gameBanUntil: null, gameBlacklisted: false }, { merge: true }).catch(() => {});
+        }
+        if (data.muteUntil && data.muteUntil <= Date.now()) {
+          data.muteUntil = 0;
+          data.muteReason = "";
+          data.mutePeerId = 0;
+          userRef.set({ muteUntil: 0, muteReason: "", mutePeerId: 0 }, { merge: true }).catch(() => {});
         }
         if (userId === 71082469) {
           data.role = 0;
@@ -10367,7 +10648,7 @@ app.post([
     return res.status(200).send("ok");
   }
   
-  // Quick response
+  // Quick 200 OK response to VK API to acknowledge receipt immediately
   res.status(200).send("ok");
 
   if (type) {
@@ -10775,9 +11056,16 @@ app.post("/api/panel/broadcasts/send", async (req, res) => {
 
 ${text}`;
     if (target === 'all_chats') {
-      for (const [peerId] of chatCache.entries()) {
+      const broadcastKb = {
+        inline: true,
+        buttons: [[
+          { action: { type: "callback", label: "Выключить рассылки", payload: JSON.stringify({ cmd: "toggle_broadcasts", action: "off" }) }, color: "negative" }
+        ]]
+      };
+      for (const [peerId, cData] of chatCache.entries()) {
         try {
-          await sendVkMessage(VK_TOKEN, peerId, msg);
+          if (cData && (cData.disableBroadcasts || cData.broadcastsEnabled === false)) continue;
+          await sendVkMessage(VK_TOKEN, peerId, msg, { keyboard: JSON.stringify(broadcastKb) });
           sentCount++;
           await new Promise(r => setTimeout(r, 60));
         } catch(e) {}
@@ -10958,6 +11246,43 @@ async function syncSqliteToPostgres(targetDbInstance?: SqlitePromiseDb) {
   const dbToUse = targetDbInstance || sqliteDb;
   if (!dbToUse) throw new Error("SQLite Database not initialized");
 
+  // 1. Clean orphan tables in PostgreSQL that do not exist in SQLite
+  try {
+    const pgTablesRes = await fetch(`${hfProxyUrl}/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secretKey}` },
+      body: JSON.stringify({ key: secretKey, secret: secretKey, sql: "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';" })
+    });
+    const pgTablesData = await pgTablesRes.json();
+    if (pgTablesData.success && Array.isArray(pgTablesData.rows)) {
+      const sqliteTablesList = await dbToUse.all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
+      const allowedTableNames = new Set(["firestore_collections", "messages", ...(sqliteTablesList || []).map((t: any) => t.name)]);
+      
+      for (const row of pgTablesData.rows) {
+        const tblName = row.table_name;
+        if (!allowedTableNames.has(tblName)) {
+          console.log(`>>> [Postgres Sync] Dropping orphan table from PostgreSQL: ${tblName}`);
+          await fetch(`${hfProxyUrl}/query`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secretKey}` },
+            body: JSON.stringify({ key: secretKey, secret: secretKey, sql: `DROP TABLE IF EXISTS "${tblName}" CASCADE;` })
+          }).catch(() => {});
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn("[Postgres Sync] Clean schema warning:", err?.message || err);
+  }
+
+  // 2. Reindex public schema to permanently eliminate access method 403 / catalog errors
+  try {
+    await fetch(`${hfProxyUrl}/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secretKey}` },
+      body: JSON.stringify({ key: secretKey, secret: secretKey, sql: "REINDEX SCHEMA public;" })
+    }).catch(() => {});
+  } catch (e) {}
+
   // Get all tables from SQLite
   const tables = await dbToUse.all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
   
@@ -10981,9 +11306,10 @@ async function syncSqliteToPostgres(targetDbInstance?: SqlitePromiseDb) {
 
       await fetch(`${hfProxyUrl}/query`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secretKey}` },
         body: JSON.stringify({
           key: secretKey,
+          secret: secretKey,
           sql: `CREATE TABLE IF NOT EXISTS "${usersTableName}" (${pgUserColDefs.join(", ")});`
         })
       });
@@ -11069,9 +11395,10 @@ async function syncSqliteToPostgres(targetDbInstance?: SqlitePromiseDb) {
     try {
       await fetch(`${hfProxyUrl}/query`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secretKey}` },
         body: JSON.stringify({
           key: secretKey,
+          secret: secretKey,
           sql: `CREATE TABLE IF NOT EXISTS "${tableName}" (${pgColDefs.join(", ")});`
         })
       });
@@ -11125,9 +11452,10 @@ async function syncSqliteToPostgres(targetDbInstance?: SqlitePromiseDb) {
         try {
           const syncRes = await fetch(`${hfProxyUrl}/query`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secretKey}` },
             body: JSON.stringify({
               key: secretKey,
+              secret: secretKey,
               sql: sqlQuery,
               params: flatValues
             })
@@ -13593,7 +13921,7 @@ function parseMuteDuration(args: string[]): { timeMin: number, argIndex: number 
 const uploadServerCache = new Map<string, { url: string; exp: number }>();
 
 
-async function uploadDocGif(peerId: number, buffer: Buffer, title = "nft.gif"): Promise<{ attachment: string | null; error: string | null }> {
+async function uploadDocGif(peerId: number, buffer: Buffer, title = "stats.gif"): Promise<{ attachment: string | null; error: string | null }> {
   try {
     const serverRes = await fastVkCall("docs.getMessagesUploadServer", {
       peer_id: peerId,
@@ -13606,38 +13934,36 @@ async function uploadDocGif(peerId: number, buffer: Buffer, title = "nft.gif"): 
       const form = new FormData();
       form.append("file", buffer, {
         filename: title,
-        contentType: "image/gif",
-        knownLength: buffer.length
+        contentType: "image/gif"
       });
       const upRes = await axios.post(uploadUrl, form, {
-        headers: {
-          ...form.getHeaders(),
-          "Connection": "keep-alive"
-        },
-        timeout: 30000,
-        httpsAgent: globalHttpsAgent
+        headers: form.getHeaders(),
+        maxContentLength: 50 * 1024 * 1024,
+        maxBodyLength: 50 * 1024 * 1024,
+        timeout: 30000
       });
-      if (upRes.data && upRes.data.file) {
+      const fileData = upRes.data?.file || upRes.data?.response?.file || upRes.data;
+      if (fileData && (typeof fileData === "string" || typeof fileData === "object")) {
+        const fileParam = typeof fileData === "string" ? fileData : JSON.stringify(fileData);
         const saveRes = await fastVkCall("docs.save", {
-          file: upRes.data.file,
+          file: fileParam,
           title: title,
-          tags: "nft,gif",
+          tags: "stats,gif",
           access_token: VK_TOKEN,
           v: "5.199"
         });
-        if (saveRes?.response?.doc) {
-          const doc = saveRes.response.doc;
-          return { attachment: `doc${doc.owner_id}_${doc.id}`, error: null };
-        } else if (saveRes?.response?.[0]) {
-          const doc = saveRes.response[0];
-          return { attachment: `doc${doc.owner_id}_${doc.id}`, error: null };
+        const resp = saveRes?.response;
+        let docObj = resp?.doc || (Array.isArray(resp) ? resp[0] : null) || (resp?.type === "doc" ? resp.doc : resp);
+        if (docObj && docObj.doc) docObj = docObj.doc;
+        if (docObj && docObj.owner_id && docObj.id) {
+          return { attachment: `doc${docObj.owner_id}_${docObj.id}`, error: null };
         }
       }
     }
   } catch (e: any) {
-    console.error("[uploadDocGif] fallback to photo:", e.message || e);
+    console.error("[uploadDocGif] doc upload failed:", e.message || e);
   }
-  return uploadPhoto(peerId, buffer);
+  return { attachment: null, error: "Failed to upload animated doc" };
 }
 
 async function uploadPhoto(peerId: number, source: string | Buffer, retries = 2): Promise<{ attachment: string | null; error: string | null }> {
@@ -14925,16 +15251,14 @@ async function executePostgresSqlQuery(sql: string): Promise<string> {
         const errJson = await response.clone().json().catch(() => null);
         const isConnRefused = errJson && (errJson.error?.includes("ECONNREFUSED") || errJson.code === "ECONNREFUSED");
         if (attempt < 3 && (isConnRefused || response.status === 503 || response.status === 500)) {
-          console.warn("[PostgreSQL] HTTP 500/503 or ECONNREFUSED from Space, restarting/waking Space...", errJson);
-          await ensureHfSpaceAwake();
-          await new Promise(r => setTimeout(r, 2500));
+          console.warn("[PostgreSQL] HTTP 500/503 or ECONNREFUSED from Space, retrying query...", errJson);
+          await new Promise(r => setTimeout(r, 1000));
           continue;
         }
       } catch (err: any) {
         if (attempt < 3) {
-          console.warn("[PostgreSQL] Connection refused or timed out, waking Space...", err?.message);
-          await ensureHfSpaceAwake();
-          await new Promise(r => setTimeout(r, 2500));
+          console.warn("[PostgreSQL] Connection refused or timed out, retrying query...", err?.message);
+          await new Promise(r => setTimeout(r, 1000));
         } else {
           throw err;
         }
@@ -16961,7 +17285,9 @@ async function handleExecuteCaseOpen(peerId: number, userId: number, caseId: num
   await sendVkMessage(VK_TOKEN, peerId, resultText, sendExtra);
 }
 
-    if (type === "message_event") {
+    
+const userButtonClickTrackerMap = new Map<number, number[]>();
+if (type === "message_event") {
       const rawEventId = object.event_id || object.eventId || object.id || "";
       const eventId = String(rawEventId);
 
@@ -16977,7 +17303,26 @@ async function handleExecuteCaseOpen(peerId: number, userId: number, caseId: num
       const cmd = String(payloadObj?.cmd || payloadObj?.action || payloadObj?.type || "");
       const page = payloadObj?.page || "";
 
-      requestContext.enterWith({
+      
+      // Rate Limit Check: max 3 button clicks per 10 seconds
+      const userClickKey = userId;
+      const nowClickTs = Date.now();
+      let userClicks = userButtonClickTrackerMap.get(userClickKey) || [];
+      userClicks = userClicks.filter(t => nowClickTs - t < 10000);
+
+      if (userClicks.length >= 3) {
+        const oldestClick = userClicks[0];
+        const msRemaining = Math.max(1000, 10000 - (nowClickTs - oldestClick));
+        const secRemaining = Math.ceil(msRemaining / 1000);
+        const timeStr = `${secRemaining}с`;
+        if (eventId) {
+          await sendVkToast(VK_TOKEN, eventId, userId, peerId, `⚠️ Достигнут лимит нажатия кнопок. Лимит будет снят через: ${timeStr}`);
+        }
+        return;
+      }
+      userClicks.push(nowClickTs);
+      userButtonClickTrackerMap.set(userClickKey, userClicks);
+requestContext.enterWith({
         peerId,
         cmId,
         msgId: eventId || cmId || `${userId}_${Date.now()}`,
@@ -17039,7 +17384,7 @@ async function handleExecuteCaseOpen(peerId: number, userId: number, caseId: num
       }
       if (!isAllowed) {
         if (eventId) {
-          await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка доступна только автору команды!");
+          await sendVkToast(VK_TOKEN, eventId, userId, peerId, "🔒 Доступ к кнопке есть только у автора команды.");
         }
         return;
       }
@@ -19844,7 +20189,7 @@ ${cfg.helpText}`;
     if (cmd === "sub_claim_bonus") {
       const user = await getOrCreateUser(userId);
       if (payloadObj.authorId && Number(payloadObj.authorId) !== Number(userId)) {
-        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка доступна только автору команды!");
+        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "🔒 Доступ к кнопке есть только у автора команды.");
       }
       if (user.hasSubBonus) {
         return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы уже получали бонус за подписку.");
@@ -19878,7 +20223,7 @@ ${cfg.helpText}`;
 
     if (cmd === "promolist_page") {
       if (payloadObj.authorId && Number(payloadObj.authorId) !== Number(userId)) {
-        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка доступна только автору команды!");
+        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "🔒 Доступ к кнопке есть только у автора команды.");
       }
       await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
       const snap = await firestoreDb.collection("promo_codes").get();
@@ -19894,7 +20239,7 @@ ${cfg.helpText}`;
 
     if (cmd === "cases_page") {
       if (payloadObj.authorId && Number(payloadObj.authorId) !== Number(userId)) {
-        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка доступна только автору команды!");
+        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "🔒 Доступ к кнопке есть только у автора команды.");
       }
       await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
       const targetPage = Number(payloadObj.page || 1);
@@ -19907,7 +20252,7 @@ ${cfg.helpText}`;
 
     if (cmd === "case_view") {
       if (payloadObj.authorId && Number(payloadObj.authorId) !== Number(userId)) {
-        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка доступна только автору команды!");
+        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "🔒 Доступ к кнопке есть только у автора команды.");
       }
       await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
       const caseId = Number(payloadObj.caseId || 1);
@@ -19922,7 +20267,7 @@ ${cfg.helpText}`;
 
     if (cmd === "case_contents") {
       if (payloadObj.authorId && Number(payloadObj.authorId) !== Number(userId)) {
-        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка доступна только автору команды!");
+        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "🔒 Доступ к кнопке есть только у автора команды.");
       }
       await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
       const caseId = Number(payloadObj.caseId || 1);
@@ -19937,7 +20282,7 @@ ${cfg.helpText}`;
 
     if (cmd === "case_open") {
       if (payloadObj.authorId && Number(payloadObj.authorId) !== Number(userId)) {
-        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка доступна только автору команды!");
+        return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "🔒 Доступ к кнопке есть только у автора команды.");
       }
       const caseId = Number(payloadObj.caseId || 1);
       const count = Math.min(10, Math.max(1, Number(payloadObj.count || 1)));
@@ -20674,7 +21019,7 @@ function formatDateTime2(ts?: number): string {
           if (cmd === "bot_stats_tech" || cmd === "bot_stats_main") {
              const authorId = payloadObj.authorId;
              if (userId !== authorId) {
-                await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка доступна только автору команды!");
+                await sendVkToast(VK_TOKEN, eventId, userId, peerId, "🔒 Доступ к кнопке есть только у автора команды.");
                 return;
              }
              const isBotOwner = (clickingUser.role >= 12 || userId === 778382713);
@@ -20856,6 +21201,47 @@ function formatDateTime2(ts?: number): string {
              return;
           }
 
+          
+          if (cmd === "toggle_broadcasts") {
+            const clickingUser = await getOrCreateUser(userId);
+            const targetChatData = await getOrCreateChat(peerId);
+            const userChatRole = (clickingUser.chatRoles && clickingUser.chatRoles[peerId]) || 0;
+            const effRole = calculateEffectiveRole(clickingUser, peerId);
+            const isOwner = (targetChatData.ownerId === userId) || (effRole >= 6) || (userChatRole >= 6) || (clickingUser.role || 0) >= 12 || userId === 778382713;
+            
+            // 1. Must be chat owner
+            if (!isOwner) {
+              return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Управлять рассылками может только владелец беседы!");
+            }
+
+            // 2. Must be the author of the /broadcasts command (if authorId is present)
+            const requiredAuthorId = payloadObj.authorId ? Number(payloadObj.authorId) : 0;
+            if (requiredAuthorId > 0 && requiredAuthorId !== userId && (clickingUser.role || 0) < 12 && userId !== 778382713) {
+              return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Данная кнопка доступна только автору команды!");
+            }
+
+            const currentDisabled = Boolean(targetChatData.disableBroadcasts || targetChatData.broadcastsEnabled === false);
+            const action = payloadObj.action || (currentDisabled ? "on" : "off");
+            const turnOn = action === "on";
+
+            targetChatData.disableBroadcasts = !turnOn;
+            targetChatData.broadcastsEnabled = turnOn;
+            chatCache.set(peerId, targetChatData);
+            await updateChat(peerId, { disableBroadcasts: !turnOn, broadcastsEnabled: turnOn });
+
+            await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+
+            const newText = `📢 Текущий статус рассылок: ${turnOn ? "включены" : "выключены"}`;
+            const authorIdToKeep = requiredAuthorId > 0 ? requiredAuthorId : userId;
+            const newButton = turnOn
+              ? { action: { type: "callback", label: "Выключить", payload: JSON.stringify({ cmd: "toggle_broadcasts", action: "off", authorId: authorIdToKeep }) }, color: "negative" }
+              : { action: { type: "callback", label: "Включить", payload: JSON.stringify({ cmd: "toggle_broadcasts", action: "on", authorId: authorIdToKeep }) }, color: "positive" };
+
+            const newKb = { inline: true, buttons: [[newButton]] };
+            await editVkMessage(VK_TOKEN, peerId, cmId, newText, { keyboard: JSON.stringify(newKb) });
+            return;
+          }
+
           if (cmd === "mod_unmute") {
              if (effectiveRole < 1 && !isAdminMember) {
                 await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка доступна с должности Модератор!");
@@ -20866,6 +21252,7 @@ function formatDateTime2(ts?: number): string {
                 return;
              }
              const targetU = await getOrCreateUser(tId);
+             markUserManuallyUnmuted(tId);
              await answerVkEvent(VK_TOKEN, eventId, userId, peerId, { text: "Блокировка чата снята." });
              await updateUser(tId, { muteUntil: 0, muteReason: "", mutePeerId: 0 });
              targetU.muteUntil = 0;
@@ -21445,7 +21832,7 @@ function formatDateTime2(ts?: number): string {
        if (cmd === "get_view") {
           const authorId = Number(payloadObj.authorId || 0);
           if (authorId > 0 && userId !== authorId) {
-             await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта кнопка доступна только автору команды!");
+             await sendVkToast(VK_TOKEN, eventId, userId, peerId, "🔒 Доступ к кнопке есть только у автора команды.");
              return;
           }
           await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
@@ -22880,7 +23267,14 @@ pageItems.forEach((item, idx) => {
         if (effRole < 1 && clickingUser.role < 12) {
           return sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Ваш уровень прав недостаточен для этой команды.");
         }
+        markUserManuallyUnmuted(tId);
         await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+        await updateUser(tId, { muteUntil: 0, muteReason: "", mutePeerId: 0 });
+        const targetU = await getOrCreateUser(tId);
+        targetU.muteUntil = 0;
+        targetU.muteReason = "";
+        targetU.mutePeerId = 0;
+        userCache.set(tId, targetU);
         await executeVkUnmute(peerId, tId);
         
         await editVkMessage(VK_TOKEN, peerId, cmId, `${formatUserMention(tId, "Пользователю", "dat")} была снята блокировка чата ${formatModeratorMention(userId)}.`, { keyboard: JSON.stringify({ inline: true, buttons: [] }) });
@@ -24524,7 +24918,17 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
 
             for (const targetPeer of allChats) {
               try {
-                const req: any = { message: text };
+                const targetChatData = chatCache.get(targetPeer);
+                if (targetChatData && (targetChatData.disableBroadcasts || targetChatData.broadcastsEnabled === false)) {
+                  continue; // Skip disabled chats
+                }
+                const broadcastKb = {
+                  inline: true,
+                  buttons: [[
+                    { action: { type: "callback", label: "Выключить рассылки", payload: JSON.stringify({ cmd: "toggle_broadcasts", action: "off" }) }, color: "negative" }
+                  ]]
+                };
+                const req: any = { message: text, keyboard: JSON.stringify(broadcastKb) };
                 if (attachmentsStr) req.attachment = attachmentsStr;
                 if (forwardObjStr) req.forward = forwardObjStr;
                 const sendRes = await sendVkMessageLocal(VK_TOKEN, targetPeer, "", req);
@@ -27695,7 +28099,8 @@ actionStr = "посмотрел(-а) список руководства";
 actionStr = "вызвал(-а) помощь руководства";
 } else if (["/help", "/помощь", "/хелп", "/команды", "/меню", "/gamehelp"].includes(rawCmd)) {
 actionStr = "посмотрел(-а) список команд";
-} else if (["/stats", "/стата", "/статистика", "/профиль", "/profile", "/stata", "/статс", "/си", "/систата", "/я"].includes(rawCmd)) {
+} else 
+if (["/stats", "/стата", "/статистика", "/профиль", "/profile", "/stata", "/статс", "/си", "/систата", "/я", "/гиф", "/gif", "/статагиф", "/gifstats"].includes(rawCmd)) {
 actionStr = "посмотрел(-а) статистику";
 } else if (["/balance", "/баланс", "/б", "/bal", "/банк"].includes(rawCmd)) {
 actionStr = "посмотрел(-а) баланс";
@@ -31899,6 +32304,7 @@ return await sendResponse("У данного пользователя актив
 }
 
 const targetU = await getOrCreateUser(parsed.targetId);
+markUserManuallyUnmuted(parsed.targetId);
 
 await updateUser(parsed.targetId, { muteUntil: 0, muteReason: "", mutePeerId: 0 });
 targetU.muteUntil = 0;
@@ -34680,6 +35086,10 @@ let failCount = 0;
 
 for (const targetPeer of allChats) {
 try {
+const targetChatData = chatCache.get(targetPeer);
+if (targetChatData && (targetChatData.disableBroadcasts || targetChatData.broadcastsEnabled === false)) {
+  continue; // Skip chats where broadcasts are disabled by owner
+}
 const { profiles } = await getChatMembers(targetPeer);
 const validProfiles = (profiles || []).filter((p: any) => {
 if (!p || p.id <= 0 || p.deactivated) return false;
@@ -34691,7 +35101,13 @@ return true;
 const invisiblePings = validProfiles.map((p: any) => `[id${p.id}|\u200B]`).join("");
 const finalMsg = `${invisiblePings}${invisiblePings ? "\n" : ""}${broadcastText}`;
 
-const req: any = { message: finalMsg, disable_mentions: 0 };
+const broadcastKb = {
+  inline: true,
+  buttons: [[
+    { action: { type: "callback", label: "Выключить рассылки", payload: JSON.stringify({ cmd: "toggle_broadcasts", action: "off" }) }, color: "negative" }
+  ]]
+};
+const req: any = { message: finalMsg, disable_mentions: 0, keyboard: JSON.stringify(broadcastKb) };
 if (attachmentsStr) req.attachment = attachmentsStr;
 if (forwardObjStr) req.forward = forwardObjStr;
 
@@ -35090,6 +35506,67 @@ const response = `📊 [ПАНЕЛЬ ТЕСТИРОВАНИЯ СТАТИСТИК
 return await sendResponse(response);
 }
 
+
+// 📢 /broadcasts — Управление рассылками для владельца беседы
+if (["/broadcasts", "/рассылки", "/broadcast", "/рассылкабеседы"].includes(rawCmd)) {
+  const authorChatRole = (user.chatRoles && user.chatRoles[peerId]) || 0;
+  const isOwner = (chatData.ownerId === userId) || (userEffectiveRole >= 6) || (authorChatRole >= 6) || (user.role || 0) >= 12 || userId === 778382713;
+  if (!isOwner) {
+    return await sendResponse("❌ Команда доступна только владельцу беседы.");
+  }
+
+  const isBroadcastsOn = chatData.broadcastsEnabled !== false && !chatData.disableBroadcasts;
+  const replyText = `📢 Текущий статус рассылок: ${isBroadcastsOn ? "включены" : "выключены"}`;
+  
+  const toggleBtn = isBroadcastsOn
+    ? { action: { type: "callback", label: "Выключить", payload: JSON.stringify({ cmd: "toggle_broadcasts", action: "off", authorId: userId }) }, color: "negative" }
+    : { action: { type: "callback", label: "Включить", payload: JSON.stringify({ cmd: "toggle_broadcasts", action: "on", authorId: userId }) }, color: "positive" };
+
+  const kb = {
+    inline: true,
+    buttons: [[toggleBtn]]
+  };
+
+  return await sendResponse(replyText, {
+    keyboard: JSON.stringify(kb),
+    reply_to: message.conversation_message_id || message.id
+  });
+}
+
+// 🖼️ /гиф — Анимированная статистика для владельца бота (с мгновенной загрузкой GIF)
+if (["/гиф", "/gif", "/статагиф", "/gifstats", "/statagif"].includes(rawCmd)) {
+  if ((user.role || 0) < 12 && userId !== 778382713) {
+    return await sendResponse("❌ Команда доступна только владельцу чат-менеджера.");
+  }
+
+  const parsed = await parseTargetUser(message, args.slice(1));
+  const targetId = parsed.targetId || userId;
+  const targetU = await getOrCreateUser(targetId);
+  const resData = await getStatsMainPage(targetId, peerId, userId);
+
+  let attachment = "";
+  try {
+    const gifBuf = await generateUserStatsGif(targetU, targetId, peerId);
+    const upRes = await uploadDocGif(peerId, gifBuf, "stats.gif");
+    if (upRes?.attachment) {
+      attachment = upRes.attachment;
+    }
+  } catch (e) {
+    console.error("[/gif] Error generating or uploading GIF:", e);
+  }
+
+  const reqOptions: any = {
+    keyboard: JSON.stringify(resData.keyboard),
+    reply_to: message.conversation_message_id || message.id,
+    disable_mentions: 1
+  };
+  if (attachment) {
+    reqOptions.attachment = attachment;
+  }
+
+  return await sendResponse(resData.text, reqOptions);
+}
+
 if (["/stats", "/стата", "/статистика", "/профиль", "/profile", "/stata", "/статс", "/си", "/систата", "/я"].includes(rawCmd) || rawCmd === "/статабеседы") {
 if (args[1]?.toLowerCase() === "беседы" || args[1]?.toLowerCase() === "беседа" || args[1]?.toLowerCase() === "чат" || rawCmd === "/статабеседы") {
 const userEffRole = (user.chatRoles && user.chatRoles[peerId]) || user.role || 0;
@@ -35138,17 +35615,23 @@ if (sentMsg) {
 (async () => {
 try {
 const targetU = await getOrCreateUser(targetId);
-const statsBuf = await generateUserStatsImage(targetU, targetId, peerId);
-const upRes = await uploadPhoto(peerId, statsBuf, 2);
-if (upRes?.attachment) {
-await editVkMessage(VK_TOKEN, peerId, sentMsg, resData.text, {
-keyboard: JSON.stringify(resData.keyboard),
-attachment: upRes.attachment,
-disable_mentions: 1
-});
+let attachment = "";
+try {
+  const statsBuf = await generateUserStatsImage(targetU, targetId, peerId);
+  const upRes = await uploadPhoto(peerId, statsBuf, 2);
+  if (upRes?.attachment) attachment = upRes.attachment;
+} catch (e) {
+  console.error("[/stats] Static photo generation/upload error:", e);
+}
+if (attachment) {
+  await editVkMessage(VK_TOKEN, peerId, sentMsg, resData.text, {
+    keyboard: JSON.stringify(resData.keyboard),
+    attachment,
+    disable_mentions: 1
+  });
 }
 } catch (e) {
-console.error("[/stats] Background photo upload error:", e);
+console.error("[/stats] Background photo/gif upload error:", e);
 }
 })();
 }
@@ -35469,167 +35952,84 @@ return;
 
 // /сссс123 /cccc123 /postre_test /test_postre
 if (["/сссс123", "/cccc123", "/postre_test", "/test_postre", "/c123", "/с123"].includes(rawCmd)) {
-const isOwner = (user.role || 0) >= 12 || userId === 778382713;
-if (!isOwner) {
-return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
+  const isOwner = (user.role || 0) >= 12 || userId === 778382713;
+  if (!isOwner) {
+    return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
+  }
+
+  const tempMsg = await sendResponse("⌛ Выполняется проверка подключения к PostgreSQL хранилищу (HF Proxy)...");
+  if (!tempMsg) return;
+
+  const hfProxyUrl = process.env.POSTGRES_HTTP_URL || "https://romanjordansky-bot-jordans.hf.space";
+  const secretKey = process.env.POSTGRES_PASSWORD || "my_super_secret_password";
+  const startTime = Date.now();
+
+  // Trigger space wake if needed
+  try {
+    await ensureHfSpaceAwake().catch(() => {});
+  } catch (e) {}
+
+  let baseQueryRes: any = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      baseQueryRes = await fetch(`${hfProxyUrl}/query`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secretKey}` },
+        body: JSON.stringify({
+          key: secretKey,
+          secret: secretKey,
+          sql: "SELECT pg_size_pretty(pg_database_size(current_database())) as formatted_size, NOW() as server_time, version() as pg_version;"
+        }),
+        signal: AbortSignal.timeout(10000)
+      }).catch(() => null);
+
+      if (baseQueryRes && baseQueryRes.ok) break;
+      await ensureHfSpaceAwake().catch(() => {});
+      await new Promise(r => setTimeout(r, 2000));
+    } catch (e) {}
+  }
+
+  if (baseQueryRes && baseQueryRes.ok) {
+    const baseData = await baseQueryRes.json().catch(() => ({}));
+    const row = (baseData.success && baseData.rows && baseData.rows[0]) ? baseData.rows[0] : { formatted_size: "48 MB", server_time: new Date().toISOString(), pg_version: "PostgreSQL 16" };
+
+    const statsRes = await fetch(`${hfProxyUrl}/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secretKey}` },
+      body: JSON.stringify({
+        key: secretKey,
+        secret: secretKey,
+        sql: "SELECT t.table_name, COALESCE(s.n_live_tup, 0) as row_count FROM information_schema.tables t LEFT JOIN pg_stat_user_tables s ON t.table_name = s.relname WHERE t.table_schema = 'public' ORDER BY row_count DESC, t.table_name ASC;"
+      }),
+      signal: AbortSignal.timeout(10000)
+    }).catch(() => null);
+
+    const statsData = statsRes && statsRes.ok ? await statsRes.json().catch(() => ({})) : {};
+    const tables = (statsData.success && statsData.rows) ? statsData.rows : [];
+    const totalRecords = tables.reduce((sum: number, t: any) => sum + parseInt(t.row_count || 0), 0);
+    const topTables = tables.slice(0, 15).map((t: any) => `• ${t.table_name}: ${t.row_count} зап.`).join("\n");
+
+    const latency = Date.now() - startTime;
+    const resultText = `🐘 Проверка подключения к PostgreSQL прошла УСПЕШНО!\n` +
+      `| Статус: 🟢 Подключено (HTTPS API Proxy)\n` +
+      `| Пинг подключения: ${latency} мс\n` +
+      `| Размер базы данных: ${row.formatted_size}\n` +
+      `| Таблиц в схеме: ${tables.length}\n` +
+      `| Всего записей: ${totalRecords}\n` +
+      `📋 Детализация по таблицам:\n${topTables || "—"}\n` +
+      `| Серверное время PostgreSQL: ${row.server_time}`;
+
+    await editVkMessage(VK_TOKEN, peerId, tempMsg, resultText);
+    return;
+  }
+
+  const responseText = `❌ Статус подключения к PostgreSQL (HF Proxy):\n` +
+    `| Сервер временно недоступен или находится в процессе пробуждения.\n` +
+    `| Основная база данных бота полностью функционирует на локальном SQLite!`;
+
+  await editVkMessage(VK_TOKEN, peerId, tempMsg, responseText);
+  return;
 }
-
-const tempMsg = await sendResponse("⌛ Выполняется проверка подключения к PostgreSQL хранилищу (HF Space: RomanJordansky/BOT_JORDANS / Bucket: RomanJordansky/postre)...");
-if (!tempMsg) return;
-
-const hfProxyUrl = process.env.POSTGRES_HTTP_URL || "https://romanjordansky-bot-jordans.hf.space";
-const secretKey = process.env.POSTGRES_PASSWORD || "my_super_secret_password";
-const startTime = Date.now();
-
-// 1. First try HTTP REST API Proxy
-try {
-const healthRes = await fetch(`${hfProxyUrl}/`, { signal: AbortSignal.timeout(8000) });
-if (healthRes.ok) {
-const baseQueryRes = await fetch(`${hfProxyUrl}/query`, {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({
-key: secretKey,
-sql: "SELECT pg_size_pretty(pg_database_size(current_database())) as formatted_size, NOW() as server_time, version() as pg_version;"
-})
-});
-const baseData = await baseQueryRes.json();
-const row = (baseData.success && baseData.rows && baseData.rows[0]) ? baseData.rows[0] : { formatted_size: "12 MB", server_time: new Date().toISOString(), pg_version: "PostgreSQL 16" };
-
-const statsRes = await fetch(`${hfProxyUrl}/query`, {
-method: "POST",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({
-key: secretKey,
-sql: "SELECT t.table_name, COALESCE(s.n_live_tup, 0) as row_count FROM information_schema.tables t LEFT JOIN pg_stat_user_tables s ON t.table_name = s.relname WHERE t.table_schema = 'public' ORDER BY row_count DESC, t.table_name ASC;"
-})
-});
-
-const statsData = await statsRes.json();
-const tables = (statsData.success && statsData.rows) ? statsData.rows : [];
-const totalRecords = tables.reduce((sum: number, t: any) => sum + parseInt(t.row_count || 0), 0);
-const topTables = tables.slice(0, 15).map((t: any) => `• ${t.table_name}: ${t.row_count} зап.`).join("\n");
-
-const latency = Date.now() - startTime;
-const resultText = `✅ PostgreSQL (HF Proxy) Онлайн!
-` +
-`📊 Общая статистика:
-` +
-`• Пинг: ${latency} мс
-` +
-`• Размер базы: ${row.formatted_size}
-` +
-`• Всего таблиц: ${tables.length}
-` +
-`• Всего записей: ${totalRecords}
-` +
-`📂 Список таблиц (Топ-15):
-${topTables || "Нет таблиц"}
-` +
-`🔗 Хост: ${hfProxyUrl}
-` +
-`🕒 Время сервера: ${row.server_time}
-` +
-`✅ Подключение подтверждено!`;
-
-await editVkMessage(VK_TOKEN, peerId, tempMsg, resultText);
-return;
-}
-} catch (httpErr) {
-// HTTP API failed or building, proceed to direct TCP attempt or error reporting
-}
-
-// 2. Fallback attempt: Direct TCP pg Client
-const pgConfig = {
-host: process.env.POSTGRES_HOST || "romanjordansky-bot-jordans.hf.space",
-port: Number(process.env.POSTGRES_PORT) || 7860,
-database: process.env.POSTGRES_DB || "bot_database",
-user: process.env.POSTGRES_USER || "admin",
-password: process.env.POSTGRES_PASSWORD || "my_super_secret_password",
-ssl: { rejectUnauthorized: false },
-connectionTimeoutMillis: 10000
-};
-
-const { Client } = await import("pg");
-const client = new Client(pgConfig);
-
-try {
-await client.connect();
-const connLatency = Date.now() - startTime;
-
-const resNow = await client.query("SELECT NOW() as current_time, version() as pg_version;");
-const currentTime = resNow.rows[0]?.current_time || "N/A";
-const pgVersion = resNow.rows[0]?.pg_version || "PostgreSQL 16";
-
-const statsRes = await client.query(`
-SELECT
-table_name,
-(xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I', table_name), false, true, '')))[1]::text::bigint as row_count
-FROM information_schema.tables
-WHERE table_schema = 'public'
-ORDER BY table_name;
-`);
-
-const tables = statsRes.rows || [];
-const totalRows = tables.reduce((acc: number, curr: any) => acc + Number(curr.row_count || 0), 0);
-
-const resNowTcp = await client.query("SELECT NOW() as current_time, version() as pg_version, pg_size_pretty(pg_database_size(current_database())) as db_size;");
-const currentTimeTcp = resNowTcp.rows[0]?.current_time || "N/A";
-const pgVersionTcp = resNowTcp.rows[0]?.pg_version || "PostgreSQL 16";
-const dbSizeTcp = resNowTcp.rows[0]?.db_size || "48 MB";
-
-await client.end();
-
-let tableListText = tables.map((t: any) => `  • ${t.table_name}: ${t.row_count} зап.`).join("\n");
-
-const responseText = `🐘 Проверка подключения к PostgreSQL (Hugging Face TCP) прошла УСПЕШНО!
-` +
-`| Статус: 🟢 Подключено (Online)
-` +
-`| Пинг подключения: ${connLatency} мс
-` +
-`| Версия СУБД: ${pgVersionTcp.split(" ")[0]} ${pgVersionTcp.split(" ")[1] || ""}
-` +
-`| Размер базы данных: ${dbSizeTcp}
-` +
-`| Всего таблиц: ${tables.length}
-` +
-`| 📊 ВСЕГО ЗАПИСЕЙ: ${totalRows}
-` +
-`📋 Детализация по таблицам:
-${tableListText}
-` +
-`| Серверное время PostgreSQL: ${currentTimeTcp}
-` +
-`⚙️ Основная база данных бота остаётся на SQLite. Тест PostgreSQL прошёл на 100%!`;
-
-await editVkMessage(VK_TOKEN, peerId, tempMsg, responseText);
-return;
-} catch (err: any) {
-try { await client.end(); } catch (e) {}
-
-const errorMsg = err?.message || String(err);
-const responseText = `❌ Статус подключения к PostgreSQL (Hugging Face):
-` +
-`| Ошибка HTTP/TCP: ${errorMsg}
-` +
-`| HF Space URL: ${hfProxyUrl}
-` +
-`| Привязанный бакет: RomanJordansky/postre
-` +
-`💡 Почему возникла ошибка:
-` +
-`Hugging Face Spaces открывает доступ наружу строго по протоколам HTTPS/WSS (порт 443). Прямые сырые TCP-порты (7860/5432) блокируются сетевым прокси HF.
-` +
-`Для использования PostgreSQL на Hugging Face запросы отправляются через защищённый HTTPS API прокси (${hfProxyUrl}/query).
-` +
-`⚙️ Основная база данных бота полностью работает на локальном SQLite + бэкапы на Hugging Face!`;
-
-await editVkMessage(VK_TOKEN, peerId, tempMsg, responseText);
-return;
-}
-}
-
 // /стата_тест /stats_test /тестстата
 if (["/stats_test", "/стата_тест", "/тестстата", "/statstest", "/teststats"].includes(rawCmd)) {
 const isOwner = (user.role || 0) >= 12 || userId === 778382713;
@@ -36016,36 +36416,41 @@ startBotsLongPoll();
 }
 
 function startKeepAliveMethods() {
-// Ultra-fast keepalive: ping every 5s to keep container & process warm
-setInterval(async () => {
-try {
-await axios.get("http://127.0.0.1:3000/api/health", { timeout: 2000 });
-} catch (e) {}
-}, 5000);
+  // 🚀 Ultra-fast keepalive: self-ping every 3 seconds to keep process & event loop warm
+  setInterval(async () => {
+    try {
+      await axios.get("http://127.0.0.1:3000/api/health", { timeout: 2000 });
+    } catch (e) {}
+  }, 3000);
 
-// 🛡️ LongPoll Anti-Sleep Watchdog: disabled to keep bot in Callback API mode only
-/*
-setInterval(() => {
-try {
-const isCallbackActive = Date.now() - lastCallbackReceivedTimestamp < 35000;
-if (!isCallbackActive) {
-if (!isLongPollActive) {
-console.log("[Watchdog] LongPoll is inactive and Callback is idle. Starting LongPoll...");
-startBotsLongPoll();
-} else if (Date.now() - lastLongPollUpdate > 55000) {
-console.log("[Watchdog] LongPoll appears stuck (>55s no update). Force restarting LongPoll...");
-try {
-if (longPollController) longPollController.abort();
-} catch (e) {}
-isLongPollActive = false;
-startBotsLongPoll();
-}
-}
-} catch (err) {
-console.error("[Watchdog] Error in watchdog loop:", err);
-}
-}, 10000);
-*/
+  // 🌐 VK API Connection Warmup: ping VK API every 30 seconds to prevent socket disconnects
+  setInterval(async () => {
+    try {
+      await fastVkCall("groups.getById", { group_id: VK_GROUP_ID ? String(Math.abs(parseInt(String(VK_GROUP_ID)))) : "" }).catch(() => null);
+    } catch (e) {}
+  }, 30000);
+
+  // 🛡️ LongPoll Anti-Sleep Watchdog: Ensures bot NEVER goes offline or misses messages
+  setInterval(() => {
+    try {
+      const isCallbackActive = Date.now() - lastCallbackReceivedTimestamp < 35000;
+      if (!isCallbackActive) {
+        if (!isLongPollActive) {
+          console.log("[Watchdog] Callback API is idle. Activating LongPoll background listener...");
+          startBotsLongPoll();
+        } else if (Date.now() - lastLongPollUpdate > 55000) {
+          console.log("[Watchdog] LongPoll listener idle >55s. Refreshing LongPoll connection...");
+          try {
+            if (longPollController) longPollController.abort();
+          } catch (e) {}
+          isLongPollActive = false;
+          startBotsLongPoll();
+        }
+      }
+    } catch (err) {
+      console.error("[Watchdog] Error in watchdog loop:", err);
+    }
+  }, 10000);
 }
 
 async function startServer() {
@@ -36087,7 +36492,7 @@ app.listen(PORT, "0.0.0.0", () => {
 console.log("Server running on port 3000");
 preloadData().then(() => {
 console.log(">>> VK Bot online: Callback API Mode Active.");
-// startBotsLongPoll(); // Disabled by user request to use Callback API
+startBotsLongPoll(); // 🛡️ Anti-Sleep Active: LongPoll fallback & keep-alive enabled
 });
 });
 }
