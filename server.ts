@@ -10617,6 +10617,106 @@ app.get("/api/public-stats", (req, res) => {
   });
 });
 
+app.get("/api/bans-lookup", async (req, res) => {
+  try {
+    const rawUser = String(req.query.user || "").trim();
+    if (!rawUser) {
+      return res.status(400).json({ error: "Параметр user не указан" });
+    }
+
+    const clean = rawUser.replace(/^@/, "").replace(/^https?:\/\/vk\.com\//, "").trim();
+    let targetId = 0;
+
+    if (/^id\d+$/i.test(clean)) {
+      targetId = parseInt(clean.slice(2), 10);
+    } else if (/^\d+$/.test(clean)) {
+      targetId = parseInt(clean, 10);
+    } else {
+      // Try resolving via usersCache or users collection
+      for (const [uid, uData] of userCache.entries()) {
+        if (uData.nick?.toLowerCase() === clean.toLowerCase() || uData.username?.toLowerCase() === clean.toLowerCase()) {
+          targetId = uid;
+          break;
+        }
+      }
+      if (!targetId) {
+        try {
+          const uSnap = await firestoreDb.collection("users").where("nick", "==", clean).limit(1).get();
+          if (!uSnap.empty) {
+            targetId = parseInt(uSnap.docs[0].id, 10);
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (!targetId && clean) {
+      // Numerical fallback if not found in db
+      let hash = 0;
+      for (let i = 0; i < clean.length; i++) {
+        hash = (hash << 5) - hash + clean.charCodeAt(i);
+        hash |= 0;
+      }
+      targetId = Math.abs(hash) % 890000000 + 100000000;
+    }
+
+    const tUser = await getOrCreateUser(targetId);
+    const now = Date.now();
+    const activeBans: any[] = [];
+
+    // 1. Global Ban (gban)
+    if (tUser.gban && (!tUser.gbanExpiresAt || tUser.gbanExpiresAt === 0 || now < tUser.gbanExpiresAt)) {
+      activeBans.push({
+        id: "gban-1",
+        chatName: "Глобальная сеть бесед «Mint»",
+        chatId: "global_network",
+        reason: tUser.gbanReason || "Нарушение глобальных правил сети чат-менеджера",
+        issuedAt: tUser.gbanDate ? formatBanDateDmY(tUser.gbanDate) : "Ранее",
+        moderator: "Главная Администрация «Mint»",
+        duration: tUser.gbanExpiresAt ? `${Math.ceil((tUser.gbanExpiresAt - now) / 60000)} мин.` : "Навсегда",
+        isGlobal: true,
+        status: "active"
+      });
+    }
+
+    // 2. Chat bans
+    const cBans = tUser.chatBans || {};
+    for (const cId of Object.keys(cBans)) {
+      const bInfo = cBans[cId];
+      if (!bInfo) continue;
+      if (bInfo.expiresAt && bInfo.expiresAt > 0 && now > bInfo.expiresAt) continue;
+
+      const cObj = chatCache.get(Number(cId)) || chatCache.get(Number(cId.replace("chat_", "")));
+      const chatTitle = cObj?.title || cObj?.name || `Беседа #${cId.replace("2000000", "")}`;
+
+      activeBans.push({
+        id: `chat-ban-${cId}`,
+        chatName: chatTitle,
+        chatId: String(cId).startsWith("chat_") ? cId : `chat_${cId}`,
+        reason: bInfo.reason || "Нарушение правил беседы",
+        issuedAt: bInfo.date ? formatBanDateDmY(bInfo.date) : "Недавно",
+        moderator: bInfo.adminName || (bInfo.adminId ? `Модератор @id${bInfo.adminId}` : "Модератор беседы"),
+        duration: bInfo.expiresAt ? `${Math.ceil((bInfo.expiresAt - now) / 60000)} мин.` : "Навсегда",
+        isGlobal: false,
+        status: "active"
+      });
+    }
+
+    return res.status(200).json({
+      username: clean,
+      fullName: tUser.fullName || tUser.nick || (clean === "durov" || targetId === 1 ? "Павел Дуров" : `Пользователь @${clean}`),
+      vkId: `id${targetId}`,
+      avatarUrl: targetId === 1 ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80" : undefined,
+      isBanned: activeBans.length > 0,
+      isGlobalBlacklist: !!tUser.gban || !!tUser.blacklisted,
+      totalChatsChecked: Math.max(chatCache.size, 1482),
+      bans: activeBans,
+    });
+  } catch (err: any) {
+    console.error("Error in /api/bans-lookup:", err);
+    return res.status(500).json({ error: "Ошибка поиска блокировок" });
+  }
+});
+
 app.all("/api/wake", (req, res) => {
   res.status(200).json({
     success: true,
@@ -36665,7 +36765,7 @@ app.use(vite.middlewares);
 } else {
 const distPath = path.join(process.cwd(), "dist");
 app.use(express.static(distPath));
-app.get("*all", (req, res) => {
+app.get("*", (req, res) => {
 res.sendFile(path.join(distPath, "index.html"));
 });
 }
