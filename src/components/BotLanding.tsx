@@ -21,6 +21,19 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
     setCurrentView(initialView);
   }, [initialView]);
 
+  useEffect(() => {
+    const titles: Record<string, string> = {
+      landing: 'Главная | «Mint» - чат-менеджер',
+      commands: 'Команды | «Mint» - чат-менеджер',
+      rules: 'Регламент и правила | «Mint» - чат-менеджер',
+      privacy: 'Конфиденциальность | «Mint» - чат-менеджер',
+      userPanel: 'Панель управления | «Mint» - чат-менеджер',
+    };
+    if (typeof document !== 'undefined') {
+      document.title = titles[currentView] || 'Главная | «Mint» - чат-менеджер';
+    }
+  }, [currentView]);
+
   const changeView = (view: 'landing' | 'commands' | 'rules' | 'privacy' | 'userPanel') => {
     setCurrentView(view);
     if (onNavigate) {
@@ -43,49 +56,49 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
   };
 
   return (
-    <div className="min-h-screen bg-black text-neutral-100 font-sans selection:bg-emerald-500 selection:text-black flex flex-col">
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-50 bg-black/90 backdrop-blur-xl border-b border-neutral-800">
+    <div className="min-h-screen bg-transparent text-neutral-100 font-sans selection:bg-violet-600 selection:text-white flex flex-col relative">
+      {/* Top Navigation Bar with Glassmorphic Blur */}
+      <header className="sticky top-0 z-50 bg-black/60 backdrop-blur-2xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           {/* Zone 1: Wordmark Logo */}
           <button
             onClick={() => changeView('landing')}
-            className="flex items-center gap-2.5 hover:opacity-90 transition-opacity text-left"
+            className="flex items-center gap-3 hover:opacity-90 transition-opacity text-left"
           >
-            <div className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/25">
-              <Bot className="w-5 h-5 text-black" />
+            <div className="w-10 h-10 bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-600/30 border border-violet-400/30">
+              <Bot className="w-5 h-5 text-white" />
             </div>
             <div>
               <span className="text-xl font-black tracking-tight text-white uppercase block leading-none">
-                Mint <span className="text-emerald-400">Bot</span>
+                Mint <span className="text-violet-400">Bot</span>
               </span>
               <span className="text-[10px] text-neutral-400 font-medium tracking-wider">Чат-менеджер VK</span>
             </div>
           </button>
 
           {/* Zone 2: Navigation Links */}
-          <nav className="hidden md:flex items-center gap-6 text-xs font-bold text-neutral-400">
+          <nav className="hidden md:flex items-center gap-7 text-xs font-bold text-neutral-400">
             <button
               onClick={() => changeView('landing')}
-              className={`hover:text-white transition-colors ${currentView === 'landing' ? 'text-emerald-400 font-extrabold' : ''}`}
+              className={`hover:text-white transition-colors ${currentView === 'landing' ? 'text-violet-400 font-extrabold shadow-sm' : ''}`}
             >
               Главная
             </button>
             <button
               onClick={() => changeView('commands')}
-              className={`hover:text-white transition-colors ${currentView === 'commands' ? 'text-emerald-400 font-extrabold' : ''}`}
+              className={`hover:text-white transition-colors ${currentView === 'commands' ? 'text-violet-400 font-extrabold shadow-sm' : ''}`}
             >
               Команды
             </button>
             <button
               onClick={() => changeView('rules')}
-              className={`hover:text-white transition-colors ${currentView === 'rules' ? 'text-emerald-400 font-extrabold' : ''}`}
+              className={`hover:text-white transition-colors ${currentView === 'rules' ? 'text-violet-400 font-extrabold shadow-sm' : ''}`}
             >
               Регламент и правила
             </button>
             <button
               onClick={() => changeView('privacy')}
-              className={`hover:text-white transition-colors ${currentView === 'privacy' ? 'text-emerald-400 font-extrabold' : ''}`}
+              className={`hover:text-white transition-colors ${currentView === 'privacy' ? 'text-violet-400 font-extrabold shadow-sm' : ''}`}
             >
               Конфиденциальность
             </button>
@@ -93,30 +106,30 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
               href="https://vk.ru/app6441755_-239281784"
               target="_blank"
               rel="noreferrer"
-              className="hover:text-white transition-colors flex items-center gap-1 text-emerald-400"
+              className="hover:text-violet-300 transition-colors flex items-center gap-1.5 text-violet-400 font-bold"
             >
               <span>Подключить бота</span>
-              <ExternalLink className="w-3 h-3" />
+              <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </nav>
 
           {/* Zone 3: Control Panel Entry (Top Right Corner) */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
             <button
               onClick={() => changeView('userPanel')}
-              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center gap-2"
+              className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white text-xs font-black rounded-xl shadow-lg shadow-violet-600/30 border border-violet-400/20 active:scale-95 transition-all flex items-center gap-2"
             >
-              <MessageSquare className="w-4 h-4 text-black" />
+              <MessageSquare className="w-4 h-4 text-white" />
               <span>Панель управления</span>
-              <ChevronRight className="w-3.5 h-3.5" />
+              <ChevronRight className="w-3.5 h-3.5 opacity-80" />
             </button>
 
             <button
               onClick={onOpenAdminPanel}
               title="Панель администратора"
-              className="p-2 sm:px-3 sm:py-2 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-400 hover:text-neutral-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
+              className="p-2 sm:px-3 sm:py-2 bg-neutral-900/80 hover:bg-neutral-800 border border-white/5 hover:border-violet-500/30 text-neutral-400 hover:text-neutral-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
             >
-              <Lock className="w-3.5 h-3.5 text-emerald-400" />
+              <Lock className="w-3.5 h-3.5 text-violet-400" />
               <span className="hidden sm:inline">Админ-панель</span>
             </button>
           </div>
@@ -131,8 +144,8 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
             {/* Hero Section */}
             <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center pt-2">
               <div className="lg:col-span-6 space-y-6">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-400 text-xs font-bold">
-                  <Sparkles className="w-4 h-4" />
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-violet-500/10 border border-violet-500/30 rounded-full text-violet-300 text-xs font-bold backdrop-blur-md shadow-sm shadow-violet-500/20">
+                  <Sparkles className="w-4 h-4 text-violet-400 animate-pulse" />
                   <span>Официальный чат-менеджер ВКонтакте</span>
                 </div>
 
@@ -141,11 +154,11 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
                   Чат-менеджер «Mint» для ваших бесед ВКонтакте!
                 </h1>
 
-                <p className="text-emerald-400 text-lg sm:text-xl font-bold tracking-tight">
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-purple-300 to-indigo-300 text-lg sm:text-xl font-bold tracking-tight">
                   Игровая система, система модерации, надёжный!
                 </p>
 
-                <p className="text-neutral-400 text-sm leading-relaxed max-w-xl font-normal">
+                <p className="text-neutral-300 text-sm leading-relaxed max-w-xl font-normal">
                   Молниеносный отклик, умный фильтр спама и мата, масштабные клановые войны, экономика и дуэли в один клик. Работает непрерывно 24/7.
                 </p>
 
@@ -155,7 +168,7 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
                     href="https://vk.ru/app6441755_-239281784"
                     target="_blank"
                     rel="noreferrer"
-                    className="px-7 py-4 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-black font-black text-sm rounded-xl shadow-xl shadow-emerald-500/25 transition-all flex items-center gap-2 group"
+                    className="px-7 py-4 bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:to-purple-500 active:scale-95 text-white font-black text-sm rounded-xl shadow-xl shadow-violet-600/35 border border-violet-400/30 hover:scale-[1.02] transition-all flex items-center gap-2.5 group"
                   >
                     <span>Добавить в беседу</span>
                     <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
@@ -163,10 +176,10 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
 
                   <button
                     onClick={() => changeView('userPanel')}
-                    className="px-6 py-4 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2"
+                    className="px-6 py-4 bg-neutral-900/80 hover:bg-neutral-800/90 border border-white/10 hover:border-violet-500/40 text-neutral-200 hover:text-white font-bold text-sm rounded-xl backdrop-blur-md transition-all flex items-center gap-2"
                   >
                     <span>Панель управления</span>
-                    <ChevronRight className="w-4 h-4 text-neutral-400" />
+                    <ChevronRight className="w-4 h-4 text-violet-400" />
                   </button>
                 </div>
               </div>
@@ -177,8 +190,8 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
               </div>
             </section>
 
-            {/* Public Real Stats Ticker */}
-            <section className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 shadow-xl grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+            {/* Public Real Stats Ticker with Glassmorphism */}
+            <section className="bg-neutral-950/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
               <div>
                 <div className="text-2xl sm:text-3xl font-black text-white font-mono">1,420+</div>
                 <div className="text-xs font-bold text-neutral-400 mt-1">Подключенных бесед</div>
@@ -192,12 +205,12 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
                 <div className="text-xs font-bold text-neutral-400 mt-1">Обработано команд</div>
               </div>
               <div>
-                <div className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono">~3.2 мс</div>
+                <div className="text-2xl sm:text-3xl font-black text-violet-400 font-mono">~3.2 мс</div>
                 <div className="text-xs font-bold text-neutral-400 mt-1">Скорость отклика</div>
               </div>
             </section>
 
-            {/* Features Grid */}
+            {/* Features Grid with Translucent Glass */}
             <section className="space-y-8">
               <div className="text-center max-w-2xl mx-auto space-y-2">
                 <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
@@ -245,12 +258,12 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
                   return (
                     <div
                       key={f.title}
-                      className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 hover:border-emerald-500/40 transition-all space-y-3"
+                      className="bg-neutral-950/60 backdrop-blur-xl border border-white/5 hover:border-violet-500/40 hover:shadow-2xl hover:shadow-violet-500/10 rounded-2xl p-6 transition-all space-y-3 group"
                     >
-                      <div className="w-10 h-10 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center">
-                        <Icon className="w-5 h-5 text-emerald-400" />
+                      <div className="w-11 h-11 bg-violet-500/10 border border-violet-500/30 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-sm shadow-violet-500/20">
+                        <Icon className="w-5 h-5 text-violet-400" />
                       </div>
-                      <h3 className="text-base font-bold text-white">{f.title}</h3>
+                      <h3 className="text-base font-bold text-white group-hover:text-violet-200 transition-colors">{f.title}</h3>
                       <p className="text-xs text-neutral-400 leading-relaxed font-normal">{f.desc}</p>
                     </div>
                   );
@@ -259,7 +272,7 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
             </section>
 
             {/* Commands Directory Preview */}
-            <section className="bg-neutral-950 border border-neutral-800 rounded-2xl p-8 space-y-6">
+            <section className="bg-neutral-950/60 backdrop-blur-xl border border-white/10 rounded-2xl p-8 space-y-6 shadow-2xl">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-extrabold text-white">Список команд чат-менеджера</h2>
@@ -269,7 +282,7 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
                 </div>
                 <button
                   onClick={() => changeView('commands')}
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs rounded-xl transition-all"
+                  className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-violet-600/30 border border-violet-400/20 transition-all"
                 >
                   Открыть всю документацию
                 </button>
@@ -279,10 +292,10 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
             </section>
 
             {/* Quick Rules Preview Banner */}
-            <section className="bg-neutral-950 border border-neutral-800 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <section className="bg-neutral-950/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                  <BookOpen className="w-5 h-5 text-emerald-400" />
+                <div className="w-11 h-11 rounded-xl bg-violet-500/10 border border-violet-500/30 flex items-center justify-center shrink-0 shadow-sm shadow-violet-500/20">
+                  <BookOpen className="w-5 h-5 text-violet-400" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white">Правила использования и Регламент</h3>
@@ -294,13 +307,13 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => changeView('rules')}
-                  className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white text-xs font-bold rounded-xl transition-colors"
+                  className="px-4 py-2 bg-neutral-900/80 hover:bg-neutral-800 border border-white/10 hover:border-violet-500/40 text-white text-xs font-bold rounded-xl transition-all"
                 >
                   Читать правила
                 </button>
                 <button
                   onClick={() => changeView('privacy')}
-                  className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 text-xs font-bold rounded-xl transition-colors"
+                  className="px-4 py-2 bg-neutral-900/80 hover:bg-neutral-800 border border-white/10 hover:border-violet-500/40 text-neutral-300 text-xs font-bold rounded-xl transition-all"
                 >
                   Конфиденциальность
                 </button>
@@ -312,14 +325,14 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
         {/* VIEW 2: COMMANDS */}
         {currentView === 'commands' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between pb-4 border-b border-neutral-800">
+            <div className="flex items-center justify-between pb-4 border-b border-white/5">
               <div>
                 <h1 className="text-2xl font-extrabold text-white">Интерактивная База Команд</h1>
                 <p className="text-xs text-neutral-400 mt-1">Полный список доступных команд Mint Bot с описанием и синтаксисом</p>
               </div>
               <button
                 onClick={() => changeView('landing')}
-                className="px-3.5 py-1.5 bg-neutral-900 border border-neutral-800 text-neutral-300 font-semibold text-xs rounded-xl hover:bg-neutral-800 transition-colors"
+                className="px-3.5 py-1.5 bg-neutral-900/80 border border-white/10 text-neutral-300 font-semibold text-xs rounded-xl hover:bg-neutral-800 hover:border-violet-500/40 transition-all"
               >
                 Вернуться на главную
               </button>
@@ -355,29 +368,31 @@ export default function BotLanding({ onOpenAdminPanel, initialView = 'landing', 
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-neutral-800/80 bg-black py-8 text-xs text-neutral-500 mt-auto">
+      <footer className="border-t border-white/5 bg-black/80 backdrop-blur-xl py-8 text-xs text-neutral-500 mt-auto">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 font-bold text-neutral-400">
-            <Bot className="w-4 h-4 text-emerald-400" />
+          <div className="flex items-center gap-2.5 font-bold text-neutral-400">
+            <div className="w-6 h-6 rounded-lg bg-violet-500/10 border border-violet-500/30 flex items-center justify-center">
+              <Bot className="w-3.5 h-3.5 text-violet-400" />
+            </div>
             <span>Чат-менеджер «Mint» © 2026. Для бесед ВКонтакте.</span>
           </div>
           <div className="flex flex-wrap items-center gap-6">
-            <button onClick={() => changeView('landing')} className="hover:text-neutral-300 transition-colors">
+            <button onClick={() => changeView('landing')} className="hover:text-violet-300 transition-colors">
               Главная
             </button>
-            <button onClick={() => changeView('commands')} className="hover:text-neutral-300 transition-colors">
+            <button onClick={() => changeView('commands')} className="hover:text-violet-300 transition-colors">
               Команды
             </button>
-            <button onClick={() => changeView('rules')} className="hover:text-neutral-300 transition-colors">
+            <button onClick={() => changeView('rules')} className="hover:text-violet-300 transition-colors">
               Регламент и правила
             </button>
-            <button onClick={() => changeView('privacy')} className="hover:text-neutral-300 transition-colors">
+            <button onClick={() => changeView('privacy')} className="hover:text-violet-300 transition-colors">
               Конфиденциальность
             </button>
-            <button onClick={() => changeView('userPanel')} className="hover:text-neutral-300 transition-colors">
+            <button onClick={() => changeView('userPanel')} className="hover:text-violet-300 transition-colors">
               Панель управления
             </button>
-            <button onClick={onOpenAdminPanel} className="hover:text-emerald-400 transition-colors">
+            <button onClick={onOpenAdminPanel} className="hover:text-violet-400 transition-colors">
               Админ-панель
             </button>
           </div>

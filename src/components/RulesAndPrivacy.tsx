@@ -60,7 +60,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack }: RulesA
           <div>
             <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
               <span>Документация и регламент</span>
-              <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
+              <span className="text-xs font-mono font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-2.5 py-0.5 rounded-full">
                 Редакция 2026
               </span>
             </h1>
@@ -76,7 +76,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack }: RulesA
             onClick={() => setActiveTab('rules')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
               activeTab === 'rules'
-                ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/20'
+                ? 'bg-violet-500 text-black shadow-md shadow-violet-500/20'
                 : 'text-neutral-400 hover:text-white'
             }`}
           >
@@ -87,7 +87,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack }: RulesA
             onClick={() => setActiveTab('privacy')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
               activeTab === 'privacy'
-                ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/20'
+                ? 'bg-violet-500 text-black shadow-md shadow-violet-500/20'
                 : 'text-neutral-400 hover:text-white'
             }`}
           >
@@ -109,7 +109,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack }: RulesA
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Поиск по статьям и пунктам правил..."
-                className="w-full bg-neutral-950 border border-neutral-800 focus:border-emerald-500 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder:text-neutral-500 outline-none transition-all"
+                className="w-full bg-neutral-950 border border-neutral-800 focus:border-violet-500 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder:text-neutral-500 outline-none transition-all"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -139,7 +139,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack }: RulesA
                   setExpandedSections((prev) => ({ ...prev, [sec.id]: true }));
                   document.getElementById(sec.id)?.scrollIntoView({ behavior: 'smooth' });
                 }}
-                className="p-2.5 bg-neutral-950 hover:bg-neutral-900 border border-neutral-800/80 hover:border-emerald-500/40 rounded-xl text-[11px] font-semibold text-neutral-300 text-center transition-all truncate"
+                className="p-2.5 bg-neutral-950 hover:bg-neutral-900 border border-neutral-800/80 hover:border-violet-500/40 rounded-xl text-[11px] font-semibold text-neutral-300 text-center transition-all truncate"
               >
                 {sec.title}
               </a>
@@ -161,7 +161,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack }: RulesA
                     className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-neutral-900/60 transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono text-xs font-bold flex items-center justify-center">
+                      <span className="w-8 h-8 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 font-mono text-xs font-bold flex items-center justify-center">
                         {sec.number}
                       </span>
                       <h2 className="text-base font-bold text-white tracking-tight">{sec.title}</h2>
@@ -178,7 +178,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack }: RulesA
                       {sec.subsections.map((sub, sIdx) => (
                         <div key={sIdx} className="space-y-3">
                           {sub.subtitle && (
-                            <h3 className="text-xs font-extrabold uppercase tracking-wider text-emerald-400/90 pl-1">
+                            <h3 className="text-xs font-extrabold uppercase tracking-wider text-violet-400/90 pl-1">
                               {sub.subtitle}
                             </h3>
                           )}
@@ -188,7 +188,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack }: RulesA
                                 key={iIdx}
                                 className={`pl-3 border-l-2 py-0.5 ${
                                   item.startsWith('•')
-                                    ? 'border-emerald-500/40 text-neutral-300 pl-4'
+                                    ? 'border-violet-500/40 text-neutral-300 pl-4'
                                     : 'border-neutral-800 text-neutral-200'
                                 }`}
                               >
@@ -226,7 +226,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack }: RulesA
           <div className="space-y-6 text-xs text-neutral-300 leading-relaxed">
             <div className="space-y-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <span className="w-5 h-5 rounded-md bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono text-[11px]">
+                <span className="w-5 h-5 rounded-md bg-violet-500/10 text-violet-400 flex items-center justify-center font-mono text-[11px]">
                   1
                 </span>
                 <span>Какие данные собираются</span>
@@ -238,7 +238,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack }: RulesA
 
             <div className="space-y-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <span className="w-5 h-5 rounded-md bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono text-[11px]">
+                <span className="w-5 h-5 rounded-md bg-violet-500/10 text-violet-400 flex items-center justify-center font-mono text-[11px]">
                   2
                 </span>
                 <span>Цели обработки информации</span>
@@ -253,7 +253,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack }: RulesA
 
             <div className="space-y-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <span className="w-5 h-5 rounded-md bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono text-[11px]">
+                <span className="w-5 h-5 rounded-md bg-violet-500/10 text-violet-400 flex items-center justify-center font-mono text-[11px]">
                   3
                 </span>
                 <span>Криптографическая защита и хранение</span>
@@ -265,7 +265,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack }: RulesA
 
             <div className="space-y-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <span className="w-5 h-5 rounded-md bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono text-[11px]">
+                <span className="w-5 h-5 rounded-md bg-violet-500/10 text-violet-400 flex items-center justify-center font-mono text-[11px]">
                   4
                 </span>
                 <span>Непередача данных третьим лицам</span>
@@ -277,7 +277,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack }: RulesA
 
             <div className="space-y-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <span className="w-5 h-5 rounded-md bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono text-[11px]">
+                <span className="w-5 h-5 rounded-md bg-violet-500/10 text-violet-400 flex items-center justify-center font-mono text-[11px]">
                   5
                 </span>
                 <span>Удаление и исправление данных</span>

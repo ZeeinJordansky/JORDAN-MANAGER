@@ -197,7 +197,7 @@ export default function UserChatPanel({ onLogout }: { onLogout: () => void }) {
           <div>
             <h1 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
               <span>Панель управления беседами</span>
-              <span className="text-xs font-mono font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-mono font-semibold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 rounded-full">
                 Обычный доступ
               </span>
             </h1>
@@ -378,7 +378,7 @@ export default function UserChatPanel({ onLogout }: { onLogout: () => void }) {
                 {loading ? 'Сохранение...' : 'Сохранить настройки'}
               </button>
               {savedStatus && (
-                <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                <span className="text-xs font-bold text-violet-400 flex items-center gap-1">
                   <CheckCircle2 className="w-4 h-4" /> Настройки успешно обновлены!
                 </span>
               )}
@@ -438,14 +438,14 @@ export default function UserChatPanel({ onLogout }: { onLogout: () => void }) {
                 </button>
                 <button
                   onClick={() => handleExecuteModAction('unban')}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-colors"
+                  className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs rounded-xl transition-colors"
                 >
                   ✅ Разбанить
                 </button>
               </div>
 
               {modSuccessMsg && (
-                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold text-xs rounded-xl flex items-center gap-2">
+                <div className="p-3 bg-violet-500/10 border border-violet-500/20 text-violet-400 font-semibold text-xs rounded-xl flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4" />
                   <span>{modSuccessMsg}</span>
                 </div>
@@ -492,7 +492,7 @@ export default function UserChatPanel({ onLogout }: { onLogout: () => void }) {
                           {m.role}
                         </span>
                       </td>
-                      <td className="p-3.5 font-mono text-emerald-400 font-semibold">
+                      <td className="p-3.5 font-mono text-violet-400 font-semibold">
                         {m.coins.toLocaleString()} 🪙
                       </td>
                       <td className="p-3.5">
@@ -535,7 +535,7 @@ export default function UserChatPanel({ onLogout }: { onLogout: () => void }) {
                 <div key={g.name} className="p-4 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-xs text-white">{g.name}</span>
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-bold text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded-full">
                       Включено
                     </span>
                   </div>
@@ -624,7 +624,7 @@ export default function UserChatPanel({ onLogout }: { onLogout: () => void }) {
               </button>
 
               {announceSent && (
-                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold text-xs rounded-xl flex items-center gap-2">
+                <div className="p-3 bg-violet-500/10 border border-violet-500/20 text-violet-400 font-semibold text-xs rounded-xl flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4" />
                   <span>Объявление успешно доставлено в беседу!</span>
                 </div>
