@@ -94,9 +94,9 @@ export default function MainPage() {
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <span>Состояние базы данных</span>
-                  <span className="text-xs px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-mono">bot_database.db</span>
+                  <span className="text-xs px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-mono">База данных бота</span>
                 </h3>
-                <p className="text-xs text-slate-400">Мониторинг физического размера и режима журнала записи</p>
+                <p className="text-xs text-slate-400">Мониторинг физического размера и стабильности хранилища</p>
               </div>
             </div>
 
@@ -111,7 +111,7 @@ export default function MainPage() {
                 ) : (
                   <AlertTriangle className="w-4 h-4 text-amber-400" />
                 )}
-                <span>Режим WAL: {dbInfo.sqliteWalEnabled ? 'ВКЛЮЧЕН (Активен)' : 'ОТКЛЮЧЕН'}</span>
+                <span>Буфер синхронизации: {dbInfo.sqliteWalEnabled ? 'АКТИВЕН' : 'ОТКЛЮЧЕН'}</span>
               </div>
             </div>
           </div>
@@ -119,7 +119,7 @@ export default function MainPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800/60">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-slate-400">Основной файл (.db)</span>
+                <span className="text-xs text-slate-400">Локальное хранилище</span>
                 <HardDrive className="w-3.5 h-3.5 text-indigo-400" />
               </div>
               <p className="text-lg font-bold text-white">{dbInfo.sqliteSizeMb || 10} МБ</p>
