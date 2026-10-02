@@ -58,8 +58,8 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
         }
 
         VKID.Config.init({
-          app: 54762459,
-          redirectUrl: 'https://vk.com/vk.com',
+          app: 54801343,
+          redirectUrl: 'https://mint-8pp.pages.dev/',
           responseMode: VKID.ConfigResponseMode.Callback,
           source: VKID.ConfigSource.LOWCODE,
           scope: '',
