@@ -3,7 +3,7 @@ import BotLanding from './components/BotLanding';
 import PanelApp from './panel/PanelApp';
 import OrbBackground from './components/OrbBackground';
 
-type AppRoute = 'landing' | 'commands' | 'rules' | 'privacy' | 'userPanel' | 'adminPanel';
+type AppRoute = 'landing' | 'commands' | 'rules' | 'privacy' | 'adminPanel';
 
 export default function App() {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
@@ -13,7 +13,6 @@ export default function App() {
       if (path === '/commands') return 'commands';
       if (path === '/rules' || path === '/reglament') return 'rules';
       if (path === '/privacy') return 'privacy';
-      if (path === '/user-panel') return 'userPanel';
     }
     return 'landing';
   });
@@ -25,7 +24,6 @@ export default function App() {
       commands: 'Команды | «Mint» - чат-менеджер',
       rules: 'Регламент и правила | «Mint» - чат-менеджер',
       privacy: 'Конфиденциальность | «Mint» - чат-менеджер',
-      userPanel: 'Панель управления | «Mint» - чат-менеджер',
       adminPanel: 'Админ-панель | «Mint» - чат-менеджер',
     };
     const title = titles[currentRoute] || 'Главная | «Mint» - чат-менеджер';
@@ -53,8 +51,6 @@ export default function App() {
         setCurrentRoute('rules');
       } else if (path === '/privacy') {
         setCurrentRoute('privacy');
-      } else if (path === '/user-panel') {
-        setCurrentRoute('userPanel');
       } else {
         setCurrentRoute('landing');
       }
@@ -73,7 +69,6 @@ export default function App() {
     else if (lower === '/commands') setCurrentRoute('commands');
     else if (lower === '/rules' || lower === '/reglament') setCurrentRoute('rules');
     else if (lower === '/privacy') setCurrentRoute('privacy');
-    else if (lower === '/user-panel') setCurrentRoute('userPanel');
     else setCurrentRoute('landing');
   };
 
@@ -109,8 +104,7 @@ export default function App() {
       <OrbBackground />
       <div className="relative z-10">
         <BotLanding
-          onOpenAdminPanel={openAdminPanel}
-          initialView={currentRoute}
+          initialView={currentRoute === 'adminPanel' ? 'landing' : currentRoute}
           onNavigate={navigateTo}
         />
       </div>
