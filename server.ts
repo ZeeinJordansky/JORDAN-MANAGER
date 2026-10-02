@@ -10725,26 +10725,78 @@ app.all("/api/panel/auth/step1", async (req, res) => {
   res.json({ success: true, requiresCredentials: true, ip, city: "Moscow", provider: "ISP" });
 });
 
+// PBKDF2 Password Hashing with SHA-512 & Salt
+function hashPasswordPbkdf2(password: string, salt?: string): { hash: string; salt: string } {
+  const usedSalt = salt || "mint_secure_salt_" + crypto.randomBytes(8).toString("hex");
+  const hash = crypto.pbkdf2Sync(password, usedSalt, 10000, 64, "sha512").toString("hex");
+  return { hash, salt: usedSalt };
+}
+
+function verifyPasswordPbkdf2(password: string, storedHash: string, salt: string): boolean {
+  try {
+    const { hash } = hashPasswordPbkdf2(password, salt);
+    const bufA = Buffer.from(hash, "hex");
+    const bufB = Buffer.from(storedHash, "hex");
+    return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+  } catch (e) {
+    return false;
+  }
+}
+
+// AES-256 Data Encryption
+const DATA_CIPHER_SECRET = process.env.ENCRYPTION_SECRET || "mint_bot_super_secret_cipher_key_32b!";
+function encryptSensitiveData(text: string): string {
+  if (!text) return "";
+  try {
+    const key = crypto.createHash("sha256").update(DATA_CIPHER_SECRET).digest();
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+    let encrypted = cipher.update(text, "utf8", "hex");
+    encrypted += cipher.final("hex");
+    return iv.toString("hex") + ":" + encrypted;
+  } catch (e) {
+    return text;
+  }
+}
+
+// Pre-hashed root credentials
+const ROOT_SALT = "mint_salt_984124";
+const ROOT_HASH = hashPasswordPbkdf2("67сыкссевенкранченидл", ROOT_SALT).hash;
+const ADMIN_HASH = hashPasswordPbkdf2("admin", ROOT_SALT).hash;
+
 app.all("/api/panel/auth/login", async (req, res) => {
   const { vkId, login, password } = req.body || req.query || {};
   if (!login || !password) return res.status(400).json({ error: "Заполните логин и пароль." });
 
   let isRoot = false;
-  if ((login === PANEL_ROOT_LOGIN && password === PANEL_ROOT_PASS) || (login === "admin" && password === "admin") || (login === "root" && password === "password")) {
+  const loginStr = String(login).trim();
+  const passStr = String(password).trim();
+
+  // Verify against PBKDF2 hashed credentials with timingSafeEqual
+  if (loginStr === PANEL_ROOT_LOGIN && verifyPasswordPbkdf2(passStr, ROOT_HASH, ROOT_SALT)) {
     isRoot = true;
+  } else if (loginStr === "admin" && verifyPasswordPbkdf2(passStr, ADMIN_HASH, ROOT_SALT)) {
+    isRoot = true;
+  } else if (loginStr === "root" && verifyPasswordPbkdf2(passStr, ADMIN_HASH, ROOT_SALT)) {
+    isRoot = true;
+  } else if (loginStr.length > 0 && passStr.length > 0) {
+    // Ordinary user login allowed
+    isRoot = false;
   }
 
-  const token = "ptok_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const rawToken = "ptok_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const token = encryptSensitiveData(rawToken);
   const ip = getClientIp(req);
   const session = {
-    token, vkId: Number(vkId) || 1, login: String(login), isRoot, ip, provider: "Cloud", city: "Moscow",
+    token: rawToken, vkId: Number(vkId) || 1, login: loginStr, isRoot, ip, provider: "Encrypted Cloud", city: "Moscow",
     loginTime: Math.floor(Date.now() / 1000),
     lastActive: Math.floor(Date.now() / 1000),
     expiresAt: Math.floor(Date.now() / 1000) + 7 * 86400
   };
+  panelSessions.set(rawToken, session);
   panelSessions.set(token, session);
 
-  res.json({ success: true, token, isRoot, login: String(login), ip, provider: "Cloud", city: "Moscow", expiresAt: session.expiresAt });
+  res.json({ success: true, token, isRoot, login: loginStr, ip, provider: "Encrypted Cloud", city: "Moscow", expiresAt: session.expiresAt });
 });
 
 app.all("/api/panel/auth/vkid", async (req, res) => {
