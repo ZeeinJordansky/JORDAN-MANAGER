@@ -10602,11 +10602,18 @@ app.get("/ping", (req, res) => {
 app.get("/api/bot-status", (req, res) => {
   res.status(200).json({
     status: "online",
-    bot: "JORDAN MANAGER",
+    bot: "«Mint»",
     mode: "Callback API",
+    connectedChats: chatCache.size,
     uptimeSeconds: Math.floor(process.uptime()),
     memoryRssMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     timestamp: new Date().toISOString()
+  });
+});
+app.get("/api/public-stats", (req, res) => {
+  res.status(200).json({
+    status: "online",
+    connectedChats: chatCache.size,
   });
 });
 

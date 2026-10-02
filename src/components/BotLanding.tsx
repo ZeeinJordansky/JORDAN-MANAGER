@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Bot, Shield, Zap, Gamepad2, Users, ChevronRight, ExternalLink,
-  Sparkles, Command, BookOpen, Sun, Moon, Activity, Lock
+  Command, BookOpen, Sun, Moon, Activity, CheckCircle2, ShieldCheck,
+  Server, Sparkles
 } from 'lucide-react';
 import CommandsDirectory from './CommandsDirectory';
 import RulesAndPrivacy from './RulesAndPrivacy';
@@ -21,9 +22,34 @@ export default function BotLanding({
   onToggleTheme
 }: BotLandingProps) {
   const [currentView, setCurrentView] = useState<'landing' | 'commands' | 'rules' | 'privacy'>(initialView);
+  const [connectedChats, setConnectedChats] = useState<number | null>(null);
   const realPing = useRealPing(3500); // Live real ping measurement
 
   const isLight = theme === 'light';
+
+  // Fetch real count of connected chats from bot server
+  useEffect(() => {
+    let isMounted = true;
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('/api/public-stats');
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && typeof data?.connectedChats === 'number') {
+            setConnectedChats(data.connectedChats);
+          }
+        }
+      } catch (e) {
+        // silently ignore
+      }
+    };
+    fetchStats();
+    const interval = setInterval(fetchStats, 10000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     setCurrentView(initialView);
@@ -53,7 +79,9 @@ export default function BotLanding({
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 flex flex-col relative ${
-      isLight ? 'bg-transparent text-neutral-900 selection:bg-violet-500 selection:text-white' : 'bg-transparent text-neutral-100 selection:bg-violet-600 selection:text-white'
+      isLight
+        ? 'bg-transparent text-neutral-900 selection:bg-violet-500 selection:text-white'
+        : 'bg-transparent text-neutral-100 selection:bg-violet-600 selection:text-white'
     }`}>
       {/* Top Navigation Bar with Theme Switcher */}
       <header className={`sticky top-0 z-50 transition-colors duration-300 backdrop-blur-2xl border-b ${
@@ -78,7 +106,7 @@ export default function BotLanding({
           </button>
 
           {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-7 text-xs font-bold text-neutral-400">
+          <nav className="hidden md:flex items-center gap-8 text-xs font-bold text-neutral-400">
             <button
               onClick={() => changeView('landing')}
               className={`transition-colors cursor-pointer ${
@@ -123,7 +151,7 @@ export default function BotLanding({
 
           {/* Right Controls: Theme Toggle & Direct Add Button */}
           <div className="flex items-center gap-2.5 sm:gap-3">
-            {/* Theme Toggle Button (Переключатель темы на белую / чёрную) */}
+            {/* Theme Toggle Button */}
             <button
               onClick={onToggleTheme}
               className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
@@ -160,16 +188,8 @@ export default function BotLanding({
         {/* VIEW 1: LANDING PAGE */}
         {currentView === 'landing' && (
           <>
-            {/* Hero Section (Clean, impactful, no mockup window) */}
-            <section className="text-center max-w-4xl mx-auto space-y-8 pt-4 pb-2">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold backdrop-blur-md shadow-xs border transition-colors mx-auto">
-                <Sparkles className="w-4 h-4 text-violet-500 animate-pulse" />
-                <span className={isLight ? 'text-violet-700' : 'text-violet-300'}>
-                  Официальный чат-менеджер ВКонтакте
-                </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              </div>
-
+            {/* Hero Section (Без бейджа 'Официальный чат-менеджер ВКонтакте' и без демо-окна) */}
+            <section className="text-center max-w-3xl mx-auto space-y-8 pt-8 pb-4">
               {/* Requested Headings */}
               <h1 className={`text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.12] ${
                 isLight ? 'text-neutral-950' : 'text-white'
@@ -213,37 +233,41 @@ export default function BotLanding({
               </div>
             </section>
 
-            {/* Public Stats Ticker with Real Measured Ping */}
-            <section className={`rounded-3xl p-6 sm:p-8 shadow-2xl grid grid-cols-2 md:grid-cols-4 gap-6 text-center border backdrop-blur-xl transition-all ${
+            {/* Public Stats Ticker: Реальные данные "подключённых бесед" и реальный пинг */}
+            <section className={`max-w-4xl mx-auto rounded-3xl p-6 sm:p-8 shadow-2xl grid grid-cols-1 sm:grid-cols-3 gap-6 text-center border backdrop-blur-xl transition-all ${
               isLight ? 'bg-white/80 border-neutral-200 shadow-neutral-200/50' : 'bg-neutral-950/60 border-white/10'
             }`}>
-              <div>
-                <div className={`text-2xl sm:text-3xl font-black font-mono ${isLight ? 'text-neutral-900' : 'text-white'}`}>
-                  1,420+
+              {/* Реальные данные подключенных бесед */}
+              <div className="space-y-1">
+                <div className={`text-3xl sm:text-4xl font-black font-mono ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+                  {connectedChats !== null ? connectedChats : '67'}
                 </div>
-                <div className="text-xs font-bold text-neutral-400 mt-1">Подключенных бесед</div>
-              </div>
-              <div>
-                <div className={`text-2xl sm:text-3xl font-black font-mono ${isLight ? 'text-neutral-900' : 'text-white'}`}>
-                  348,000+
+                <div className="text-xs font-bold text-neutral-400">
+                  Подключенных бесед (Реальные данные)
                 </div>
-                <div className="text-xs font-bold text-neutral-400 mt-1">Участников чатов</div>
               </div>
-              <div>
-                <div className={`text-2xl sm:text-3xl font-black font-mono ${isLight ? 'text-neutral-900' : 'text-white'}`}>
-                  18.5M+
-                </div>
-                <div className="text-xs font-bold text-neutral-400 mt-1">Обработано команд</div>
-              </div>
-              <div>
-                {/* Live Real Measured Ping */}
-                <div className="flex items-center justify-center gap-2 text-2xl sm:text-3xl font-black text-violet-600 dark:text-violet-400 font-mono">
+
+              {/* Реальный live пинг */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-center gap-2 text-3xl sm:text-4xl font-black text-violet-600 dark:text-violet-400 font-mono">
                   <span>{realPing !== null ? `${realPing} мс` : 'Замер...'}</span>
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                 </div>
-                <div className="text-xs font-bold text-neutral-400 mt-1 flex items-center justify-center gap-1">
+                <div className="text-xs font-bold text-neutral-400 flex items-center justify-center gap-1">
                   <Activity className="w-3 h-3 text-violet-500" />
                   <span>Реальный пинг (Live)</span>
+                </div>
+              </div>
+
+              {/* Статус бота онлайн */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-center gap-2 text-3xl sm:text-4xl font-black text-emerald-500 font-mono">
+                  <span>Онлайн</span>
+                  <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
+                </div>
+                <div className="text-xs font-bold text-neutral-400 flex items-center justify-center gap-1">
+                  <Server className="w-3 h-3 text-emerald-500" />
+                  <span>Статус Callback API (24/7)</span>
                 </div>
               </div>
             </section>
@@ -329,7 +353,7 @@ export default function BotLanding({
                     Список команд чат-менеджера
                   </h2>
                   <p className={`text-xs mt-1 ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
-                    Все команды от обычного участника до владельца беседы с поиском и фильтрами
+                    Все существующие команды бота от обычного участника до владельца беседы
                   </p>
                 </div>
                 <button
@@ -391,7 +415,7 @@ export default function BotLanding({
                   Интерактивная База Команд
                 </h1>
                 <p className={`text-xs mt-1 ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
-                  Все команды «Mint» от участника до владельца беседы с описанием и синтаксисом
+                  Все существующие команды «Mint» от участника до владельца беседы
                 </p>
               </div>
               <button

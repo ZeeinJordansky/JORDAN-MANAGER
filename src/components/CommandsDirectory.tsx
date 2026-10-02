@@ -5,92 +5,593 @@ export type PermissionLevel = 'Участник' | 'Модератор' | 'Ст.
 
 interface CommandItem {
   name: string;
-  category: 'moderation' | 'games' | 'clans' | 'economy' | 'settings' | 'owner';
+  aliases: string;
+  category: 'moderation' | 'games' | 'economy' | 'settings' | 'owner';
   categoryLabel: string;
   usage: string;
   description: string;
   permissionLevel: PermissionLevel;
 }
 
-const COMMANDS_DATA: CommandItem[] = [
+const REAL_BOT_COMMANDS: CommandItem[] = [
   // ================= 1. УЧАСТНИК =================
-  { name: '/профиль', category: 'economy', categoryLabel: 'Экономика', usage: '/профиль [@пользователь]', description: 'Посмотреть личный профиль, баланс монет, ранг, статус в беседе и клан.', permissionLevel: 'Участник' },
-  { name: '/баланс', category: 'economy', categoryLabel: 'Экономика', usage: '/баланс', description: 'Мгновенная проверка количества монет и драгоценностей в кошельке.', permissionLevel: 'Участник' },
-  { name: '/перевод', category: 'economy', categoryLabel: 'Экономика', usage: '/перевод [@пользователь] [сумма]', description: 'Передать монеты другому участнику беседы без комиссии.', permissionLevel: 'Участник' },
-  { name: '/бонус', category: 'economy', categoryLabel: 'Экономика', usage: '/бонус', description: 'Получить ежедневную денежную награду за активность.', permissionLevel: 'Участник' },
-  { name: '/топ', category: 'economy', categoryLabel: 'Экономика', usage: '/топ [монеты/ранг/активность]', description: 'Рейтинг богатейших участников и самых активных собеседников.', permissionLevel: 'Участник' },
-  { name: '/онлайн', category: 'settings', categoryLabel: 'Беседа', usage: '/онлайн', description: 'Список участников беседы, находящихся в сети прямо сейчас.', permissionLevel: 'Участник' },
-  { name: '/инфо', category: 'settings', categoryLabel: 'Беседа', usage: '/инфо', description: 'Подробная сводка о беседе: количество участников, ID и настройки.', permissionLevel: 'Участник' },
-  { name: '/пинг', category: 'settings', categoryLabel: 'Беседа', usage: '/пинг', description: 'Проверка реального отклика и скорости работы сервера чат-менеджера.', permissionLevel: 'Участник' },
-  { name: '/правила', category: 'settings', categoryLabel: 'Беседа', usage: '/правила', description: 'Просмотр официально установленных правил текущей беседы.', permissionLevel: 'Участник' },
-  { name: '/муты', category: 'moderation', categoryLabel: 'Модерация', usage: '/муты', description: 'Список действующих ограничений и замолкнувших участников.', permissionLevel: 'Участник' },
-  { name: '/помощь', category: 'settings', categoryLabel: 'Справка', usage: '/помощь', description: 'Краткая справка по основным разделам и синтаксису команд.', permissionLevel: 'Участник' },
+  {
+    name: '/профиль',
+    aliases: '/стата, /статистика, /profile, /stats',
+    category: 'economy',
+    categoryLabel: 'Экономика',
+    usage: '/профиль [@пользователь]',
+    description: 'Посмотреть личный профиль, баланс монет, ранг, статус в беседе и клан.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/баланс',
+    aliases: '/банк, /балик',
+    category: 'economy',
+    categoryLabel: 'Экономика',
+    usage: '/баланс',
+    description: 'Мгновенная проверка количества монет и сбережений на счёте.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/передать',
+    aliases: '/pay, /transfer, /перевод, /датьденег',
+    category: 'economy',
+    categoryLabel: 'Экономика',
+    usage: '/передать [@пользователь] [сумма]',
+    description: 'Перевести монеты другому участнику беседы без комиссии.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/бонус',
+    aliases: '/ежедневный, /ежедневный_бонус',
+    category: 'economy',
+    categoryLabel: 'Экономика',
+    usage: '/бонус',
+    description: 'Получить ежедневную денежную награду монет за активность.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/топ',
+    aliases: '/top',
+    category: 'economy',
+    categoryLabel: 'Экономика',
+    usage: '/топ [монеты / баланс]',
+    description: 'Рейтинг самых богатых и активных участников беседы.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/онлайн',
+    aliases: '/online, /онлайнлист, /olist',
+    category: 'settings',
+    categoryLabel: 'Беседа',
+    usage: '/онлайн',
+    description: 'Список участников беседы, находящихся в сети прямо сейчас.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/инфо',
+    aliases: '/info, /инфобот, /infobot',
+    category: 'settings',
+    categoryLabel: 'Беседа',
+    usage: '/инфо',
+    description: 'Информация о беседе, количестве участников, статусе и настройках.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/пинг',
+    aliases: '/ping',
+    category: 'settings',
+    categoryLabel: 'Беседа',
+    usage: '/пинг',
+    description: 'Проверка реального времени отклика бота в миллисекундах.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/правила',
+    aliases: '/rules',
+    category: 'settings',
+    categoryLabel: 'Беседа',
+    usage: '/правила',
+    description: 'Просмотр официально установленных правил текущей беседы.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/помощь',
+    aliases: '/help, /хелп, /команды, /меню',
+    category: 'settings',
+    categoryLabel: 'Справка',
+    usage: '/помощь',
+    description: 'Главное интерактивное меню помощи по всем командам чат-менеджера.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/титул',
+    aliases: '/title',
+    category: 'economy',
+    categoryLabel: 'Экономика',
+    usage: '/титул [название]',
+    description: 'Установить или изменить отображаемый титул в профиле.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/депозиты',
+    aliases: '/открытьдепозит',
+    category: 'economy',
+    categoryLabel: 'Экономика',
+    usage: '/депозиты [сумма] [срок]',
+    description: 'Открыть банковский депозит под процент для приумножения монет.',
+    permissionLevel: 'Участник',
+  },
 
-  // Игры & РП (Участник)
-  { name: '/дуэль', category: 'games', categoryLabel: 'Игры & РП', usage: '/дуэль [@пользователь] [ставка]', description: 'Вызвать участника на дуэль на монеты. Победитель определяется алгоритмом.', permissionLevel: 'Участник' },
-  { name: '/казино', category: 'games', categoryLabel: 'Игры & РП', usage: '/казино [сумма]', description: 'Испытать удачу в рулетке с шансом выигрыша x2 или x3.', permissionLevel: 'Участник' },
-  { name: '/рулетка', category: 'games', categoryLabel: 'Игры & РП', usage: '/рулетка [число 0-36 или цвет] [ставка]', description: 'Классическая европейская рулетка со ставками на красное, черное и зеро.', permissionLevel: 'Участник' },
-  { name: '/монетка', category: 'games', categoryLabel: 'Игры & РП', usage: '/монетка [орел/решка] [ставка]', description: 'Подбросить виртуальную монетку против системы.', permissionLevel: 'Участник' },
-  { name: '/работа', category: 'games', categoryLabel: 'Игры & РП', usage: '/работа', description: 'Устроиться на работу и получать стабильный почасовой заработок.', permissionLevel: 'Участник' },
-  { name: '/ограбление', category: 'games', categoryLabel: 'Игры & РП', usage: '/ограбление [@пользователь]', description: 'Попытка ограбить карманы другого игрока с определенным риском штрафа.', permissionLevel: 'Участник' },
-  { name: '/бизнес', category: 'games', categoryLabel: 'Игры & РП', usage: '/бизнес', description: 'Покупка и управление коммерческими объектами с пассивным доходом.', permissionLevel: 'Участник' },
-  { name: '/кейсы', category: 'games', categoryLabel: 'Игры & РП', usage: '/кейсы [открыть]', description: 'Открытие сундуков с редкими призами, монетами и статусными титулами.', permissionLevel: 'Участник' },
-  { name: '/брак', category: 'games', categoryLabel: 'Игры & РП', usage: '/брак [@пользователь]', description: 'Предложить руку и сердце участнику беседы для создания виртуальной семьи.', permissionLevel: 'Участник' },
-  { name: '/развод', category: 'games', categoryLabel: 'Игры & РП', usage: '/развод', description: 'Расторгнуть текущий виртуальный брак.', permissionLevel: 'Участник' },
-  { name: '/семья', category: 'games', categoryLabel: 'Игры & РП', usage: '/семья', description: 'Просмотр семейного статуса, даты свадьбы и совместного бюджета.', permissionLevel: 'Участник' },
-
-  // Кланы (Участник)
-  { name: '/клан создать', category: 'clans', categoryLabel: 'Кланы', usage: '/клан создать [название]', description: 'Основать собственный клан и стать его лидером.', permissionLevel: 'Участник' },
-  { name: '/клан инфо', category: 'clans', categoryLabel: 'Кланы', usage: '/клан инфо', description: 'Подробная информация о составе, уровне и казне вашего клана.', permissionLevel: 'Участник' },
-  { name: '/клан пригласить', category: 'clans', categoryLabel: 'Кланы', usage: '/клан пригласить [@пользователь]', description: 'Отправить приглашение на вступление в клан участнику беседы.', permissionLevel: 'Участник' },
-  { name: '/клан исключить', category: 'clans', categoryLabel: 'Кланы', usage: '/клан исключить [@пользователь]', description: 'Исключить участника из состава вашего клана (для главы/офицеров).', permissionLevel: 'Участник' },
-  { name: '/клан казна', category: 'clans', categoryLabel: 'Кланы', usage: '/клан казна пополнить [сумма]', description: 'Внести монеты в общую казну для прокачки кланового уровня.', permissionLevel: 'Участник' },
-  { name: '/клан топ', category: 'clans', categoryLabel: 'Кланы', usage: '/клан топ', description: 'Общий рейтинг сильнейших и богатейших кланов.', permissionLevel: 'Участник' },
-  { name: '/клан покинуть', category: 'clans', categoryLabel: 'Кланы', usage: '/клан покинуть', description: 'Добровольный выход из состава текущего клана.', permissionLevel: 'Участник' },
+  // Игры
+  {
+    name: '/дуэль',
+    aliases: '/duel',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/дуэль [@пользователь] [ставка]',
+    description: 'Вызвать участника на дуэль на монеты. Победитель забирает банк.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/дуэльбиз',
+    aliases: '/duel_biz',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/дуэльбиз [@пользователь]',
+    description: 'Опасная дуэль, где ставкой является один из ваших бизнесов.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/казино',
+    aliases: '/casino',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/казино [сумма]',
+    description: 'Сделать ставку в рулетке с шансом выигрыша x2 или x3.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/рулетка',
+    aliases: '/roulette',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/рулетка [число / цвет] [ставка]',
+    description: 'Ставки на красное, черное или конкретный номер в рулетке.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/монетка',
+    aliases: '/coin, /кнб',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/монетка [орел/решка] [ставка]',
+    description: 'Бросок монетки на удачу против бота или другого игрока.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/кейсы',
+    aliases: '/кейс, /case',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/кейсы [открыть]',
+    description: 'Открытие сундуков с редкими призами, монетами и статусными титулами.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/бизнес',
+    aliases: '/бизнесы, /купитьбиз, /продатьбиз',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/бизнес [купить / продать / прибыль]',
+    description: 'Покупка и управление коммерческими объектами с пассивным доходом.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/работа',
+    aliases: '/работать',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/работа',
+    description: 'Устроиться на работу и получать стабильный почасовой заработок.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/майнинг',
+    aliases: '/ферма',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/майнинг [купить / снять]',
+    description: 'Покупка видеокарт и майнинг виртуальной криптовалюты.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/брак',
+    aliases: '/поженить',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/брак [@пользователь]',
+    description: 'Предложить руку и сердце участнику беседы для создания семьи.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/развод',
+    aliases: '/развести',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/развод',
+    description: 'Расторгнуть текущий виртуальный брак.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/мафия',
+    aliases: '/mafia',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/мафия [старт / войти]',
+    description: 'Запуск классической игры Мафия прямо в беседе ВКонтакте.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/крокодил',
+    aliases: '/croc',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/крокодил [старт]',
+    description: 'Игра «Крокодил»: ведущий объясняет загаданное слово, чат угадывает.',
+    permissionLevel: 'Участник',
+  },
+  {
+    name: '/клан',
+    aliases: '/clan',
+    category: 'games',
+    categoryLabel: 'Игры',
+    usage: '/клан [создать / инфо / казна / топ / покинуть]',
+    description: 'Создание кланов, клановая казна, прокачка и турниры за рейтинг.',
+    permissionLevel: 'Участник',
+  },
 
   // ================= 2. МОДЕРАТОР =================
-  { name: '/кик', category: 'moderation', categoryLabel: 'Модерация', usage: '/кик [@пользователь] [причина]', description: 'Исключить нарушителя из беседы (по ссылке или ответному сообщению).', permissionLevel: 'Модератор' },
-  { name: '/мут', category: 'moderation', categoryLabel: 'Модерация', usage: '/мут [@пользователь] [время в мин] [причина]', description: 'Запретить участнику писать сообщения в чат на указанное время.', permissionLevel: 'Модератор' },
-  { name: '/размут', category: 'moderation', categoryLabel: 'Модерация', usage: '/размут [@пользователь]', description: 'Досрочно снять ограничение на отправку сообщений.', permissionLevel: 'Модератор' },
-  { name: '/варн', category: 'moderation', categoryLabel: 'Модерация', usage: '/варн [@пользователь] [причина]', description: 'Выдать официальное предупреждение. При лимите срабатывает автокик.', permissionLevel: 'Модератор' },
-  { name: '/снятьварн', category: 'moderation', categoryLabel: 'Модерация', usage: '/снятьварн [@пользователь]', description: 'Аннулировать одно или все предупреждения участника.', permissionLevel: 'Модератор' },
-  { name: '/варны', category: 'moderation', categoryLabel: 'Модерация', usage: '/варны [@пользователь]', description: 'Просмотр истории и списка активных предупреждений нарушителя.', permissionLevel: 'Модератор' },
-  { name: '/медленно', category: 'moderation', categoryLabel: 'Модерация', usage: '/медленно [секунды]', description: 'Включить задержку между отправкой сообщений (slowmode).', permissionLevel: 'Модератор' },
-  { name: '/очистить', category: 'moderation', categoryLabel: 'Модерация', usage: '/очистить [1-100]', description: 'Удалить последние N сообщений в беседе при флуде или спаме.', permissionLevel: 'Модератор' },
-  { name: '/стата', category: 'moderation', categoryLabel: 'Модерация', usage: '/стата [@пользователь]', description: 'Просмотр модераторской истории наказаний участника.', permissionLevel: 'Модератор' },
+  {
+    name: '/кик',
+    aliases: '/kick, /выгнать, /исключить, /k',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/кик [@пользователь] [причина]',
+    description: 'Исключить нарушителя из беседы (по ссылке или ответному сообщению).',
+    permissionLevel: 'Модератор',
+  },
+  {
+    name: '/мут',
+    aliases: '/mute, /мутить, /замутить, /заглушить, /m',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/мут [@пользователь] [время в мин] [причина]',
+    description: 'Запретить участнику писать сообщения в чат на указанное время.',
+    permissionLevel: 'Модератор',
+  },
+  {
+    name: '/размут',
+    aliases: '/unmute, /размутить, /разглушить, /unm',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/размут [@пользователь]',
+    description: 'Досрочно снять ограничение на отправку сообщений.',
+    permissionLevel: 'Модератор',
+  },
+  {
+    name: '/варн',
+    aliases: '/warn, /пред, /предупреждение, /w',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/варн [@пользователь] [причина]',
+    description: 'Выдать предупреждение. При наборе 3 варнов нарушитель кикается.',
+    permissionLevel: 'Модератор',
+  },
+  {
+    name: '/разварн',
+    aliases: '/unwarn, /анварн, /снятьварн, /снятьпред, /unw',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/разварн [@пользователь]',
+    description: 'Аннулировать предупреждение участника беседы.',
+    permissionLevel: 'Модератор',
+  },
+  {
+    name: '/варны',
+    aliases: '/warns, /warnlist, /инфоварн',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/варны [@пользователь]',
+    description: 'Просмотр истории и активных предупреждений нарушителя.',
+    permissionLevel: 'Модератор',
+  },
+  {
+    name: '/очистить',
+    aliases: '/чистка, /purge, /mclear',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/очистить [1-100]',
+    description: 'Массовое удаление последних сообщений при спаме или флуде.',
+    permissionLevel: 'Модератор',
+  },
+  {
+    name: '/тишина',
+    aliases: '/silence',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/тишина [вкл/выкл]',
+    description: 'Режим тишины: только модераторы и администраторы могут писать.',
+    permissionLevel: 'Модератор',
+  },
+  {
+    name: '/закрепить',
+    aliases: '/pin',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/закрепить [в ответ на сообщение]',
+    description: 'Закрепить выбранное сообщение в шапке беседы.',
+    permissionLevel: 'Модератор',
+  },
+  {
+    name: '/открепить',
+    aliases: '/unpin',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/открепить',
+    description: 'Удалить закрепленное сообщение из шапки беседы.',
+    permissionLevel: 'Модератор',
+  },
 
   // ================= 3. СТАРШИЙ МОДЕРАТОР =================
-  { name: '/бан', category: 'moderation', categoryLabel: 'Модерация', usage: '/бан [@пользователь] [причина]', description: 'Внести нарушителя в черный список беседы навсегда.', permissionLevel: 'Ст. Модератор' },
-  { name: '/разбан', category: 'moderation', categoryLabel: 'Модерация', usage: '/разбан [@пользователь]', description: 'Исключить нарушителя из черного списка беседы и разрешить вход.', permissionLevel: 'Ст. Модератор' },
-  { name: '/банлист', category: 'moderation', categoryLabel: 'Модерация', usage: '/банлист', description: 'Полный перечень участников, находящихся в бане беседы.', permissionLevel: 'Ст. Модератор' },
-  { name: '/собачки', category: 'moderation', categoryLabel: 'Модерация', usage: '/собачки [кик/чек]', description: 'Поиск и автоматическое удаление заблокированных страниц (DELETED).', permissionLevel: 'Ст. Модератор' },
-  { name: '/кикнеактив', category: 'moderation', categoryLabel: 'Модерация', usage: '/кикнеактив [дней]', description: 'Исключение участников, не написавших ни одного сообщения за N дней.', permissionLevel: 'Ст. Модератор' },
+  {
+    name: '/бан',
+    aliases: '/ban, /забанить, /б',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/бан [@пользователь] [причина]',
+    description: 'Перманентный бан нарушителя с запретом повторного входа.',
+    permissionLevel: 'Ст. Модератор',
+  },
+  {
+    name: '/разбан',
+    aliases: '/unban, /разбанить, /избана',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/разбан [@пользователь]',
+    description: 'Снять блокировку и разрешить участнику повторный вход.',
+    permissionLevel: 'Ст. Модератор',
+  },
+  {
+    name: '/банлист',
+    aliases: '/banlist, /инфобан',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/банлист',
+    description: 'Полный перечень всех заблокированных участников беседы.',
+    permissionLevel: 'Ст. Модератор',
+  },
+  {
+    name: '/собачки',
+    aliases: '/собаки, /чисткасобачек',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/собачки [кик/чек]',
+    description: 'Поиск и автоматическое исключение удаленных страниц ВКонтакте (DELETED).',
+    permissionLevel: 'Ст. Модератор',
+  },
+  {
+    name: '/кикнеактив',
+    aliases: '/неактив, /очиститьнеактив',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/кикнеактив [кол-во дней]',
+    description: 'Автоматический кик молчунов, не писавших в беседу указанное число дней.',
+    permissionLevel: 'Ст. Модератор',
+  },
+  {
+    name: '/чс',
+    aliases: '/чсб, /addblack, /добавитьвчс',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/чс [@пользователь] [причина]',
+    description: 'Внесение пользователя в локальный черный список беседы.',
+    permissionLevel: 'Ст. Модератор',
+  },
+  {
+    name: '/анчс',
+    aliases: '/unblack, /изчс, /удалитьизчс',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/анчс [@пользователь]',
+    description: 'Удаление пользователя из черного списка беседы.',
+    permissionLevel: 'Ст. Модератор',
+  },
+  {
+    name: '/логи',
+    aliases: '/logs, /логимут, /логикик, /логиварн, /логибан',
+    category: 'moderation',
+    categoryLabel: 'Модерация',
+    usage: '/логи [мут / кик / бан / варн]',
+    description: 'Просмотр журнала модераторских действий и выданных наказаний.',
+    permissionLevel: 'Ст. Модератор',
+  },
 
   // ================= 4. АДМИНИСТРАТОР =================
-  { name: '/настройки', category: 'settings', categoryLabel: 'Настройки', usage: '/настройки', description: 'Интерактивное меню управления параметрами беседы и фильтрами.', permissionLevel: 'Администратор' },
-  { name: '/приветствие', category: 'settings', categoryLabel: 'Настройки', usage: '/приветствие [текст]', description: 'Установить текст автоприветствия с поддержкой тегов {user} и {chat}.', permissionLevel: 'Администратор' },
-  { name: '/правила установить', category: 'settings', categoryLabel: 'Настройки', usage: '/правила установить [текст]', description: 'Записать или обновить официальный свод правил беседы.', permissionLevel: 'Администратор' },
-  { name: '/антиссылки', category: 'settings', categoryLabel: 'Настройки', usage: '/антиссылки [вкл/выкл]', description: 'Автоудаление любых рекламных и подозрительных ссылок.', permissionLevel: 'Администратор' },
-  { name: '/антимат', category: 'settings', categoryLabel: 'Настройки', usage: '/антимат [вкл/выкл]', description: 'Автоматическая цензура ненормативной лексики с выдачей мута.', permissionLevel: 'Администратор' },
-  { name: '/антикапс', category: 'settings', categoryLabel: 'Настройки', usage: '/антикапс [вкл/выкл]', description: 'Фильтр сообщений, написанных преимущественно заглавными буквами.', permissionLevel: 'Администратор' },
-  { name: '/автокик', category: 'settings', categoryLabel: 'Настройки', usage: '/автокик [вкл/выкл]', description: 'Автоматическое исключение при накоплении установленного числа варнов.', permissionLevel: 'Администратор' },
-  { name: '/назначить модератор', category: 'settings', categoryLabel: 'Настройки', usage: '/назначить модератор [@пользователь]', description: 'Выдать участнику полномочия модератора беседы.', permissionLevel: 'Администратор' },
-  { name: '/снять модератор', category: 'settings', categoryLabel: 'Настройки', usage: '/снять модератор [@пользователь]', description: 'Отозвать модераторские права у участника.', permissionLevel: 'Администратор' },
-  { name: '/лог', category: 'settings', categoryLabel: 'Беседа', usage: '/лог [кол-во]', description: 'Журнал последних модераторских и системных действий в беседе.', permissionLevel: 'Администратор' },
+  {
+    name: '/настройки',
+    aliases: '/settings',
+    category: 'settings',
+    categoryLabel: 'Настройки',
+    usage: '/настройки',
+    description: 'Панель управления всеми параметрами беседы, фильтрами и модулями.',
+    permissionLevel: 'Администратор',
+  },
+  {
+    name: '/приветствие',
+    aliases: '/welcometext',
+    category: 'settings',
+    categoryLabel: 'Настройки',
+    usage: '/приветствие [текст с тегами {user} и {chat}]',
+    description: 'Установка автоприветствия новых вступивших участников беседы.',
+    permissionLevel: 'Администратор',
+  },
+  {
+    name: '/модер',
+    aliases: '/setmoder, /аддмодер, /выдатьмодера',
+    category: 'settings',
+    categoryLabel: 'Настройки',
+    usage: '/модер [@пользователь]',
+    description: 'Назначить участника модератором беседы.',
+    permissionLevel: 'Администратор',
+  },
+  {
+    name: '/снятьмодер',
+    aliases: '/unmoder, /снятьроль',
+    category: 'settings',
+    categoryLabel: 'Настройки',
+    usage: '/снятьмодер [@пользователь]',
+    description: 'Отозвать модераторские полномочия у участника.',
+    permissionLevel: 'Администратор',
+  },
+  {
+    name: '/админ',
+    aliases: '/setadmin, /аддадмин, /выдатьадмина',
+    category: 'settings',
+    categoryLabel: 'Настройки',
+    usage: '/админ [@пользователь]',
+    description: 'Назначить полноправного администратора беседы.',
+    permissionLevel: 'Администратор',
+  },
+  {
+    name: '/снятьадмин',
+    aliases: '/унроль',
+    category: 'settings',
+    categoryLabel: 'Настройки',
+    usage: '/снятьадмин [@пользователь]',
+    description: 'Снять полномочия администратора с участника.',
+    permissionLevel: 'Администратор',
+  },
+  {
+    name: '/ачат',
+    aliases: '/achat',
+    category: 'settings',
+    categoryLabel: 'Настройки',
+    usage: '/ачат',
+    description: 'Присвоить беседе статус админ-чата для закрытых обсуждений.',
+    permissionLevel: 'Администратор',
+  },
+  {
+    name: '/уначат',
+    aliases: '/unachat',
+    category: 'settings',
+    categoryLabel: 'Настройки',
+    usage: '/уначат',
+    description: 'Снять статус админ-чата с беседы.',
+    permissionLevel: 'Администратор',
+  },
+  {
+    name: '/зов',
+    aliases: '/zov, /tegall, /все',
+    category: 'settings',
+    categoryLabel: 'Беседа',
+    usage: '/зов [текст объявления]',
+    description: 'Упомянуть всех участников беседы одним сообщением при важном сборе.',
+    permissionLevel: 'Администратор',
+  },
 
   // ================= 5. ВЛАДЕЛЕЦ БЕСЕДЫ 👑 =================
-  { name: '/создатель', category: 'owner', categoryLabel: 'Владелец', usage: '/создатель', description: 'Информация о создателе и текущем юридическом владельце беседы.', permissionLevel: 'Владелец' },
-  { name: '/передать права', category: 'owner', categoryLabel: 'Владелец', usage: '/передать права [@пользователь]', description: 'Полная и безоговорочная передача статуса Владельца беседы другому участнику.', permissionLevel: 'Владелец' },
-  { name: '/назначить админ', category: 'owner', categoryLabel: 'Владелец', usage: '/назначить админ [@пользователь]', description: 'Назначение полноправного администратора беседы с расширенными правами.', permissionLevel: 'Владелец' },
-  { name: '/снять админ', category: 'owner', categoryLabel: 'Владелец', usage: '/снять админ [@пользователь]', description: 'Разжалование администратора до уровня обычного участника.', permissionLevel: 'Владелец' },
-  { name: '/префикс', category: 'owner', categoryLabel: 'Владелец', usage: '/префикс [символ]', description: 'Изменение командного символа бота для беседы (например: !, ?, ., /).', permissionLevel: 'Владелец' },
-  { name: '/иммунитет', category: 'owner', categoryLabel: 'Владелец', usage: '/иммунитет [@пользователь] [уровень]', description: 'Выдача абсолютного иммунитета от наказаний (киков, мутов, варнов).', permissionLevel: 'Владелец' },
-  { name: '/снять все права', category: 'owner', categoryLabel: 'Владелец', usage: '/снять все права', description: 'Экстренное аннулирование полномочий всех назначенных модераторов и админов.', permissionLevel: 'Владелец' },
-  { name: '/черный список', category: 'owner', categoryLabel: 'Владелец', usage: '/черный список [вкл/выкл]', description: 'Синхронизация беседы с глобальной базой рейдеров и спамеров Mint Guard.', permissionLevel: 'Владелец' },
-  { name: '/сброс беседы', category: 'owner', categoryLabel: 'Владелец', usage: '/сброс беседы [подтвердить]', description: 'Полный сброс параметров, правил, экономики и базы данных текущей беседы.', permissionLevel: 'Владелец' },
-  { name: '/резервная копия', category: 'owner', categoryLabel: 'Владелец', usage: '/резервная копия', description: 'Создание и выгрузка зашифрованного архива настроек и рангов беседы.', permissionLevel: 'Владелец' },
-  { name: '/восстановить', category: 'owner', categoryLabel: 'Владелец', usage: '/восстановить [ключ бэкапа]', description: 'Восстановление всех настроек и иерархии беседы из резервной копии.', permissionLevel: 'Владелец' },
-  { name: '/белый список', category: 'owner', categoryLabel: 'Владелец', usage: '/белый список [@пользователь]', description: 'Добавление доверенного участника в белый список без проверок фильтрами.', permissionLevel: 'Владелец' },
+  {
+    name: '/setowner',
+    aliases: '/giveowner, /передатьвладельца, /передатьправа',
+    category: 'owner',
+    categoryLabel: 'Владелец',
+    usage: '/setowner [@пользователь]',
+    description: 'Полная и безоговорочная передача прав Владельца беседы другому участнику.',
+    permissionLevel: 'Владелец',
+  },
+  {
+    name: '/снятьвладельца',
+    aliases: '/делетоунер, /снятьправа',
+    category: 'owner',
+    categoryLabel: 'Владелец',
+    usage: '/снятьвладельца',
+    description: 'Снять полномочия владельца и сбросить права создателя беседы.',
+    permissionLevel: 'Владелец',
+  },
+  {
+    name: '/префикс',
+    aliases: '/prefix',
+    category: 'owner',
+    categoryLabel: 'Владелец',
+    usage: '/префикс [символ]',
+    description: 'Изменить командный символ бота для этой беседы (например: !, ?, ., /).',
+    permissionLevel: 'Владелец',
+  },
+  {
+    name: '/безпрефикса',
+    aliases: '/noprefix',
+    category: 'owner',
+    categoryLabel: 'Владелец',
+    usage: '/безпрефикса [вкл/выкл]',
+    description: 'Включить или отключить выполнение команд бота без префикса.',
+    permissionLevel: 'Владелец',
+  },
+  {
+    name: '/роль',
+    aliases: '/nrole, /setrole',
+    category: 'owner',
+    categoryLabel: 'Владелец',
+    usage: '/роль [@пользователь] [название]',
+    description: 'Установить кастомную текстовую роль участнику в беседе.',
+    permissionLevel: 'Владелец',
+  },
+  {
+    name: '/снятьроль',
+    aliases: '/nremoverole, /removerole',
+    category: 'owner',
+    categoryLabel: 'Владелец',
+    usage: '/снятьроль [@пользователь]',
+    description: 'Снять назначенную роль с участника беседы.',
+    permissionLevel: 'Владелец',
+  },
+  {
+    name: '/сброс',
+    aliases: '/reset',
+    category: 'owner',
+    categoryLabel: 'Владелец',
+    usage: '/сброс [подтвердить]',
+    description: 'Полный сброс параметров, правил, экономики и модерации беседы к начальным.',
+    permissionLevel: 'Владелец',
+  },
+  {
+    name: '/инфочат',
+    aliases: '/infochat, /чатинфо',
+    category: 'owner',
+    categoryLabel: 'Владелец',
+    usage: '/инфочат',
+    description: 'Полная техническая информация о текущей беседе, правах и модулях.',
+    permissionLevel: 'Владелец',
+  },
+  {
+    name: '/банигр',
+    aliases: '/снятьбанигр, /чсигр, /снятьчсигр',
+    category: 'owner',
+    categoryLabel: 'Владелец',
+    usage: '/банигр [вкл/выкл]',
+    description: 'Полный запрет или разрешение на использование игровых и азартных команд в чате.',
+    permissionLevel: 'Владелец',
+  },
+  {
+    name: '/чсбота',
+    aliases: '/blacklist',
+    category: 'owner',
+    categoryLabel: 'Владелец',
+    usage: '/чсбота [инфо]',
+    description: 'Просмотр базы глобально заблокированных участников в чат-менеджере.',
+    permissionLevel: 'Владелец',
+  },
 ];
 
 interface CommandsDirectoryProps {
@@ -108,7 +609,6 @@ export default function CommandsDirectory({ theme = 'dark' }: CommandsDirectoryP
     { id: 'all', label: 'Все категории', icon: Terminal },
     { id: 'moderation', label: 'Модерация', icon: Shield },
     { id: 'games', label: 'Игры & РП', icon: Gamepad2 },
-    { id: 'clans', label: 'Кланы', icon: Users },
     { id: 'economy', label: 'Экономика', icon: Coins },
     { id: 'settings', label: 'Настройки', icon: Settings },
     { id: 'owner', label: 'Владелец', icon: Crown },
@@ -123,13 +623,14 @@ export default function CommandsDirectory({ theme = 'dark' }: CommandsDirectoryP
     { id: 'Владелец', label: 'Владелец беседы 👑', icon: Crown },
   ];
 
-  const filteredCommands = COMMANDS_DATA.filter((cmd) => {
+  const filteredCommands = REAL_BOT_COMMANDS.filter((cmd) => {
     const matchesCat = activeCategory === 'all' || cmd.category === activeCategory;
     const matchesLevel = activeLevel === 'all' || cmd.permissionLevel === activeLevel;
     const q = search.toLowerCase().trim();
     const matchesSearch =
       !q ||
       cmd.name.toLowerCase().includes(q) ||
+      cmd.aliases.toLowerCase().includes(q) ||
       cmd.description.toLowerCase().includes(q) ||
       cmd.usage.toLowerCase().includes(q);
     return matchesCat && matchesLevel && matchesSearch;
@@ -147,12 +648,12 @@ export default function CommandsDirectory({ theme = 'dark' }: CommandsDirectoryP
           : 'bg-violet-500/15 text-violet-300 border-violet-500/30 font-bold';
       case 'Ст. Модератор':
         return isLight
-          ? 'bg-purple-100 text-purple-900 border-purple-300'
-          : 'bg-purple-500/15 text-purple-300 border-purple-500/30';
+          ? 'bg-purple-100 text-purple-900 border-purple-300 font-semibold'
+          : 'bg-purple-500/15 text-purple-300 border-purple-500/30 font-semibold';
       case 'Модератор':
         return isLight
-          ? 'bg-blue-100 text-blue-900 border-blue-300'
-          : 'bg-sky-500/15 text-sky-300 border-sky-500/30';
+          ? 'bg-blue-100 text-blue-900 border-blue-300 font-semibold'
+          : 'bg-sky-500/15 text-sky-300 border-sky-500/30 font-semibold';
       default:
         return isLight
           ? 'bg-neutral-100 text-neutral-700 border-neutral-300'
@@ -172,7 +673,7 @@ export default function CommandsDirectory({ theme = 'dark' }: CommandsDirectoryP
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск команды, синтаксиса или действия..."
+              placeholder="Поиск по реальным командам бота и алиасам..."
               className={`w-full rounded-xl pl-10 pr-4 py-2.5 text-xs outline-none transition-all font-medium ${
                 isLight
                   ? 'bg-white border border-neutral-200 focus:border-violet-500 text-neutral-900 placeholder:text-neutral-400 shadow-sm'
@@ -182,7 +683,9 @@ export default function CommandsDirectory({ theme = 'dark' }: CommandsDirectoryP
           </div>
 
           {/* Level Filter (до владельца беседы) */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl overflow-x-auto w-full md:w-auto no-scrollbar border">
+          <div className={`flex items-center gap-1.5 p-1 rounded-xl overflow-x-auto w-full md:w-auto no-scrollbar border ${
+            isLight ? 'bg-neutral-100 border-neutral-200' : 'bg-neutral-900/80 border-white/10'
+          }`}>
             {levels.map((lvl) => {
               const Icon = lvl.icon;
               const active = activeLevel === lvl.id;
@@ -196,8 +699,8 @@ export default function CommandsDirectory({ theme = 'dark' }: CommandsDirectoryP
                         ? 'bg-violet-600 text-white shadow-md'
                         : 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg shadow-violet-600/30'
                       : isLight
-                      ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
-                      : 'text-neutral-400 hover:text-white hover:bg-neutral-900/60'
+                      ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/60'
+                      : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
@@ -266,11 +769,19 @@ export default function CommandsDirectory({ theme = 'dark' }: CommandsDirectoryP
               </p>
             </div>
 
-            <div className={`p-2.5 rounded-xl border font-mono text-[11px] truncate flex items-center justify-between gap-2 ${
-              isLight ? 'bg-neutral-100/80 border-neutral-200 text-neutral-800' : 'bg-black/50 border-white/5 text-violet-300'
-            }`}>
-              <span className="truncate">{cmd.usage}</span>
-              <span className="text-[10px] text-neutral-500 shrink-0 font-sans">синтаксис</span>
+            <div className="space-y-1.5">
+              <div className={`p-2.5 rounded-xl border font-mono text-[11px] truncate flex items-center justify-between gap-2 ${
+                isLight ? 'bg-neutral-100/80 border-neutral-200 text-neutral-800' : 'bg-black/50 border-white/5 text-violet-300'
+              }`}>
+                <span className="truncate">{cmd.usage}</span>
+                <span className="text-[10px] text-neutral-500 shrink-0 font-sans">синтаксис</span>
+              </div>
+
+              {cmd.aliases && (
+                <div className="text-[10px] font-mono text-neutral-500 truncate px-1">
+                  Синонимы: {cmd.aliases}
+                </div>
+              )}
             </div>
           </div>
         ))}
