@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import BotLanding from './components/BotLanding';
 import PanelApp from './panel/PanelApp';
+import OrbBackground from './components/OrbBackground';
 
 type AppRoute = 'landing' | 'commands' | 'rules' | 'privacy' | 'userPanel' | 'adminPanel';
 
@@ -16,6 +17,22 @@ export default function App() {
     }
     return 'landing';
   });
+
+  // Dynamic site title: (название страницы) | «Mint» - чат-менеджер
+  useEffect(() => {
+    const titles: Record<AppRoute, string> = {
+      landing: 'Главная | «Mint» - чат-менеджер',
+      commands: 'Команды | «Mint» - чат-менеджер',
+      rules: 'Регламент и правила | «Mint» - чат-менеджер',
+      privacy: 'Конфиденциальность | «Mint» - чат-менеджер',
+      userPanel: 'Панель управления | «Mint» - чат-менеджер',
+      adminPanel: 'Админ-панель | «Mint» - чат-менеджер',
+    };
+    const title = titles[currentRoute] || 'Главная | «Mint» - чат-менеджер';
+    if (typeof document !== 'undefined') {
+      document.title = title;
+    }
+  }, [currentRoute]);
 
   useEffect(() => {
     // Sync initial canonical path to /main if user visited root /
@@ -71,6 +88,7 @@ export default function App() {
   if (currentRoute === 'adminPanel') {
     return (
       <div className="relative min-h-screen bg-black">
+        <OrbBackground />
         <div className="fixed top-3 right-3 z-[9999]">
           <button
             onClick={openWebsite}
@@ -79,16 +97,23 @@ export default function App() {
             <span>🌐 На главную сайта</span>
           </button>
         </div>
-        <PanelApp />
+        <div className="relative z-10">
+          <PanelApp />
+        </div>
       </div>
     );
   }
 
   return (
-    <BotLanding
-      onOpenAdminPanel={openAdminPanel}
-      initialView={currentRoute}
-      onNavigate={navigateTo}
-    />
+    <div className="relative min-h-screen bg-black">
+      <OrbBackground />
+      <div className="relative z-10">
+        <BotLanding
+          onOpenAdminPanel={openAdminPanel}
+          initialView={currentRoute}
+          onNavigate={navigateTo}
+        />
+      </div>
+    </div>
   );
 }

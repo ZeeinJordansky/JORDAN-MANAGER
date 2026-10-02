@@ -121,7 +121,7 @@ export default function CommandSimulator() {
           </div>
           <div>
             <div className="text-xs font-bold text-white flex items-center gap-1.5">
-              <span>Чат-менеджер «Mint» · Симулятор</span>
+              <span>Чат-менеджер «Mint»</span>
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             </div>
             <div className="text-[10px] text-neutral-400 font-mono">Беседа #1 · Онлайн (отклик 3.2 мс)</div>
