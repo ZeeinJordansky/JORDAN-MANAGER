@@ -23,11 +23,11 @@ export default function PanelApp() {
     const checkSession = async () => {
       try {
         const res = await panelApi.verifySession();
-        if (res.valid) {
-          setSession({ token: res.session.id, isRoot: res.isRoot, login: res.login });
+        if (res && res.valid && res.session) {
+          setSession({ token: res.session.id || 'ptok_demo', isRoot: res.isRoot, login: res.login || 'Управляющий' });
         }
       } catch (e) {
-        // invalid
+        // invalid session
       } finally {
         setLoading(false);
       }
@@ -49,19 +49,29 @@ export default function PanelApp() {
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">Загрузка...</div>;
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 font-sans text-sm font-semibold">
+        Загрузка панели управления...
+      </div>
+    );
   }
 
   if (!session) {
-    return <LoginModal onSuccess={handleLoginSuccess} />;
-  }
-
-  if (showWelcome) {
-    return <WelcomeModal login={session.login} onFinish={() => setShowWelcome(false)} />;
+    return (
+      <LoginModal
+        onSuccess={handleLoginSuccess}
+        title="Вход в Панель Управления"
+        subtitle="Авторизуйтесь по логину и паролю для доступа к настройкам"
+      />
+    );
   }
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
+    <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans relative">
+      {showWelcome && (
+        <WelcomeModal login={session.login} onFinish={() => setShowWelcome(false)} />
+      )}
+
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -69,8 +79,10 @@ export default function PanelApp() {
         login={session.login}
         onLogout={handleLogout}
       />
+
       <div className="flex-1 flex flex-col min-w-0">
         <Header login={session.login} onLogout={handleLogout} />
+
         <main className="flex-1 overflow-y-auto p-6 scroll-smooth">
           {activeTab === 'main' && <MainPage />}
           {activeTab === 'chats' && <ChatsPage />}
