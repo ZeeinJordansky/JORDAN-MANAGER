@@ -91,11 +91,18 @@ export default function BotLanding({
           {/* Brand Logo: «Mint» returns to main page */}
           <button
             onClick={() => changeView('landing')}
-            className="flex items-center gap-3 hover:opacity-90 transition-opacity text-left cursor-pointer"
+            className="flex items-center gap-3 hover:opacity-90 transition-opacity text-left cursor-pointer group"
             title="«Mint» — Вернуться на главную"
           >
-            <div className="w-10 h-10 bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-600/30 border border-violet-400/30">
-              <Bot className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-violet-600/30 border border-violet-400/40 bg-neutral-900 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
+              <img
+                src="/ming.jpg"
+                alt="«Mint»"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
             </div>
             <div>
               <span className={`text-xl font-black tracking-tight block leading-none ${isLight ? 'text-neutral-900' : 'text-white'}`}>
@@ -233,21 +240,21 @@ export default function BotLanding({
               </div>
             </section>
 
-            {/* Public Stats Ticker: Реальные данные "подключённых бесед" и реальный пинг */}
-            <section className={`max-w-4xl mx-auto rounded-3xl p-6 sm:p-8 shadow-2xl grid grid-cols-1 sm:grid-cols-3 gap-6 text-center border backdrop-blur-xl transition-all ${
+            {/* Public Stats Ticker: подключенные беседы и пинг чат-менеджера */}
+            <section className={`max-w-2xl mx-auto rounded-3xl p-6 sm:p-8 shadow-2xl grid grid-cols-1 sm:grid-cols-2 gap-6 text-center border backdrop-blur-xl transition-all ${
               isLight ? 'bg-white/80 border-neutral-200 shadow-neutral-200/50' : 'bg-neutral-950/60 border-white/10'
             }`}>
-              {/* Реальные данные подключенных бесед */}
+              {/* Подключенные беседы */}
               <div className="space-y-1">
                 <div className={`text-3xl sm:text-4xl font-black font-mono ${isLight ? 'text-neutral-900' : 'text-white'}`}>
                   {connectedChats !== null ? connectedChats : '67'}
                 </div>
                 <div className="text-xs font-bold text-neutral-400">
-                  Подключенных бесед (Реальные данные)
+                  Подключенных бесед
                 </div>
               </div>
 
-              {/* Реальный live пинг */}
+              {/* Пинг чат-менеджера */}
               <div className="space-y-1">
                 <div className="flex items-center justify-center gap-2 text-3xl sm:text-4xl font-black text-violet-600 dark:text-violet-400 font-mono">
                   <span>{realPing !== null ? `${realPing} мс` : 'Замер...'}</span>
@@ -255,19 +262,7 @@ export default function BotLanding({
                 </div>
                 <div className="text-xs font-bold text-neutral-400 flex items-center justify-center gap-1">
                   <Activity className="w-3 h-3 text-violet-500" />
-                  <span>Реальный пинг (Live)</span>
-                </div>
-              </div>
-
-              {/* Статус бота онлайн */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-center gap-2 text-3xl sm:text-4xl font-black text-emerald-500 font-mono">
-                  <span>Онлайн</span>
-                  <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
-                </div>
-                <div className="text-xs font-bold text-neutral-400 flex items-center justify-center gap-1">
-                  <Server className="w-3 h-3 text-emerald-500" />
-                  <span>Статус Callback API (24/7)</span>
+                  <span>Пинг чат-менеджера</span>
                 </div>
               </div>
             </section>
@@ -449,10 +444,10 @@ export default function BotLanding({
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <button
             onClick={() => changeView('landing')}
-            className="flex items-center gap-2.5 font-bold hover:opacity-90 transition-opacity cursor-pointer text-left"
+            className="flex items-center gap-2.5 font-bold hover:opacity-90 transition-opacity cursor-pointer text-left group"
           >
-            <div className="w-6 h-6 rounded-lg bg-violet-500/10 border border-violet-500/30 flex items-center justify-center">
-              <Bot className="w-3.5 h-3.5 text-violet-500" />
+            <div className="w-7 h-7 rounded-lg overflow-hidden border border-violet-500/30 shrink-0 bg-neutral-900 flex items-center justify-center">
+              <img src="/ming.jpg" alt="«Mint»" className="w-full h-full object-cover" />
             </div>
             <span className={isLight ? 'text-neutral-800' : 'text-neutral-300'}>
               «Mint» © 2026. Чат-менеджер для бесед ВКонтакте.

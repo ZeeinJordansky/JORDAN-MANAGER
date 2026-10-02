@@ -27,10 +27,8 @@ export default function Sidebar({ activeTab, setActiveTab, isRoot, login, onLogo
     <aside className="w-72 bg-slate-900 border-r border-slate-800 flex flex-col transition-all duration-300">
       {/* Brand Profile */}
       <div className="p-6 flex flex-col items-center border-b border-slate-800/60 bg-slate-900/50">
-        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 p-0.5 shadow-lg shadow-indigo-500/20 mb-4">
-          <div className="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center">
-            <Bot className="w-10 h-10 text-indigo-400" />
-          </div>
+        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 p-0.5 shadow-lg shadow-indigo-500/20 mb-4 overflow-hidden">
+          <img src="/ming.jpg" alt="«Mint»" className="w-full h-full object-cover rounded-[14px]" />
         </div>
         <h1 className="text-lg font-bold text-white tracking-wide">GAMES MANAGER</h1>
         <p className="text-xs font-medium text-indigo-400 mt-1 uppercase tracking-widest">Панель Управления</p>
