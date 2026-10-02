@@ -6,6 +6,43 @@ import OrbBackground from './components/OrbBackground';
 type AppRoute = 'landing' | 'commands' | 'rules' | 'privacy' | 'adminPanel';
 
 export default function App() {
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('mint_theme');
+      if (saved === 'light' || saved === 'dark') return saved;
+    }
+    return 'dark';
+  });
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mint_theme', next);
+        if (next === 'dark') {
+          document.documentElement.classList.add('dark');
+          document.documentElement.classList.remove('light');
+        } else {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.classList.add('light');
+        }
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+      }
+    }
+  }, [theme]);
+
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase();
@@ -82,8 +119,8 @@ export default function App() {
 
   if (currentRoute === 'adminPanel') {
     return (
-      <div className="relative min-h-screen bg-black">
-        <OrbBackground />
+      <div className={`relative min-h-screen ${theme === 'light' ? 'bg-[#f8fafc]' : 'bg-black'}`}>
+        <OrbBackground theme={theme} />
         <div className="fixed top-3 right-3 z-[9999]">
           <button
             onClick={openWebsite}
@@ -100,12 +137,14 @@ export default function App() {
   }
 
   return (
-    <div className="relative min-h-screen bg-black">
-      <OrbBackground />
+    <div className={`relative min-h-screen transition-colors duration-300 ${theme === 'light' ? 'bg-[#f8fafc]' : 'bg-black'}`}>
+      <OrbBackground theme={theme} />
       <div className="relative z-10">
         <BotLanding
           initialView={currentRoute === 'adminPanel' ? 'landing' : currentRoute}
           onNavigate={navigateTo}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
       </div>
     </div>

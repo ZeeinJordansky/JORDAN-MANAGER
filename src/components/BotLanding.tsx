@@ -1,18 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import {
   Bot, Shield, Zap, Gamepad2, Users, ChevronRight, ExternalLink,
-  Sparkles, Command, BookOpen, ShieldCheck, Activity, Award
+  Sparkles, Command, BookOpen, Sun, Moon, Activity, Lock
 } from 'lucide-react';
 import CommandsDirectory from './CommandsDirectory';
 import RulesAndPrivacy from './RulesAndPrivacy';
+import { useRealPing } from '../hooks/useRealPing';
 
 interface BotLandingProps {
   initialView?: 'landing' | 'commands' | 'rules' | 'privacy';
   onNavigate?: (path: string) => void;
+  theme: 'dark' | 'light';
+  onToggleTheme: () => void;
 }
 
-export default function BotLanding({ initialView = 'landing', onNavigate }: BotLandingProps) {
+export default function BotLanding({
+  initialView = 'landing',
+  onNavigate,
+  theme,
+  onToggleTheme
+}: BotLandingProps) {
   const [currentView, setCurrentView] = useState<'landing' | 'commands' | 'rules' | 'privacy'>(initialView);
+  const realPing = useRealPing(3500); // Live real ping measurement
+
+  const isLight = theme === 'light';
 
   useEffect(() => {
     setCurrentView(initialView);
@@ -41,9 +52,13 @@ export default function BotLanding({ initialView = 'landing', onNavigate }: BotL
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-neutral-100 font-sans selection:bg-violet-600 selection:text-white flex flex-col relative">
-      {/* Top Navigation Bar with Glassmorphic Blur */}
-      <header className="sticky top-0 z-50 bg-black/60 backdrop-blur-2xl border-b border-white/5">
+    <div className={`min-h-screen font-sans transition-colors duration-300 flex flex-col relative ${
+      isLight ? 'bg-transparent text-neutral-900 selection:bg-violet-500 selection:text-white' : 'bg-transparent text-neutral-100 selection:bg-violet-600 selection:text-white'
+    }`}>
+      {/* Top Navigation Bar with Theme Switcher */}
+      <header className={`sticky top-0 z-50 transition-colors duration-300 backdrop-blur-2xl border-b ${
+        isLight ? 'bg-white/80 border-neutral-200/80 shadow-xs' : 'bg-black/60 border-white/5'
+      }`}>
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           {/* Brand Logo: «Mint» returns to main page */}
           <button
@@ -55,7 +70,7 @@ export default function BotLanding({ initialView = 'landing', onNavigate }: BotL
               <Bot className="w-5 h-5 text-white" />
             </div>
             <div>
-              <span className="text-xl font-black tracking-tight text-white block leading-none">
+              <span className={`text-xl font-black tracking-tight block leading-none ${isLight ? 'text-neutral-900' : 'text-white'}`}>
                 «Mint»
               </span>
               <span className="text-[10px] text-neutral-400 font-medium tracking-wider">чат-менеджер VK</span>
@@ -66,37 +81,72 @@ export default function BotLanding({ initialView = 'landing', onNavigate }: BotL
           <nav className="hidden md:flex items-center gap-7 text-xs font-bold text-neutral-400">
             <button
               onClick={() => changeView('landing')}
-              className={`hover:text-white transition-colors cursor-pointer ${currentView === 'landing' ? 'text-violet-400 font-extrabold shadow-sm' : ''}`}
+              className={`transition-colors cursor-pointer ${
+                currentView === 'landing'
+                  ? 'text-violet-600 dark:text-violet-400 font-extrabold shadow-xs'
+                  : isLight ? 'hover:text-neutral-900 text-neutral-600' : 'hover:text-white'
+              }`}
             >
               Главная
             </button>
             <button
               onClick={() => changeView('commands')}
-              className={`hover:text-white transition-colors cursor-pointer ${currentView === 'commands' ? 'text-violet-400 font-extrabold shadow-sm' : ''}`}
+              className={`transition-colors cursor-pointer ${
+                currentView === 'commands'
+                  ? 'text-violet-600 dark:text-violet-400 font-extrabold shadow-xs'
+                  : isLight ? 'hover:text-neutral-900 text-neutral-600' : 'hover:text-white'
+              }`}
             >
               Команды
             </button>
             <button
               onClick={() => changeView('rules')}
-              className={`hover:text-white transition-colors cursor-pointer ${currentView === 'rules' ? 'text-violet-400 font-extrabold shadow-sm' : ''}`}
+              className={`transition-colors cursor-pointer ${
+                currentView === 'rules'
+                  ? 'text-violet-600 dark:text-violet-400 font-extrabold shadow-xs'
+                  : isLight ? 'hover:text-neutral-900 text-neutral-600' : 'hover:text-white'
+              }`}
             >
               Регламент и правила
             </button>
             <button
               onClick={() => changeView('privacy')}
-              className={`hover:text-white transition-colors cursor-pointer ${currentView === 'privacy' ? 'text-violet-400 font-extrabold shadow-sm' : ''}`}
+              className={`transition-colors cursor-pointer ${
+                currentView === 'privacy'
+                  ? 'text-violet-600 dark:text-violet-400 font-extrabold shadow-xs'
+                  : isLight ? 'hover:text-neutral-900 text-neutral-600' : 'hover:text-white'
+              }`}
             >
               Конфиденциальность
             </button>
           </nav>
 
-          {/* Primary Action Button (no control panel) */}
-          <div className="flex items-center gap-3">
+          {/* Right Controls: Theme Toggle & Direct Add Button */}
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* Theme Toggle Button (Переключатель темы на белую / чёрную) */}
+            <button
+              onClick={onToggleTheme}
+              className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+                isLight
+                  ? 'bg-neutral-100 hover:bg-neutral-200 border-neutral-300 text-neutral-800'
+                  : 'bg-neutral-900/80 hover:bg-neutral-800 border-white/10 text-neutral-300'
+              }`}
+              title={isLight ? 'Включить тёмную тему' : 'Включить светлую (белую) тему'}
+              aria-label="Переключить тему"
+            >
+              {isLight ? (
+                <Moon className="w-4 h-4 text-violet-600" />
+              ) : (
+                <Sun className="w-4 h-4 text-amber-400" />
+              )}
+            </button>
+
+            {/* Direct Connect Link */}
             <a
               href="https://vk.ru/app6441755_-239281784"
               target="_blank"
               rel="noreferrer"
-              className="px-5 py-2.5 bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:to-purple-500 text-white text-xs font-black rounded-xl shadow-lg shadow-violet-600/35 border border-violet-400/30 active:scale-95 transition-all flex items-center gap-2 group"
+              className="px-4 sm:px-5 py-2.5 bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:to-purple-500 text-white text-xs font-black rounded-xl shadow-lg shadow-violet-600/35 border border-violet-400/30 active:scale-95 transition-all flex items-center gap-2 group cursor-pointer"
             >
               <span>Добавить в беседу</span>
               <ExternalLink className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
@@ -106,173 +156,105 @@ export default function BotLanding({ initialView = 'landing', onNavigate }: BotL
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-10 space-y-16">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-12 space-y-16">
         {/* VIEW 1: LANDING PAGE */}
         {currentView === 'landing' && (
           <>
-            {/* Hero Section */}
-            <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center pt-4">
-              <div className="lg:col-span-7 space-y-6">
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-violet-500/10 border border-violet-500/30 rounded-full text-violet-300 text-xs font-bold backdrop-blur-md shadow-sm shadow-violet-500/20">
-                  <Sparkles className="w-4 h-4 text-violet-400 animate-pulse" />
-                  <span>Официальный чат-менеджер ВКонтакте</span>
-                </div>
-
-                {/* Requested Headings */}
-                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-[1.15]">
-                  Чат-менеджер «Mint» для ваших бесед ВКонтакте!
-                </h1>
-
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-purple-300 to-indigo-300 text-xl sm:text-2xl font-black tracking-tight">
-                  Игровая система, система модерации, надёжный!
-                </p>
-
-                <p className="text-neutral-300 text-sm leading-relaxed max-w-xl font-normal">
-                  Молниеносный отклик, умный фильтр спама и мата, масштабные клановые войны, экономика и дуэли в один клик. Работает непрерывно 24/7.
-                </p>
-
-                {/* Primary CTA Buttons */}
-                <div className="flex flex-wrap items-center gap-4 pt-2">
-                  <a
-                    href="https://vk.ru/app6441755_-239281784"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-8 py-4 bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:to-purple-500 active:scale-95 text-white font-black text-sm rounded-xl shadow-xl shadow-violet-600/40 border border-violet-400/30 hover:scale-[1.02] transition-all flex items-center gap-2.5 group cursor-pointer"
-                  >
-                    <span>Добавить в беседу</span>
-                    <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                  </a>
-
-                  <button
-                    onClick={() => changeView('commands')}
-                    className="px-6 py-4 bg-neutral-900/80 hover:bg-neutral-800/90 border border-white/10 hover:border-violet-500/40 text-neutral-200 hover:text-white font-bold text-sm rounded-xl backdrop-blur-md transition-all flex items-center gap-2 cursor-pointer"
-                  >
-                    <span>Список команд</span>
-                    <ChevronRight className="w-4 h-4 text-violet-400" />
-                  </button>
-                </div>
+            {/* Hero Section (Clean, impactful, no mockup window) */}
+            <section className="text-center max-w-4xl mx-auto space-y-8 pt-4 pb-2">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold backdrop-blur-md shadow-xs border transition-colors mx-auto">
+                <Sparkles className="w-4 h-4 text-violet-500 animate-pulse" />
+                <span className={isLight ? 'text-violet-700' : 'text-violet-300'}>
+                  Официальный чат-менеджер ВКонтакте
+                </span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               </div>
 
-              {/* High-end Showcase Card (replacing the simulator board) */}
-              <div className="lg:col-span-5">
-                <div className="bg-neutral-950/70 backdrop-blur-2xl border border-white/10 hover:border-violet-500/40 rounded-3xl p-7 shadow-2xl transition-all space-y-6">
-                  {/* Card Header */}
-                  <div className="flex items-center justify-between pb-4 border-b border-white/5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-violet-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-violet-600/30 border border-violet-400/30">
-                        <Bot className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-base font-black text-white">«Mint»</span>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-violet-500/10 border border-violet-500/30 rounded-full text-[10px] font-bold text-violet-300">
-                            <ShieldCheck className="w-3 h-3 text-violet-400" /> Проверен
-                          </span>
-                        </div>
-                        <span className="text-xs text-neutral-400 font-mono">VK Chat Engine 2026</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-violet-500/10 border border-violet-500/25 rounded-full">
-                      <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
-                      <span className="text-[10px] font-bold text-violet-300 font-mono">Онлайн</span>
-                    </div>
-                  </div>
+              {/* Requested Headings */}
+              <h1 className={`text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.12] ${
+                isLight ? 'text-neutral-950' : 'text-white'
+              }`}>
+                Чат-менеджер «Mint» для ваших бесед ВКонтакте!
+              </h1>
 
-                  {/* Highlights Grid */}
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div className="bg-black/40 border border-white/5 rounded-2xl p-3.5 space-y-1">
-                      <div className="flex items-center gap-1.5 text-neutral-400 text-[11px] font-semibold">
-                        <Activity className="w-3.5 h-3.5 text-violet-400" />
-                        <span>Скорость отклика</span>
-                      </div>
-                      <div className="text-lg font-black text-white font-mono">~3.2 мс</div>
-                    </div>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 dark:from-violet-400 dark:via-purple-300 dark:to-indigo-300 text-xl sm:text-2xl lg:text-3xl font-black tracking-tight">
+                Игровая система, система модерации, надёжный!
+              </p>
 
-                    <div className="bg-black/40 border border-white/5 rounded-2xl p-3.5 space-y-1">
-                      <div className="flex items-center gap-1.5 text-neutral-400 text-[11px] font-semibold">
-                        <Shield className="w-3.5 h-3.5 text-violet-400" />
-                        <span>Безопасность</span>
-                      </div>
-                      <div className="text-lg font-black text-violet-300 font-mono">Антирейд</div>
-                    </div>
+              <p className={`text-sm sm:text-base leading-relaxed max-w-2xl mx-auto font-normal ${
+                isLight ? 'text-neutral-600' : 'text-neutral-300'
+              }`}>
+                Мгновенный отклик на каждую команду, умная фильтрация спама и мата, масштабные клановые битвы, дуэли на монеты и продвинутая иерархия прав до владельца беседы. Работает непрерывно 24/7.
+              </p>
 
-                    <div className="bg-black/40 border border-white/5 rounded-2xl p-3.5 space-y-1">
-                      <div className="flex items-center gap-1.5 text-neutral-400 text-[11px] font-semibold">
-                        <Gamepad2 className="w-3.5 h-3.5 text-violet-400" />
-                        <span>Игры & Экономика</span>
-                      </div>
-                      <div className="text-sm font-bold text-white">40+ механик</div>
-                    </div>
+              {/* Primary CTA Buttons */}
+              <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
+                <a
+                  href="https://vk.ru/app6441755_-239281784"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-8 sm:px-10 py-4 bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:to-purple-500 active:scale-95 text-white font-black text-sm rounded-2xl shadow-xl shadow-violet-600/40 border border-violet-400/30 hover:scale-[1.02] transition-all flex items-center gap-2.5 group cursor-pointer"
+                >
+                  <span>Добавить в беседу</span>
+                  <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                </a>
 
-                    <div className="bg-black/40 border border-white/5 rounded-2xl p-3.5 space-y-1">
-                      <div className="flex items-center gap-1.5 text-neutral-400 text-[11px] font-semibold">
-                        <Award className="w-3.5 h-3.5 text-violet-400" />
-                        <span>Аптайм</span>
-                      </div>
-                      <div className="text-sm font-bold text-white">99.98% 24/7</div>
-                    </div>
-                  </div>
-
-                  {/* Quick Feature Badges */}
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {[
-                      'Автомодерация',
-                      'Кланы и войны',
-                      'Казино и рулетка',
-                      'Дуэли на монеты',
-                      'Автоприветствия',
-                      'Фильтр спама',
-                    ].map((badge) => (
-                      <span
-                        key={badge}
-                        className="px-3 py-1 bg-white/5 border border-white/5 hover:border-violet-500/30 text-neutral-300 hover:text-white text-[11px] font-medium rounded-lg transition-colors"
-                      >
-                        {badge}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Direct Add Button */}
-                  <a
-                    href="https://vk.ru/app6441755_-239281784"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full py-3.5 bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-violet-600/30 border border-violet-400/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
-                  >
-                    <span>Подключить «Mint» к вашей беседе</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
+                <button
+                  onClick={() => changeView('commands')}
+                  className={`px-8 py-4 border font-bold text-sm rounded-2xl backdrop-blur-md transition-all flex items-center gap-2 cursor-pointer ${
+                    isLight
+                      ? 'bg-white hover:bg-neutral-100 border-neutral-300 text-neutral-800 shadow-sm'
+                      : 'bg-neutral-900/80 hover:bg-neutral-800/90 border-white/10 hover:border-violet-500/40 text-neutral-200 hover:text-white'
+                  }`}
+                >
+                  <span>Список команд</span>
+                  <ChevronRight className="w-4 h-4 text-violet-400" />
+                </button>
               </div>
             </section>
 
-            {/* Public Stats Ticker with Glassmorphism */}
-            <section className="bg-neutral-950/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+            {/* Public Stats Ticker with Real Measured Ping */}
+            <section className={`rounded-3xl p-6 sm:p-8 shadow-2xl grid grid-cols-2 md:grid-cols-4 gap-6 text-center border backdrop-blur-xl transition-all ${
+              isLight ? 'bg-white/80 border-neutral-200 shadow-neutral-200/50' : 'bg-neutral-950/60 border-white/10'
+            }`}>
               <div>
-                <div className="text-2xl sm:text-3xl font-black text-white font-mono">1,420+</div>
+                <div className={`text-2xl sm:text-3xl font-black font-mono ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+                  1,420+
+                </div>
                 <div className="text-xs font-bold text-neutral-400 mt-1">Подключенных бесед</div>
               </div>
               <div>
-                <div className="text-2xl sm:text-3xl font-black text-white font-mono">348,000+</div>
+                <div className={`text-2xl sm:text-3xl font-black font-mono ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+                  348,000+
+                </div>
                 <div className="text-xs font-bold text-neutral-400 mt-1">Участников чатов</div>
               </div>
               <div>
-                <div className="text-2xl sm:text-3xl font-black text-white font-mono">18.5M+</div>
+                <div className={`text-2xl sm:text-3xl font-black font-mono ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+                  18.5M+
+                </div>
                 <div className="text-xs font-bold text-neutral-400 mt-1">Обработано команд</div>
               </div>
               <div>
-                <div className="text-2xl sm:text-3xl font-black text-violet-400 font-mono">~3.2 мс</div>
-                <div className="text-xs font-bold text-neutral-400 mt-1">Скорость отклика</div>
+                {/* Live Real Measured Ping */}
+                <div className="flex items-center justify-center gap-2 text-2xl sm:text-3xl font-black text-violet-600 dark:text-violet-400 font-mono">
+                  <span>{realPing !== null ? `${realPing} мс` : 'Замер...'}</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                </div>
+                <div className="text-xs font-bold text-neutral-400 mt-1 flex items-center justify-center gap-1">
+                  <Activity className="w-3 h-3 text-violet-500" />
+                  <span>Реальный пинг (Live)</span>
+                </div>
               </div>
             </section>
 
-            {/* Features Grid with Translucent Glass */}
+            {/* Features Grid */}
             <section className="space-y-8">
               <div className="text-center max-w-2xl mx-auto space-y-2">
-                <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                <h2 className={`text-2xl sm:text-3xl font-black tracking-tight ${isLight ? 'text-neutral-900' : 'text-white'}`}>
                   Все возможности для вашей беседы
                 </h2>
-                <p className="text-xs sm:text-sm text-neutral-400">
+                <p className={`text-xs sm:text-sm ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
                   Современный комплекс инструментов для поддержания порядка и высокой активности участников
                 </p>
               </div>
@@ -306,21 +288,31 @@ export default function BotLanding({ initialView = 'landing', onNavigate }: BotL
                   },
                   {
                     icon: Command,
-                    title: 'Автоответы и Триггеры',
-                    desc: 'Создавайте собственные автоматические ответы на ключевые фразы без сложного программирования.',
+                    title: 'Иерархия до Владельца',
+                    desc: 'Многоуровневые права: участник, модератор, ст. модератор, администратор и владелец беседы.',
                   },
                 ].map((f) => {
                   const Icon = f.icon;
                   return (
                     <div
                       key={f.title}
-                      className="bg-neutral-950/60 backdrop-blur-xl border border-white/5 hover:border-violet-500/40 hover:shadow-2xl hover:shadow-violet-500/10 rounded-2xl p-6 transition-all space-y-3 group"
+                      className={`rounded-2xl p-6 transition-all space-y-3 group border backdrop-blur-xl ${
+                        isLight
+                          ? 'bg-white/80 border-neutral-200/90 hover:border-violet-400 hover:shadow-lg'
+                          : 'bg-neutral-950/60 border-white/5 hover:border-violet-500/40 hover:shadow-2xl hover:shadow-violet-500/10'
+                      }`}
                     >
-                      <div className="w-11 h-11 bg-violet-500/10 border border-violet-500/30 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-sm shadow-violet-500/20">
-                        <Icon className="w-5 h-5 text-violet-400" />
+                      <div className="w-11 h-11 bg-violet-500/10 border border-violet-500/30 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-xs">
+                        <Icon className="w-5 h-5 text-violet-500" />
                       </div>
-                      <h3 className="text-base font-bold text-white group-hover:text-violet-200 transition-colors">{f.title}</h3>
-                      <p className="text-xs text-neutral-400 leading-relaxed font-normal">{f.desc}</p>
+                      <h3 className={`text-base font-bold transition-colors ${
+                        isLight ? 'text-neutral-900 group-hover:text-violet-600' : 'text-white group-hover:text-violet-200'
+                      }`}>
+                        {f.title}
+                      </h3>
+                      <p className={`text-xs leading-relaxed font-normal ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                        {f.desc}
+                      </p>
                     </div>
                   );
                 })}
@@ -328,12 +320,16 @@ export default function BotLanding({ initialView = 'landing', onNavigate }: BotL
             </section>
 
             {/* Commands Directory Preview */}
-            <section className="bg-neutral-950/60 backdrop-blur-xl border border-white/10 rounded-2xl p-8 space-y-6 shadow-2xl">
+            <section className={`rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl border backdrop-blur-xl ${
+              isLight ? 'bg-white/80 border-neutral-200' : 'bg-neutral-950/60 border-white/10'
+            }`}>
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-extrabold text-white">Список команд чат-менеджера</h2>
-                  <p className="text-xs text-neutral-400 mt-1">
-                    Свыше 40 встроенных команд с удобным поиском и синтаксисом
+                  <h2 className={`text-xl font-extrabold ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+                    Список команд чат-менеджера
+                  </h2>
+                  <p className={`text-xs mt-1 ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                    Все команды от обычного участника до владельца беседы с поиском и фильтрами
                   </p>
                 </div>
                 <button
@@ -344,32 +340,40 @@ export default function BotLanding({ initialView = 'landing', onNavigate }: BotL
                 </button>
               </div>
 
-              <CommandsDirectory />
+              <CommandsDirectory theme={theme} />
             </section>
 
             {/* Quick Rules Preview Banner */}
-            <section className="bg-neutral-950/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+            <section className={`rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl border backdrop-blur-xl ${
+              isLight ? 'bg-white/80 border-neutral-200' : 'bg-neutral-950/60 border-white/10'
+            }`}>
               <div className="flex items-center gap-4">
-                <div className="w-11 h-11 rounded-xl bg-violet-500/10 border border-violet-500/30 flex items-center justify-center shrink-0 shadow-sm shadow-violet-500/20">
-                  <BookOpen className="w-5 h-5 text-violet-400" />
+                <div className="w-11 h-11 rounded-xl bg-violet-500/10 border border-violet-500/30 flex items-center justify-center shrink-0">
+                  <BookOpen className="w-5 h-5 text-violet-500" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Правила использования и Регламент</h3>
-                  <p className="text-xs text-neutral-400 mt-0.5">
-                    Ознакомьтесь с официальным регламентом из 12 разделов и политикой конфиденциальности «Mint»
+                  <h3 className={`text-sm font-bold ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+                    Правила использования и Регламент
+                  </h3>
+                  <p className={`text-xs mt-0.5 ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                    Ознакомьтесь с официальным регламентом из 12 разделов и реальной политикой конфиденциальности «Mint»
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => changeView('rules')}
-                  className="px-4 py-2 bg-neutral-900/80 hover:bg-neutral-800 border border-white/10 hover:border-violet-500/40 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+                  className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                    isLight ? 'bg-neutral-100 hover:bg-neutral-200 border-neutral-300 text-neutral-800' : 'bg-neutral-900/80 hover:bg-neutral-800 border-white/10 text-white'
+                  }`}
                 >
                   Читать правила
                 </button>
                 <button
                   onClick={() => changeView('privacy')}
-                  className="px-4 py-2 bg-neutral-900/80 hover:bg-neutral-800 border border-white/10 hover:border-violet-500/40 text-neutral-300 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                  className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                    isLight ? 'bg-neutral-100 hover:bg-neutral-200 border-neutral-300 text-neutral-700' : 'bg-neutral-900/80 hover:bg-neutral-800 border-white/10 text-neutral-300'
+                  }`}
                 >
                   Конфиденциальность
                 </button>
@@ -381,64 +385,74 @@ export default function BotLanding({ initialView = 'landing', onNavigate }: BotL
         {/* VIEW 2: COMMANDS */}
         {currentView === 'commands' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between pb-4 border-b border-white/5">
+            <div className={`flex items-center justify-between pb-4 border-b ${isLight ? 'border-neutral-200' : 'border-white/5'}`}>
               <div>
-                <h1 className="text-2xl font-extrabold text-white">Интерактивная База Команд</h1>
-                <p className="text-xs text-neutral-400 mt-1">Полный список доступных команд «Mint» с описанием и синтаксисом</p>
+                <h1 className={`text-2xl font-extrabold ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+                  Интерактивная База Команд
+                </h1>
+                <p className={`text-xs mt-1 ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                  Все команды «Mint» от участника до владельца беседы с описанием и синтаксисом
+                </p>
               </div>
               <button
                 onClick={() => changeView('landing')}
-                className="px-3.5 py-1.5 bg-neutral-900/80 border border-white/10 text-neutral-300 font-semibold text-xs rounded-xl hover:bg-neutral-800 hover:border-violet-500/40 transition-all cursor-pointer"
+                className={`px-3.5 py-1.5 border font-semibold text-xs rounded-xl transition-all cursor-pointer ${
+                  isLight ? 'bg-white border-neutral-300 text-neutral-800 hover:bg-neutral-100' : 'bg-neutral-900/80 border-white/10 text-neutral-300 hover:bg-neutral-800'
+                }`}
               >
                 Вернуться на главную
               </button>
             </div>
-            <CommandsDirectory />
+            <CommandsDirectory theme={theme} />
           </div>
         )}
 
         {/* VIEW 3: RULES (Регламент) */}
         {currentView === 'rules' && (
-          <RulesAndPrivacy initialTab="rules" onBack={() => changeView('landing')} />
+          <RulesAndPrivacy initialTab="rules" onBack={() => changeView('landing')} theme={theme} />
         )}
 
         {/* VIEW 4: PRIVACY (Конфиденциальность) */}
         {currentView === 'privacy' && (
-          <RulesAndPrivacy initialTab="privacy" onBack={() => changeView('landing')} />
+          <RulesAndPrivacy initialTab="privacy" onBack={() => changeView('landing')} theme={theme} />
         )}
       </main>
 
-      {/* Footer (Clean, no control panel) */}
-      <footer className="border-t border-white/5 bg-black/80 backdrop-blur-xl py-8 text-xs text-neutral-500 mt-auto">
+      {/* Footer */}
+      <footer className={`border-t py-8 text-xs mt-auto backdrop-blur-xl transition-colors duration-300 ${
+        isLight ? 'bg-white/80 border-neutral-200 text-neutral-600' : 'border-white/5 bg-black/80 text-neutral-500'
+      }`}>
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <button
             onClick={() => changeView('landing')}
-            className="flex items-center gap-2.5 font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer text-left"
+            className="flex items-center gap-2.5 font-bold hover:opacity-90 transition-opacity cursor-pointer text-left"
           >
             <div className="w-6 h-6 rounded-lg bg-violet-500/10 border border-violet-500/30 flex items-center justify-center">
-              <Bot className="w-3.5 h-3.5 text-violet-400" />
+              <Bot className="w-3.5 h-3.5 text-violet-500" />
             </div>
-            <span>«Mint» © 2026. Чат-менеджер для бесед ВКонтакте.</span>
+            <span className={isLight ? 'text-neutral-800' : 'text-neutral-300'}>
+              «Mint» © 2026. Чат-менеджер для бесед ВКонтакте.
+            </span>
           </button>
 
           <div className="flex flex-wrap items-center gap-6">
-            <button onClick={() => changeView('landing')} className="hover:text-violet-300 transition-colors cursor-pointer">
+            <button onClick={() => changeView('landing')} className="hover:text-violet-500 transition-colors cursor-pointer">
               Главная
             </button>
-            <button onClick={() => changeView('commands')} className="hover:text-violet-300 transition-colors cursor-pointer">
+            <button onClick={() => changeView('commands')} className="hover:text-violet-500 transition-colors cursor-pointer">
               Команды
             </button>
-            <button onClick={() => changeView('rules')} className="hover:text-violet-300 transition-colors cursor-pointer">
+            <button onClick={() => changeView('rules')} className="hover:text-violet-500 transition-colors cursor-pointer">
               Регламент и правила
             </button>
-            <button onClick={() => changeView('privacy')} className="hover:text-violet-300 transition-colors cursor-pointer">
+            <button onClick={() => changeView('privacy')} className="hover:text-violet-500 transition-colors cursor-pointer">
               Конфиденциальность
             </button>
             <a
               href="https://vk.ru/app6441755_-239281784"
               target="_blank"
               rel="noreferrer"
-              className="text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1 font-bold"
+              className="text-violet-600 dark:text-violet-400 hover:opacity-80 transition-opacity flex items-center gap-1 font-bold"
             >
               <span>Добавить бота</span>
               <ExternalLink className="w-3 h-3" />
