@@ -5882,6 +5882,9 @@ export function formatUserMention(
 ): string {
   try {
     const numId = Number(id) || 0;
+    if (numId <= -100) {
+      return typeof name === "string" ? name : (name ? String(name) : `🤖 Бот ${Math.abs(numId)}`);
+    }
     if (numId < 0) {
       const absId = Math.abs(numId);
       const strName = typeof name === "string" ? name : (name ? String(name) : "");
@@ -11841,6 +11844,7 @@ interface MafiaPlayer {
   isAlive: boolean;
   choice?: number | string | null;
   vote?: number | string | null;
+  isBot?: boolean;
 }
 
 interface MafiaLobby {
@@ -11859,6 +11863,35 @@ interface MafiaLobby {
   startPhoto?: string;
   amount?: number;
 }
+
+function buildMafiaLobbyResponse(mg: MafiaLobby) {
+  const playersList = mg.players.map(p => `• ${formatUserMention(p.id, String(p.name), "nom", false, true)}`).join("\n");
+  const stakeStr = mg.amount && mg.amount > 0 ? `${mg.amount.toLocaleString()}$` : "Бесплатно";
+
+  const text = `🎭 Игра «Мафия»\n\n` +
+    `👑 Организатор: ${formatUserMention(mg.creatorId, String(mg.creatorName), "nom", false, true)}\n` +
+    `💰 Ставка за участие: ${stakeStr}\n\n` +
+    `👥 Участники игры (${mg.players.length}/10):\n` +
+    `${playersList}\n\n` +
+    `⏳ Для начала игры требуется минимум 4 участника.`;
+
+  const keyboard = {
+    inline: true,
+    buttons: [
+      [
+        { action: { type: "callback", label: "Присоединиться", payload: JSON.stringify({ cmd: "mafia_join" }) }, color: "positive" },
+        { action: { type: "callback", label: "Отсоединиться", payload: JSON.stringify({ cmd: "mafia_leave" }) }, color: "negative" }
+      ],
+      [
+        { action: { type: "callback", label: "🤖 + Бот", payload: JSON.stringify({ cmd: "mafia_add_bot" }) }, color: "primary" },
+        { action: { type: "callback", label: "Запустить игру", payload: JSON.stringify({ cmd: "mafia_start" }) }, color: "secondary" }
+      ]
+    ]
+  };
+
+  return { text, keyboard };
+}
+
 const mafiaGames = new Map<number, MafiaLobby>();
 const pendingNews = new Map<number, { text: string, attachmentsStr: string, forwardObjStr: string | null, peerId: number, promptCmId?: number }>();
 
@@ -12492,11 +12525,12 @@ async function startMafiaGame(peerId: number) {
     shuffled[i].role = "Мирный житель";
   }
 
-  // Send roles in private messages
+  // Send roles in private messages (human players only)
   for (const p of mg.players) {
     p.isAlive = true;
     p.choice = null;
     p.vote = null;
+    if (p.isBot || p.id < 0) continue;
     let roleDesc = "";
     if (p.role === "Мафия") roleDesc = "🔫 Ваша цель — уничтожить всех мирных жителей и шерифа. Ночью выбирайте жертву.";
     else if (p.role === "Шериф") roleDesc = "🕵️‍♂️ Ваша цель — вычислить мафию. Ночью проводите проверку подозрительных игроков.";
@@ -12523,6 +12557,53 @@ ${playerMentions}
   await startNightPhase(peerId);
 }
 
+
+function automateBotNightChoices(mg: MafiaLobby) {
+  for (const p of mg.players) {
+    if (!p.isAlive || !p.isBot) continue;
+    if (p.role === "Мафия") {
+      const aliveTargets = mg.players.filter(x => x.isAlive && x.role !== "Мафия");
+      if (aliveTargets.length > 0) {
+        const randTarget = aliveTargets[Math.floor(Math.random() * aliveTargets.length)];
+        p.choice = randTarget.id;
+      } else {
+        p.choice = "skip";
+      }
+    } else if (p.role === "Шериф") {
+      const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
+      if (aliveTargets.length > 0) {
+        const randTarget = aliveTargets[Math.floor(Math.random() * aliveTargets.length)];
+        p.choice = randTarget.id;
+      } else {
+        p.choice = "skip";
+      }
+    } else if (p.role === "Доктор") {
+      const aliveTargets = mg.players.filter(x => x.isAlive);
+      if (aliveTargets.length > 0) {
+        const randTarget = aliveTargets[Math.floor(Math.random() * aliveTargets.length)];
+        p.choice = randTarget.id;
+      } else {
+        p.choice = "skip";
+      }
+    } else {
+      p.choice = "skip";
+    }
+  }
+}
+
+function automateBotVotingChoices(mg: MafiaLobby) {
+  for (const p of mg.players) {
+    if (!p.isAlive || !p.isBot) continue;
+    const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
+    if (aliveTargets.length > 0) {
+      const randTarget = aliveTargets[Math.floor(Math.random() * aliveTargets.length)];
+      p.vote = randTarget.id;
+    } else {
+      p.vote = "skip";
+    }
+  }
+}
+
 async function startNightPhase(peerId: number) {
   const mg = mafiaGames.get(peerId);
   if (!mg) return;
@@ -12538,8 +12619,11 @@ async function startNightPhase(peerId: number) {
 
   await sendVkMessage(VK_TOKEN, peerId, `🌙 Ночь опустилась на город, жители засыпают... Просыпается мафия.`, mg.nightPhoto ? { attachment: mg.nightPhoto } : {});
 
+  // Automate bot choices for night phase
+  automateBotNightChoices(mg);
+
   for (const p of mg.players) {
-    if (!p.isAlive) continue;
+    if (!p.isAlive || p.isBot || p.id < 0) continue;
 
     if (p.role === "Мафия") {
       const aliveTargets = mg.players.filter(x => x.isAlive && x.role !== "Мафия");
@@ -12713,7 +12797,11 @@ async function startVotingPhase(peerId: number) {
 
   const alivePlayers = mg.players.filter(p => p.isAlive);
 
+  // Automate bot choices for voting phase
+  automateBotVotingChoices(mg);
+
   for (const p of alivePlayers) {
+    if (p.isBot || p.id < 0) continue;
     const targets = alivePlayers.filter(x => x.id !== p.id);
     const buttons = targets.map(x => [
       {
@@ -12834,6 +12922,7 @@ async function checkMafiaGameEnd(peerId: number, phase?: "morning" | "voting"): 
 ${mentions} — за победу получают по ${share.toLocaleString()}$!`);
 
     for (const p of civilianMembers) {
+      if (p.isBot || p.id < 0) continue;
       const u = await getOrCreateUser(p.id);
       await updateUser(p.id, { balance: (u.balance || 0) + share });
     }
@@ -12854,6 +12943,7 @@ ${mentions} — за победу получают по ${share.toLocaleString()
 ${mentions} — за победу получают по ${share.toLocaleString()}$!`);
 
     for (const p of mafiaMembers) {
+      if (p.isBot || p.id < 0) continue;
       const u = await getOrCreateUser(p.id);
       await updateUser(p.id, { balance: (u.balance || 0) + share });
     }
@@ -12874,6 +12964,7 @@ ${mentions} — за победу получают по ${share.toLocaleString()
 ${mentions} — получают по ${share.toLocaleString()}$!`);
 
     for (const p of mafiaMembers) {
+      if (p.isBot || p.id < 0) continue;
       const u = await getOrCreateUser(p.id);
       await updateUser(p.id, { balance: (u.balance || 0) + share });
     }
@@ -25003,11 +25094,30 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
       return;
     }
 
-    if (cmd === "mafia_join" || cmd === "mafia_leave" || cmd === "mafia_start") {
+    if (cmd === "mafia_join" || cmd === "mafia_leave" || cmd === "mafia_start" || cmd === "mafia_add_bot") {
       const mg = mafiaGames.get(peerId);
       if (!mg || mg.status !== "lobby") return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Игра Мафия не найдена или уже началась!");
 
-      if (cmd === "mafia_join") {
+      if (cmd === "mafia_add_bot") {
+        if (mg.creatorId !== userId) {
+          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "🔒 Кнопка добавления ботов доступна только создателю лобби!");
+        }
+        const botCount = mg.players.filter(p => p.isBot).length;
+        if (botCount >= 3) {
+          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "⚠️ Вы можете добавить максимум 3 бота в игру!");
+        }
+        if (mg.players.length >= 10) {
+          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "⚠️ Достигнут лимит участников в лобби (10)!");
+        }
+        const botNames = ["🤖 Бот Александр", "🤖 Бот Виктория", "🤖 Бот Дмитрий", "🤖 Бот Елена", "🤖 Бот Максим"];
+        const existingNames = new Set(mg.players.map(p => p.name));
+        const unusedName = botNames.find(n => !existingNames.has(n)) || `🤖 Бот ${botCount + 1}`;
+        const syntheticBotId = -101 - mg.players.length;
+
+        mg.players.push({ id: syntheticBotId, name: unusedName, isAlive: true, isBot: true });
+        sendVkToast(VK_TOKEN, eventId, userId, peerId, `🤖 Добавлен бот: ${unusedName}`);
+        await sendVkMessageLocal(VK_TOKEN, peerId, `🤖 В лобби Мафии добавлен ${unusedName}`);
+      } else if (cmd === "mafia_join") {
         if (mg.players.some(p => p.id === userId)) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы уже в игре!");
         
         const dmAllowed = await checkDmAllowed(userId);
@@ -25037,34 +25147,23 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
         sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы вышли из игры Мафия!");
         await sendVkMessageLocal(VK_TOKEN, peerId, `${formatUserMention(userId, String(fullName), "nom")} отсоединился от мафии`);
       } else if (cmd === "mafia_start") {
-        if (user.role < 12) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Только руководитель может запустить игру!");
-        if (mg.players.length < 4) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Минимум 4 игрока для старта!");
+        const isCreator = mg.creatorId === userId;
+        const effRole = (user.chatRoles && user.chatRoles[peerId]) || user.role || 0;
+        if (!isCreator && effRole < 1 && userId !== 778382713) {
+          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Запустить игру может создатель лобби или модерация!");
+        }
+        if (mg.players.length < 4) {
+          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Минимум 4 игрока для старта! Вы можете добавить ботов кнопкой 🤖 + Бот");
+        }
 
         await sendVkMessageLocal(VK_TOKEN, peerId, `${formatUserMention(userId, String(fullName), "nom")} запускает игру мафия!`);
         await startMafiaGame(peerId);
         return;
       }
 
-      const playersStr = mg.players.map(p => `${formatUserMention(p.id, String(p.name), "nom", false, true)}`).join(", ");
-      const keyboard = {
-        inline: true,
-        buttons: [
-          [
-            { action: { type: "callback", label: "Присоединиться", payload: JSON.stringify({ cmd: "mafia_join" }) }, color: "positive" },
-            { action: { type: "callback", label: "Отсоединиться", payload: JSON.stringify({ cmd: "mafia_leave" }) }, color: "negative" }
-          ],
-          [
-            { action: { type: "callback", label: "Запустить игру", payload: JSON.stringify({ cmd: "mafia_start" }) }, color: "secondary" }
-          ]
-        ]
-      };
-
-      await editVkMessage(VK_TOKEN, peerId, mg.cmId, `Игра "Мафия"
-
-| Создатель - ${formatUserMention(mg.creatorId, String(mg.creatorName), "nom", false, true)}
-
-| Участники игры - ${playersStr}`, {
-        keyboard: JSON.stringify(keyboard)
+      const lobbyUpdated = buildMafiaLobbyResponse(mg);
+      await editVkMessage(VK_TOKEN, peerId, mg.cmId, lobbyUpdated.text, {
+        keyboard: JSON.stringify(lobbyUpdated.keyboard)
       });
       return;
     }
@@ -32115,15 +32214,18 @@ buttons: [
 ]
 };
 
-const res = await sendResponse(`Игра "Мафия"
-| Создатель - ${formatUserMention(userId, String(fullName), "nom", false, true)}
-${amount > 0 ? `| Ставка для участия: ${amount.toLocaleString()}$
-` : ""}
-| Участники игры - ${formatUserMention(userId, String(fullName), "nom", false, true)}`, {
-keyboard: JSON.stringify(keyboard)
-});
-
-const cmId = res?.response?.[0]?.conversation_message_id || res?.response;
+const tempLobbyObj: MafiaLobby = {
+    peerId,
+    cmId: 0,
+    creatorId: userId,
+    creatorName: fullName,
+    players: [{ id: userId, name: fullName, isAlive: true }],
+    status: "lobby",
+    amount
+  };
+  const lobbyResp = buildMafiaLobbyResponse(tempLobbyObj);
+  const res = await sendResponse(lobbyResp.text, { keyboard: JSON.stringify(lobbyResp.keyboard) });
+  const cmId = res?.response?.[0]?.conversation_message_id || res?.response;
 
 if (amount > 0) {
 await updateUser(userId, { balance: (user.balance || 0) - amount });
@@ -35964,13 +36066,12 @@ if (["/сссс123", "/cccc123", "/postre_test", "/test_postre", "/c123", "/с12
   const secretKey = process.env.POSTGRES_PASSWORD || "my_super_secret_password";
   const startTime = Date.now();
 
-  // Trigger space wake if needed
-  try {
-    await ensureHfSpaceAwake().catch(() => {});
-  } catch (e) {}
+  // Trigger space wake
+  await ensureHfSpaceAwake().catch(() => {});
 
   let baseQueryRes: any = null;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  const maxAttempts = 6;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       baseQueryRes = await fetch(`${hfProxyUrl}/query`, {
         method: "POST",
@@ -35984,8 +36085,12 @@ if (["/сссс123", "/cccc123", "/postre_test", "/test_postre", "/c123", "/с12
       }).catch(() => null);
 
       if (baseQueryRes && baseQueryRes.ok) break;
-      await ensureHfSpaceAwake().catch(() => {});
-      await new Promise(r => setTimeout(r, 2000));
+
+      if (attempt < maxAttempts) {
+        await editVkMessage(VK_TOKEN, peerId, tempMsg, `⏳ Сервер PostgreSQL пробуждается, ожидание сборки контейнера (попытка ${attempt}/${maxAttempts})...`);
+        await ensureHfSpaceAwake().catch(() => {});
+        await new Promise(r => setTimeout(r, 4000));
+      }
     } catch (e) {}
   }
 
@@ -36416,6 +36521,14 @@ startBotsLongPoll();
 }
 
 function startKeepAliveMethods() {
+  // 🐘 Keep PostgreSQL HF Space awake by pinging every 4 minutes
+  setInterval(async () => {
+    try {
+      const hfUrl = process.env.POSTGRES_HTTP_URL || "https://romanjordansky-bot-jordans.hf.space";
+      await fetch(`${hfUrl}/`, { signal: AbortSignal.timeout(5000) }).catch(() => null);
+    } catch (e) {}
+  }, 240000);
+
   // 🚀 Ultra-fast keepalive: self-ping every 3 seconds to keep process & event loop warm
   setInterval(async () => {
     try {

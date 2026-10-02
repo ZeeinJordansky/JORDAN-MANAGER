@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "node apply-nginx-bypass.cjs && tsx --expose-gc server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build:ui": "vite build",
+    "deploy:ui": "vite build && wrangler pages deploy dist",
     "start": "node apply-nginx-bypass.cjs && node --expose-gc dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
