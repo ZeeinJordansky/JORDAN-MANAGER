@@ -96,10 +96,10 @@ export default function BotLanding({
       <header className={`sticky top-0 z-50 transition-colors duration-300 backdrop-blur-2xl border-b ${
         isLight ? 'bg-white/90 border-neutral-200' : 'bg-black/80 border-white/5'
       }`}>
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between relative">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between gap-4 relative">
           <button
             onClick={() => changeView('landing')}
-            className="flex items-center hover:opacity-80 transition-opacity cursor-pointer group shrink-0 z-10"
+            className="flex items-center hover:opacity-80 transition-opacity cursor-pointer group shrink-0 z-20"
           >
             <div className="w-10 h-10 rounded-xl overflow-hidden border border-violet-500/20 bg-neutral-950 flex items-center justify-center shrink-0">
               <img src="/ming.jpg" alt="Logo" className="w-full h-full object-cover" />
@@ -107,8 +107,8 @@ export default function BotLanding({
             <span className={`ml-3 text-lg font-black tracking-tight ${isLight ? 'text-neutral-900' : 'text-white'}`}>Mint</span>
           </button>
 
-          {/* Centered Nav */}
-          <nav className="hidden md:flex items-center gap-1 p-1 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 absolute left-1/2 -translate-x-1/2 z-0">
+          {/* Centered Nav Links - Hidden only on small mobile */}
+          <nav className="hidden md:flex items-center gap-1 p-1 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 z-10">
             {[
               { id: 'landing', label: 'Главная' },
               { id: 'commands', label: 'Команды' },
@@ -118,7 +118,7 @@ export default function BotLanding({
               <button
                 key={item.id}
                 onClick={() => changeView(item.id as any)}
-                className={`px-5 py-2 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest cursor-pointer ${
+                className={`px-3 lg:px-5 py-2 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest cursor-pointer whitespace-nowrap ${
                   currentView === item.id
                     ? 'bg-white dark:bg-violet-600 text-violet-600 dark:text-white shadow-sm'
                     : isLight ? 'text-neutral-500 hover:text-neutral-900' : 'text-neutral-400 hover:text-white'
@@ -129,17 +129,18 @@ export default function BotLanding({
             ))}
           </nav>
 
-          <div className="flex items-center gap-4 shrink-0 z-10">
+          <div className="flex items-center gap-3 shrink-0 z-20">
             <button
               onClick={() => onNavigate('/login')}
-              className={`hidden sm:flex items-center gap-3 px-5 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-sm ${
+              className={`hidden sm:flex items-center gap-2.5 px-4 lg:px-5 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-sm ${
                 isLight 
                   ? 'bg-neutral-900 text-white hover:bg-neutral-800' 
                   : 'bg-violet-600 text-white hover:bg-violet-500 shadow-violet-600/20'
               }`}
             >
               <Shield className="w-3.5 h-3.5" />
-              <span>Вход в панель</span>
+              <span className="hidden lg:inline">Вход в панель</span>
+              <span className="lg:hidden">Вход</span>
             </button>
             <button
               onClick={onToggleTheme}

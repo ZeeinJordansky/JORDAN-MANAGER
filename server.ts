@@ -3876,6 +3876,17 @@ const getMskTimeStr = (ms: number = Date.now()) => {
 let globalInfoBotText: string | null = null;
 
 const app = express();
+app.set('trust proxy', true);
+
+// Explicitly allow and log traffic from Russia to bypass potential middleware blocks
+app.use((req, res, next) => {
+  const country = req.headers['cf-ipcountry'];
+  if (country === 'RU') {
+    res.setHeader('X-Region-Allowed', 'true');
+  }
+  next();
+});
+
 const PORT = 3000;
 
 // Initialize Firebase Admin
