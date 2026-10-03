@@ -8889,6 +8889,17 @@ async function fetchVkFullName(userId: number): Promise<string | null> {
   return null;
 }
 
+async function fetchVkAvatar(userId: number): Promise<string | null> {
+  if (userId <= 0) return null;
+  try {
+    const res = await fastVkCall("users.get", { user_ids: String(userId), fields: "photo_200" }, true);
+    if (res?.response?.[0]) {
+      return res.response[0].photo_200 || null;
+    }
+  } catch (e) {}
+  return null;
+}
+
 const userFetchPromises = new Map<number, Promise<any>>();
 async function getOrCreateUser(userIdRaw: number | string, nameHint?: string) {
   const userId = Number(userIdRaw);
@@ -10588,6 +10599,26 @@ app.use("/api", (req, res, next) => {
     return res.sendStatus(200);
   }
   next();
+});
+
+// Server-side key verification proxy to bypass potential client-side Firestore blocking/offline issues
+app.post("/api/auth/verify-key", async (req, res) => {
+  const { key } = req.body;
+  if (!key || typeof key !== 'string' || !key.startsWith('mint-')) {
+    return res.status(400).json({ error: "Неверный формат ключа" });
+  }
+  try {
+    // @ts-ignore
+    const doc = await firestoreDb.collection("auth_keys").doc(key).get();
+    if (doc.exists) {
+      res.json({ success: true, data: doc.data() });
+    } else {
+      res.status(404).json({ error: "Ключ не найден или недействителен" });
+    }
+  } catch (err: any) {
+    console.error("[Auth] Verify key error:", err);
+    res.status(500).json({ error: "Ошибка на стороне сервера при проверке ключа" });
+  }
 });
 
 // Uptime monitor and health check endpoints
@@ -28153,8 +28184,32 @@ const normalizedCmd = "/" + cmdNameOnly;
 const allowedInDm = new Set([
 "/заявка", "/податьзаявку", "/заявки", "/apply", "/заявканапост", "/анкета",
 "/ticket", "/тикет", "/репорт", "/report", "/answerticket", "/ответить", "/closeticket", "/закрыть", "/ahelp", "/ахелп",
-"/get", "/гет", "/наказания", "/id", "/айди", "/ид"
+"/get", "/гет", "/наказания", "/id", "/айди", "/ид", "/ключ", "/key"
 ]);
+
+if (normalizedCmd === "/ключ" || normalizedCmd === "/key") {
+  const randomChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let keySuffix = "";
+  for (let i = 0; i < 15; i++) {
+    keySuffix += randomChars.charAt(Math.floor(Math.random() * randomChars.length));
+  }
+  const generatedKey = `mint-${keySuffix}`;
+  
+  const userFull = user.fullName || (await fetchVkFullName(userId)) || `User${userId}`;
+  const avatarUrl = user.avatarUrl || (await fetchVkAvatar(userId)) || "";
+  
+  await firestoreDb.collection("auth_keys").doc(generatedKey).set({
+    vkId: String(userId),
+    fullName: userFull,
+    avatarUrl: avatarUrl,
+    createdAt: new Date().toISOString()
+  });
+
+  return await sendResponse(`Ваш ключ для входа в панель: ${generatedKey}
+  
+Никому не сообщайте ваш ключ доступа!`);
+}
+
 if (!allowedInDm.has(normalizedCmd)) {
 return await sendResponse(`В личных сообщениях чат-менеджера работают только определённые команды.
 

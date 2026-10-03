@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import BotLanding from './components/BotLanding';
 import PanelApp from './panel/PanelApp';
 import OrbBackground from './components/OrbBackground';
+import Login from './components/Login';
+import Dashboard from './components/Dashboard';
+import NotFound from './components/NotFound';
 
-type AppRoute = 'landing' | 'commands' | 'bans' | 'faq' | 'rules' | 'privacy' | 'adminPanel';
+type AppRoute = 'landing' | 'commands' | 'faq' | 'rules' | 'privacy' | 'adminPanel' | 'login' | 'panel' | '404';
 
 function parseUrlRoute(): { route: AppRoute; queryUser?: string; refCode?: string } {
   if (typeof window === 'undefined') return { route: 'landing' };
@@ -13,6 +16,10 @@ function parseUrlRoute(): { route: AppRoute; queryUser?: string; refCode?: strin
   const search = window.location.search;
 
   if (lower.includes('/panel/zxclk2311498fslkjd')) return { route: 'adminPanel' };
+
+  // Control Panel Routes
+  if (lower === '/login') return { route: 'login' };
+  if (lower === '/panel') return { route: 'panel' };
 
   // Ref link support: /ref=(код) или /ref/(код) или ?ref=(код)
   if (lower.startsWith('/ref=') || lower.startsWith('/ref/')) {
@@ -36,25 +43,13 @@ function parseUrlRoute(): { route: AppRoute; queryUser?: string; refCode?: strin
     }
   }
 
-  // Exact requested route format: /getbans=(ид или юз)
-  if (lower.startsWith('/getbans=') || lower.startsWith('/getbans/')) {
-    const raw = pathname.slice(pathname.indexOf('=') !== -1 ? pathname.indexOf('=') + 1 : pathname.indexOf('/getbans/') + 9);
-    const decoded = decodeURIComponent(raw).trim();
-    return { route: 'bans', queryUser: decoded };
-  }
-
-  if (lower.startsWith('/getbans') || lower === '/bans' || lower === '/banlist') {
-    const params = new URLSearchParams(search);
-    const user = params.get('user') || params.get('id') || params.get('username') || '';
-    return { route: 'bans', queryUser: user };
-  }
-
   if (lower === '/commands' || lower === '/help' || lower === '/хелп') return { route: 'commands' };
   if (lower === '/faq' || lower === '/вопросы') return { route: 'faq' };
   if (lower === '/rules' || lower === '/reglament') return { route: 'rules' };
   if (lower === '/privacy') return { route: 'privacy' };
+  if (lower === '/' || lower === '' || lower === '/main') return { route: 'landing' };
 
-  return { route: 'landing' };
+  return { route: '404' };
 }
 
 export default function App() {
@@ -68,6 +63,23 @@ export default function App() {
 
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => parseUrlRoute().route);
   const [initialBanUser, setInitialBanUser] = useState<string>(() => parseUrlRoute().queryUser || '');
+  const [user, setUser] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('mint_auth_user');
+      return saved ? JSON.parse(saved) : null;
+    }
+    return null;
+  });
+
+  const handleLogin = (userData: any) => {
+    setUser(userData);
+    localStorage.setItem('mint_auth_user', JSON.stringify(userData));
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('mint_auth_user');
+  };
 
   const toggleTheme = () => {
     setTheme((prev) => {
@@ -98,16 +110,18 @@ export default function App() {
     }
   }, [theme]);
 
-  // Dynamic site title: (название страницы) | «Mint» - чат-менеджер
+  // Dynamic site title
   useEffect(() => {
     const titles: Record<AppRoute, string> = {
       landing: 'Главная | «Mint» - чат-менеджер',
       commands: 'Команды | «Mint» - чат-менеджер',
-      bans: 'Блокировки в беседах | «Mint» - чат-менеджер',
       faq: 'Часто задаваемые вопросы (FAQ) | «Mint» - чат-менеджер',
       rules: 'Регламент и правила | «Mint» - чат-менеджер',
       privacy: 'Конфиденциальность | «Mint» - чат-менеджер',
       adminPanel: 'Админ-панель | «Mint» - чат-менеджер',
+      login: 'Вход в панель | «Mint»',
+      panel: 'Панель управления | «Mint»',
+      '404': '404 - Страница не найдена',
     };
     const title = titles[currentRoute] || 'Главная | «Mint» - чат-менеджер';
     if (typeof document !== 'undefined') {
@@ -140,38 +154,29 @@ export default function App() {
     if (typeof window !== 'undefined' && window.history.pushState) {
       window.history.pushState({}, '', path);
     }
-    const lower = path.toLowerCase();
-    if (lower.includes('/panel/zxclk2311498fslkjd')) {
-      setCurrentRoute('adminPanel');
-    } else if (lower.startsWith('/getbans=') || lower.startsWith('/getbans/') || lower.startsWith('/getbans') || lower === '/bans') {
-      let rawUser = '';
-      if (path.includes('=')) {
-        rawUser = decodeURIComponent(path.split('=')[1] || '');
-      } else if (path.startsWith('/getbans/')) {
-        rawUser = decodeURIComponent(path.slice(9));
-      }
-      setInitialBanUser(rawUser);
-      setCurrentRoute('bans');
-    } else if (lower === '/commands' || lower === '/help' || lower === '/хелп') {
-      setCurrentRoute('commands');
-    } else if (lower === '/faq' || lower === '/вопросы') {
-      setCurrentRoute('faq');
-    } else if (lower === '/rules' || lower === '/reglament') {
-      setCurrentRoute('rules');
-    } else if (lower === '/privacy') {
-      setCurrentRoute('privacy');
-    } else {
-      setCurrentRoute('landing');
-    }
-  };
-
-  const openAdminPanel = () => {
-    navigateTo('/panel/zxclk2311498Fslkjd');
+    const parsed = parseUrlRoute();
+    setCurrentRoute(parsed.route);
   };
 
   const openWebsite = () => {
     navigateTo('/main');
   };
+
+  if (currentRoute === '404') {
+    return <NotFound onNavigate={navigateTo} theme={theme} />;
+  }
+
+  if (currentRoute === 'login') {
+    return <Login onLogin={handleLogin} theme={theme} onNavigate={navigateTo} />;
+  }
+
+  if (currentRoute === 'panel') {
+    if (!user) {
+      navigateTo('/login');
+      return null;
+    }
+    return <Dashboard user={user} onLogout={handleLogout} theme={theme} onNavigate={navigateTo} />;
+  }
 
   if (currentRoute === 'adminPanel') {
     return (

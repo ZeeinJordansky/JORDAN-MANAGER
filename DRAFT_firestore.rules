@@ -14,7 +14,7 @@ service cloud.firestore {
     // Authentication Keys
     match /auth_keys/{key} {
       // Allow single document fetch by ID for login flow
-      allow get: if key is string && key.size() > 0;
+      allow get: if isValidId(key);
       
       // Block listing and all write operations from client
       allow list: if false;

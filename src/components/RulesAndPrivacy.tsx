@@ -83,7 +83,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack, theme = 
             onClick={() => setActiveTab('rules')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'rules'
-                ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-md shadow-violet-600/30'
+                ? 'bg-neutral-900 text-white shadow-sm'
                 : isLight ? 'text-neutral-600 hover:text-neutral-900' : 'text-neutral-400 hover:text-white'
             }`}
           >
@@ -94,7 +94,7 @@ export default function RulesAndPrivacy({ initialTab = 'rules', onBack, theme = 
             onClick={() => setActiveTab('privacy')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'privacy'
-                ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-md shadow-violet-600/30'
+                ? 'bg-neutral-900 text-white shadow-sm'
                 : isLight ? 'text-neutral-600 hover:text-neutral-900' : 'text-neutral-400 hover:text-white'
             }`}
           >

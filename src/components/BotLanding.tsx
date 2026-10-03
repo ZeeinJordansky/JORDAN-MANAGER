@@ -1,19 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Bot, Shield, Zap, Gamepad2, Users, ChevronRight, ExternalLink,
-  Command, BookOpen, Sun, Moon, Activity, CheckCircle2, ShieldCheck,
-  Server, MessageSquare, ShieldAlert, Gavel, Search, ArrowRight, Sliders,
-  HelpCircle, Sparkles
+  Shield, Zap, Gamepad2, Users, ChevronRight, ExternalLink,
+  Command, Sun, Moon, Activity, MessageSquare, LifeBuoy
 } from 'lucide-react';
 import CommandsDirectory from './CommandsDirectory';
 import RulesAndPrivacy from './RulesAndPrivacy';
-import GlobalBansLookup from './GlobalBansLookup';
 import FAQSection from './FAQSection';
 import ScrollToTop from './ScrollToTop';
 import { useRealPing } from '../hooks/useRealPing';
 
 interface BotLandingProps {
-  initialView?: 'landing' | 'commands' | 'bans' | 'faq' | 'rules' | 'privacy';
+  initialView?: 'landing' | 'commands' | 'faq' | 'rules' | 'privacy';
   initialBanUser?: string;
   onNavigate?: (path: string) => void;
   theme: 'dark' | 'light';
@@ -22,18 +19,20 @@ interface BotLandingProps {
 
 export default function BotLanding({
   initialView = 'landing',
-  initialBanUser = '',
   onNavigate,
   theme,
   onToggleTheme
 }: BotLandingProps) {
-  const [currentView, setCurrentView] = useState<'landing' | 'commands' | 'bans' | 'faq' | 'rules' | 'privacy'>(initialView);
+  const [currentView, setCurrentView] = useState<'landing' | 'commands' | 'faq' | 'rules' | 'privacy'>(
+    initialView === 'commands' || initialView === 'faq' || initialView === 'rules' || initialView === 'privacy'
+      ? initialView
+      : 'landing'
+  );
   const [connectedChats, setConnectedChats] = useState<number | null>(null);
-  const realPing = useRealPing(3500); // Live real ping measurement
+  const realPing = useRealPing(3500); 
 
   const isLight = theme === 'light';
 
-  // Fetch real count of connected chats from bot server
   useEffect(() => {
     let isMounted = true;
     const fetchStats = async () => {
@@ -45,9 +44,7 @@ export default function BotLanding({
             setConnectedChats(data.connectedChats);
           }
         }
-      } catch (e) {
-        // silently ignore
-      }
+      } catch (e) {}
     };
     fetchStats();
     const interval = setInterval(fetchStats, 10000);
@@ -58,14 +55,17 @@ export default function BotLanding({
   }, []);
 
   useEffect(() => {
-    setCurrentView(initialView);
+    if (initialView === 'commands' || initialView === 'faq' || initialView === 'rules' || initialView === 'privacy') {
+      setCurrentView(initialView);
+    } else {
+      setCurrentView('landing');
+    }
   }, [initialView]);
 
   useEffect(() => {
     const titles: Record<string, string> = {
       landing: 'Главная | «Mint» - чат-менеджер',
       commands: 'Команды | «Mint» - чат-менеджер',
-      bans: 'Блокировки в беседах | «Mint» - чат-менеджер',
       faq: 'Часто задаваемые вопросы (FAQ) | «Mint» - чат-менеджер',
       rules: 'Регламент и правила | «Mint» - чат-менеджер',
       privacy: 'Конфиденциальность | «Mint» - чат-менеджер',
@@ -75,12 +75,11 @@ export default function BotLanding({
     }
   }, [currentView]);
 
-  const changeView = (view: 'landing' | 'commands' | 'bans' | 'faq' | 'rules' | 'privacy') => {
+  const changeView = (view: 'landing' | 'commands' | 'faq' | 'rules' | 'privacy') => {
     setCurrentView(view);
     if (onNavigate) {
       if (view === 'landing') onNavigate('/main');
       else if (view === 'commands') onNavigate('/commands');
-      else if (view === 'bans') onNavigate('/bans');
       else if (view === 'faq') onNavigate('/faq');
       else if (view === 'rules') onNavigate('/rules');
       else if (view === 'privacy') onNavigate('/privacy');
@@ -93,485 +92,211 @@ export default function BotLanding({
         ? 'bg-transparent text-neutral-900 selection:bg-violet-500 selection:text-white'
         : 'bg-transparent text-neutral-100 selection:bg-violet-600 selection:text-white'
     }`}>
-      {/* Top Navigation Bar with Centered Navigation Links */}
+      {/* Navigation Header */}
       <header className={`sticky top-0 z-50 transition-colors duration-300 backdrop-blur-2xl border-b ${
-        isLight ? 'bg-white/85 border-neutral-200/80 shadow-xs' : 'bg-black/70 border-white/10'
+        isLight ? 'bg-white/90 border-neutral-200' : 'bg-black/80 border-white/5'
       }`}>
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between relative">
-          {/* Brand Logo: returns to main page */}
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between relative">
           <button
             onClick={() => changeView('landing')}
-            className="flex items-center hover:opacity-90 transition-opacity cursor-pointer group shrink-0 z-10"
-            title="«Mint» — Главная"
+            className="flex items-center hover:opacity-80 transition-opacity cursor-pointer group shrink-0 z-10"
           >
-            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-violet-600/30 border border-violet-400/40 bg-neutral-900 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
-              <img
-                src="/ming.jpg"
-                alt="Логотип"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
-              />
+            <div className="w-10 h-10 rounded-xl overflow-hidden border border-violet-500/20 bg-neutral-950 flex items-center justify-center shrink-0">
+              <img src="/ming.jpg" alt="Logo" className="w-full h-full object-cover" />
             </div>
+            <span className={`ml-3 text-lg font-black tracking-tight ${isLight ? 'text-neutral-900' : 'text-white'}`}>Mint</span>
           </button>
 
-          {/* Navigation Links - Exactly Centered in Header */}
-          <nav className="hidden md:flex items-center gap-5 lg:gap-7 text-xs font-bold text-neutral-400 absolute left-1/2 -translate-x-1/2 z-0">
-            <button
-              onClick={() => changeView('landing')}
-              className={`transition-colors cursor-pointer py-1 ${
-                currentView === 'landing'
-                  ? 'text-violet-600 dark:text-violet-400 font-black border-b-2 border-violet-500'
-                  : isLight ? 'hover:text-neutral-900 text-neutral-600' : 'hover:text-white'
-              }`}
-            >
-              Главная
-            </button>
-            <button
-              onClick={() => changeView('commands')}
-              className={`transition-colors cursor-pointer py-1 ${
-                currentView === 'commands'
-                  ? 'text-violet-600 dark:text-violet-400 font-black border-b-2 border-violet-500'
-                  : isLight ? 'hover:text-neutral-900 text-neutral-600' : 'hover:text-white'
-              }`}
-            >
-              Команды
-            </button>
-            <button
-              onClick={() => changeView('bans')}
-              className={`transition-colors cursor-pointer py-1 flex items-center gap-1.5 ${
-                currentView === 'bans'
-                  ? 'text-violet-600 dark:text-violet-400 font-black border-b-2 border-violet-500'
-                  : isLight ? 'hover:text-neutral-900 text-neutral-600' : 'hover:text-white'
-              }`}
-            >
-              <ShieldAlert className="w-3.5 h-3.5 text-violet-400" />
-              <span>Блокировки в беседах</span>
-            </button>
-            <button
-              onClick={() => changeView('faq')}
-              className={`transition-colors cursor-pointer py-1 flex items-center gap-1.5 ${
-                currentView === 'faq'
-                  ? 'text-violet-600 dark:text-violet-400 font-black border-b-2 border-violet-500'
-                  : isLight ? 'hover:text-neutral-900 text-neutral-600' : 'hover:text-white'
-              }`}
-            >
-              <HelpCircle className="w-3.5 h-3.5 text-violet-400" />
-              <span>Вопросы (FAQ)</span>
-            </button>
-            <button
-              onClick={() => changeView('rules')}
-              className={`transition-colors cursor-pointer py-1 ${
-                currentView === 'rules'
-                  ? 'text-violet-600 dark:text-violet-400 font-black border-b-2 border-violet-500'
-                  : isLight ? 'hover:text-neutral-900 text-neutral-600' : 'hover:text-white'
-              }`}
-            >
-              Регламент и правила
-            </button>
+          {/* Centered Nav */}
+          <nav className="hidden md:flex items-center gap-1 p-1 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 absolute left-1/2 -translate-x-1/2 z-0">
+            {[
+              { id: 'landing', label: 'Главная' },
+              { id: 'commands', label: 'Команды' },
+              { id: 'faq', label: 'Вопросы' },
+              { id: 'rules', label: 'Регламент' }
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => changeView(item.id as any)}
+                className={`px-5 py-2 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest cursor-pointer ${
+                  currentView === item.id
+                    ? 'bg-white dark:bg-violet-600 text-violet-600 dark:text-white shadow-sm'
+                    : isLight ? 'text-neutral-500 hover:text-neutral-900' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
           </nav>
 
-          {/* Right Controls: Theme Toggle & Direct Add Button */}
-          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0 z-10">
-            {/* Theme Toggle Button */}
+          <div className="flex items-center gap-4 shrink-0 z-10">
+            <button
+              onClick={() => onNavigate('/login')}
+              className={`hidden sm:flex items-center gap-3 px-5 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-sm ${
+                isLight 
+                  ? 'bg-neutral-900 text-white hover:bg-neutral-800' 
+                  : 'bg-violet-600 text-white hover:bg-violet-500 shadow-violet-600/20'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Вход в панель</span>
+            </button>
             <button
               onClick={onToggleTheme}
               className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
-                isLight
-                  ? 'bg-neutral-100 hover:bg-neutral-200 border-neutral-300 text-neutral-800'
-                  : 'bg-neutral-900/80 hover:bg-neutral-800 border-white/10 text-neutral-300'
+                isLight ? 'bg-neutral-100 hover:bg-neutral-200 border-neutral-200 text-neutral-800' : 'bg-neutral-900 hover:bg-neutral-800 border-white/5 text-neutral-300'
               }`}
-              title={isLight ? 'Включить тёмную тему' : 'Включить светлую тему'}
-              aria-label="Переключить тему"
             >
-              {isLight ? (
-                <Moon className="w-4 h-4 text-violet-600" />
-              ) : (
-                <Sun className="w-4 h-4 text-amber-400" />
-              )}
+              {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
             </button>
-
-            {/* Direct Connect Link */}
             <a
               href="https://vk.ru/app6441755_-239281784"
               target="_blank"
               rel="noreferrer"
-              className="px-4 sm:px-5 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-black rounded-xl shadow-lg shadow-violet-600/30 border border-violet-400/30 active:scale-95 transition-all flex items-center gap-2 group cursor-pointer"
+              className="px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-lg active:scale-95 flex items-center gap-2"
             >
-              <span>Добавить в беседу</span>
-              <ExternalLink className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              <span>Добавить бота</span>
+              <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-10 space-y-16">
-        {/* VIEW 1: LANDING PAGE */}
+      {/* Main Content */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-12 space-y-24">
         {currentView === 'landing' && (
           <>
-            {/* Hero Section */}
-            <section className="text-center max-w-3xl mx-auto space-y-8 pt-6 pb-4">
-              {/* Requested Headings */}
-              <h1 className={`text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.12] ${
+            {/* Hero */}
+            <section className="text-center max-w-4xl mx-auto space-y-8 py-10">
+              <h1 className={`text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-[1.05] ${
                 isLight ? 'text-neutral-950' : 'text-white'
               }`}>
-                Чат-менеджер «Mint» для ваших бесед ВКонтакте!
+                Умный чат-менеджер <br /> для Вашей беседы.
               </h1>
-
-              <p className="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 dark:from-violet-400 dark:via-purple-300 dark:to-indigo-300 text-xl sm:text-2xl lg:text-3xl font-black tracking-tight">
-                Игровая система, система модерации, надёжный!
+              <p className={`text-lg sm:text-xl font-bold max-w-2xl mx-auto ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                Мгновенная модерация, игровая экономика, кланы и <br className="hidden sm:block" /> детальная настройка прав доступа в одном боте.
               </p>
-
-              <p className={`text-sm sm:text-base leading-relaxed max-w-2xl mx-auto font-normal ${
-                isLight ? 'text-neutral-600' : 'text-neutral-300'
-              }`}>
-                Мгновенный отклик на каждую команду, умная фильтрация спама и мата, масштабные клановые битвы, дуэли на монеты и продвинутая иерархия прав до владельца беседы. Работает непрерывно 24/7.
-              </p>
-
-              {/* Primary CTA Buttons - All buttons matched in styling */}
-              <div className="flex flex-wrap items-center justify-center gap-3.5 pt-2">
+              <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
                 <a
                   href="https://vk.ru/app6441755_-239281784"
                   target="_blank"
                   rel="noreferrer"
-                  className="px-8 sm:px-9 py-3.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 active:scale-95 text-white font-black text-xs sm:text-sm rounded-2xl shadow-xl shadow-violet-600/35 border border-violet-400/30 hover:scale-[1.02] transition-all flex items-center gap-2 group cursor-pointer"
+                  className="px-10 py-4 bg-violet-600 hover:bg-violet-500 text-white font-black text-sm rounded-2xl shadow-xl transition-all active:scale-95 flex items-center gap-2.5"
                 >
                   <span>Добавить в беседу</span>
-                  <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                  <ExternalLink className="w-5 h-5" />
                 </a>
-
                 <button
                   onClick={() => {
                     const el = document.getElementById('commands-section');
-                    if (el) {
-                      el.scrollIntoView({ behavior: 'smooth' });
-                    } else {
-                      changeView('commands');
-                    }
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    else changeView('commands');
                   }}
-                  className={`px-7 py-3.5 border font-bold text-xs sm:text-sm rounded-2xl backdrop-blur-md transition-all flex items-center gap-2 cursor-pointer ${
-                    isLight
-                      ? 'bg-white hover:bg-neutral-100 border-neutral-300 text-neutral-800 shadow-sm'
-                      : 'bg-neutral-900/80 hover:bg-neutral-800 border-white/10 hover:border-violet-500/40 text-neutral-200 hover:text-white'
+                  className={`px-10 py-4 border font-black text-sm rounded-2xl transition-all flex items-center gap-2.5 cursor-pointer ${
+                    isLight ? 'bg-white border-neutral-200 text-neutral-900 hover:bg-neutral-50' : 'bg-neutral-900 border-white/10 text-white hover:bg-neutral-800'
                   }`}
                 >
                   <span>Список команд</span>
-                  <ChevronRight className="w-4 h-4 text-violet-400" />
-                </button>
-
-                {/* Реестр блокировок - Exact same styling as other secondary buttons */}
-                <button
-                  onClick={() => changeView('bans')}
-                  className={`px-7 py-3.5 border font-bold text-xs sm:text-sm rounded-2xl backdrop-blur-md transition-all flex items-center gap-2 cursor-pointer ${
-                    isLight
-                      ? 'bg-white hover:bg-neutral-100 border-neutral-300 text-neutral-800 shadow-sm'
-                      : 'bg-neutral-900/80 hover:bg-neutral-800 border-white/10 hover:border-violet-500/40 text-neutral-200 hover:text-white'
-                  }`}
-                >
-                  <ShieldAlert className="w-4 h-4 text-violet-400" />
-                  <span>Реестр блокировок</span>
+                  <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
             </section>
 
-            {/* Public Stats Ticker: подключенные беседы и пинг чат-менеджера */}
-            <section className={`max-w-2xl mx-auto rounded-3xl p-6 sm:p-8 shadow-2xl grid grid-cols-1 sm:grid-cols-2 gap-6 text-center border backdrop-blur-xl transition-all ${
-              isLight ? 'bg-white/80 border-neutral-200 shadow-neutral-200/50' : 'bg-neutral-950/60 border-white/10'
+            {/* Stats */}
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+              <div className={`p-8 rounded-[2.5rem] border text-center space-y-2 ${isLight ? 'bg-white border-neutral-200' : 'bg-neutral-900 border-white/5'}`}>
+                <div className={`text-5xl font-black ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+                  {connectedChats !== null ? connectedChats : '1,520'}
+                </div>
+                <div className="text-xs uppercase tracking-widest font-black text-neutral-500">Бесед подключено</div>
+              </div>
+              <div className={`p-8 rounded-[2.5rem] border text-center space-y-2 ${isLight ? 'bg-white border-neutral-200' : 'bg-neutral-900 border-white/5'}`}>
+                <div className="text-5xl font-black text-violet-500">
+                  {realPing !== null ? `${realPing}мс` : '24мс'}
+                </div>
+                <div className="text-xs uppercase tracking-widest font-black text-neutral-500 flex items-center justify-center gap-2">
+                   <Activity className="w-3.5 h-3.5" />
+                   Задержка ответа
+                </div>
+              </div>
+            </section>
+
+            {/* Support Box replacement */}
+            <section className={`max-w-4xl mx-auto p-8 sm:p-12 rounded-[3rem] border text-center space-y-6 ${
+              isLight ? 'bg-neutral-100 border-neutral-200 text-neutral-900' : 'bg-neutral-900 border-white/5 text-white'
             }`}>
-              {/* Подключенные беседы */}
-              <div className="space-y-1">
-                <div className={`text-3xl sm:text-4xl font-black font-mono ${isLight ? 'text-neutral-900' : 'text-white'}`}>
-                  {connectedChats !== null ? connectedChats : '67'}
-                </div>
-                <div className="text-xs font-bold text-neutral-400">
-                  Подключенных бесед
-                </div>
+              <div className="w-16 h-16 bg-violet-500/10 rounded-2xl mx-auto flex items-center justify-center text-violet-500">
+                <LifeBuoy className="w-8 h-8" />
               </div>
-
-              {/* Пинг чат-менеджера */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-center gap-2 text-3xl sm:text-4xl font-black text-violet-600 dark:text-violet-400 font-mono">
-                  <span>{realPing !== null ? `${realPing} мс` : 'Замер...'}</span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                </div>
-                <div className="text-xs font-bold text-neutral-400 flex items-center justify-center gap-1">
-                  <Activity className="w-3 h-3 text-violet-500" />
-                  <span>Пинг чат-менеджера</span>
-                </div>
-              </div>
+              <h2 className="text-3xl font-black">Нужна помощь?</h2>
+              <p className={`text-lg max-w-xl mx-auto font-medium ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                обратитесь в поддержку по команде <code className="bg-violet-500/10 text-violet-500 px-2 py-1 rounded-lg">/тикет</code> в чат-менеджере
+              </p>
             </section>
 
-            {/* Features Grid */}
-            <section className="space-y-8">
-              <div className="text-center max-w-2xl mx-auto space-y-2">
-                <h2 className={`text-2xl sm:text-3xl font-black tracking-tight ${isLight ? 'text-neutral-900' : 'text-white'}`}>
-                  Все возможности для вашей беседы
-                </h2>
-                <p className={`text-xs sm:text-sm ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
-                  Современный комплекс инструментов для поддержания порядка и высокой активности участников
-                </p>
+            {/* Features */}
+            <section className="space-y-12">
+              <div className="text-center space-y-3">
+                <h2 className="text-3xl sm:text-4xl font-black">Почему выбирают Mint?</h2>
+                <p className={`text-sm max-w-xl mx-auto font-medium ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>Надёжная защита и увлекательный геймплей в одной оболочке.</p>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {[
-                  {
-                    icon: Zap,
-                    title: 'Высокая скорость',
-                    desc: 'Мгновенный отклик на каждую команду благодаря оптимизированной асинхронной архитектуре.',
-                  },
-                  {
-                    icon: Shield,
-                    title: 'Защита и Автомодерация',
-                    desc: 'Автоматический бан за спам, мут за мат и капс, фильтр внешних ссылок и интеллектуальная защита от рейдов.',
-                  },
-                  {
-                    icon: Gamepad2,
-                    title: 'РП & Игровая Экономика',
-                    desc: 'Дуэли на монеты, азартная рулетка, работы, ограбления, покупка виртуальных бизнесов и открытие кейсов.',
-                  },
-                  {
-                    icon: Users,
-                    title: 'Клановые Битвы',
-                    desc: 'Создание кланов, клановая казна, регулярные турниры за рейтинг и общественный топ сильнейших.',
-                  },
-                  {
-                    icon: MessageSquare,
-                    title: 'Гибкие Приветствия',
-                    desc: 'Персонализированные автоприветствия новых участников с тегами {user} и {chat} и правила беседы.',
-                  },
-                  {
-                    icon: Command,
-                    title: 'Иерархия до Владельца',
-                    desc: 'Многоуровневые права: участник, модератор, ст. модератор, администратор и владелец беседы.',
-                  },
-                ].map((f) => {
-                  const Icon = f.icon;
-                  return (
-                    <div
-                      key={f.title}
-                      className={`rounded-2xl p-6 transition-all space-y-3 group border backdrop-blur-xl ${
-                        isLight
-                          ? 'bg-white/80 border-neutral-200/90 hover:border-violet-400 hover:shadow-lg'
-                          : 'bg-neutral-950/60 border-white/5 hover:border-violet-500/40 hover:shadow-2xl hover:shadow-violet-500/10'
-                      }`}
-                    >
-                      <div className="w-11 h-11 bg-violet-500/10 border border-violet-500/30 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shadow-xs">
-                        <Icon className="w-5 h-5 text-violet-500" />
-                      </div>
-                      <h3 className={`text-base font-bold transition-colors ${
-                        isLight ? 'text-neutral-900 group-hover:text-violet-600' : 'text-white group-hover:text-violet-200'
-                      }`}>
-                        {f.title}
-                      </h3>
-                      <p className={`text-xs leading-relaxed font-normal ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
-                        {f.desc}
-                      </p>
+                  { icon: Zap, title: 'Скорость', desc: 'Бот отвечает мгновенно на любые запросы, не заставляя участников ждать.' },
+                  { icon: Shield, title: 'Безопасность', desc: 'Автомодерация спама, мата и внешних ссылок работает 24/7.' },
+                  { icon: Gamepad2, title: 'Активность', desc: 'Экономика, кланы и игры мотивируют участников общаться чаще.' }
+                ].map((f) => (
+                  <div key={f.title} className={`p-8 rounded-[2.5rem] border space-y-4 ${isLight ? 'bg-white border-neutral-200' : 'bg-neutral-900 border-white/5'}`}>
+                    <div className="w-12 h-12 bg-violet-500/10 rounded-2xl flex items-center justify-center text-violet-500">
+                      <f.icon className="w-6 h-6" />
                     </div>
-                  );
-                })}
+                    <h3 className="text-xl font-black">{f.title}</h3>
+                    <p className={`text-sm leading-relaxed font-medium ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>{f.desc}</p>
+                  </div>
+                ))}
               </div>
             </section>
 
-            {/* EMBEDDED COMMANDS DIRECTORY / HELPER ON MAIN LANDING */}
-            <section id="commands-section" className="space-y-6 pt-4">
-              <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b ${isLight ? 'border-neutral-200' : 'border-white/5'}`}>
-                <div>
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 text-violet-400 text-xs font-bold mb-2">
-                    <Command className="w-3.5 h-3.5" />
-                    <span>Справочник и каталог</span>
-                  </div>
-                  <h2 className={`text-2xl sm:text-3xl font-black tracking-tight ${isLight ? 'text-neutral-900' : 'text-white'}`}>
-                    База команд чат-менеджера «Mint»
-                  </h2>
-                  <p className={`text-xs sm:text-sm mt-1 ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
-                    Нажмите на любую команду, чтобы открыть интерактивное руководство с форматом ввода и пояснением аргументов
-                  </p>
-                </div>
+            {/* Commands */}
+            <section id="commands-section" className="space-y-10 pt-10">
+              <div className="text-center space-y-3">
+                <h2 className="text-3xl sm:text-4xl font-black">Команды проекта</h2>
+                <p className={`text-sm font-medium ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>Интерактивный справочник всех функций чат-менеджера</p>
               </div>
-
               <CommandsDirectory theme={theme} />
             </section>
 
-            {/* FREQUENTLY ASKED QUESTIONS (FAQ) ON MAIN LANDING */}
+            {/* FAQ */}
             <FAQSection theme={theme} />
-
-            {/* Global Bans Quick Callout Banner */}
-            <section className={`p-8 rounded-3xl border shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 backdrop-blur-2xl ${
-              isLight ? 'bg-gradient-to-br from-violet-50 to-indigo-50 border-violet-200' : 'bg-gradient-to-br from-violet-950/20 to-neutral-950/80 border-violet-500/20'
-            }`}>
-              <div className="space-y-2 text-center md:text-left">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/20 text-violet-400 text-xs font-bold">
-                  <ShieldAlert className="w-3.5 h-3.5" />
-                  <span>Единый реестр безопасности</span>
-                </div>
-                <h3 className={`text-xl sm:text-2xl font-black ${isLight ? 'text-neutral-950' : 'text-white'}`}>
-                  Проверьте любого пользователя на блокировки во всех беседах
-                </h3>
-                <p className={`text-xs sm:text-sm max-w-xl ${isLight ? 'text-neutral-600' : 'text-neutral-300'}`}>
-                  Узнайте, был ли участник заблокирован за спам, скам или рейды в других группах до того, как дать ему права в своей беседе.
-                </p>
-              </div>
-
-              <button
-                onClick={() => changeView('bans')}
-                className="px-6 py-3.5 bg-violet-600 hover:bg-violet-500 text-white font-black text-xs rounded-2xl shadow-lg shadow-violet-600/30 transition-all active:scale-95 flex items-center gap-2 shrink-0 cursor-pointer"
-              >
-                <span>Открыть реестр</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </section>
           </>
         )}
 
-        {/* VIEW 2: COMMANDS DEDICATED */}
-        {currentView === 'commands' && (
-          <div className="space-y-6">
-            <div className={`flex items-center justify-between pb-4 border-b ${isLight ? 'border-neutral-200' : 'border-white/5'}`}>
-              <div>
-                <h1 className={`text-2xl font-extrabold ${isLight ? 'text-neutral-900' : 'text-white'}`}>
-                  Интерактивная База Команд
-                </h1>
-                <p className={`text-xs mt-1 ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
-                  Все существующие команды «Mint» от участника до владельца беседы
-                </p>
-              </div>
-              <button
-                onClick={() => changeView('landing')}
-                className={`px-3.5 py-1.5 border font-semibold text-xs rounded-xl transition-all cursor-pointer ${
-                  isLight ? 'bg-white border-neutral-300 text-neutral-800 hover:bg-neutral-100' : 'bg-neutral-900/80 border-white/10 text-neutral-300 hover:bg-neutral-800'
-                }`}
-              >
-                Вернуться на главную
-              </button>
-            </div>
-            <CommandsDirectory theme={theme} />
-          </div>
-        )}
-
-        {/* VIEW 3: GLOBAL BANS LOOKUP (Блокировки во всех беседах) */}
-        {currentView === 'bans' && (
-          <div className="space-y-6">
-            <div className={`flex items-center justify-between pb-4 border-b ${isLight ? 'border-neutral-200' : 'border-white/5'}`}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/30 flex items-center justify-center text-violet-400 shrink-0">
-                  <ShieldAlert className="w-5 h-5" />
-                </div>
-                <div>
-                  <h1 className={`text-2xl font-extrabold ${isLight ? 'text-neutral-900' : 'text-white'}`}>
-                    Блокировки во всех беседах
-                  </h1>
-                  <p className={`text-xs mt-0.5 ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
-                    Централизованная проверка банов и блокировок в беседах «Mint»
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => changeView('landing')}
-                className={`px-3.5 py-1.5 border font-semibold text-xs rounded-xl transition-all cursor-pointer ${
-                  isLight ? 'bg-white border-neutral-300 text-neutral-800 hover:bg-neutral-100' : 'bg-neutral-900/80 border-white/10 text-neutral-300 hover:bg-neutral-800'
-                }`}
-              >
-                Вернуться на главную
-              </button>
-            </div>
-            <GlobalBansLookup
-              initialUser={initialBanUser}
-              theme={theme}
-              onNavigate={(path) => {
-                if (onNavigate) onNavigate(path);
-              }}
-            />
-          </div>
-        )}
-
-        {/* VIEW 4: FAQ DEDICATED */}
-        {currentView === 'faq' && (
-          <div className="space-y-6">
-            <div className={`flex items-center justify-between pb-4 border-b ${isLight ? 'border-neutral-200' : 'border-white/5'}`}>
-              <div>
-                <h1 className={`text-2xl font-extrabold ${isLight ? 'text-neutral-900' : 'text-white'}`}>
-                  Часто задаваемые вопросы (FAQ)
-                </h1>
-                <p className={`text-xs mt-1 ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
-                  Всё о добавлении, правах администратора, командах и функциях бота «Mint»
-                </p>
-              </div>
-              <button
-                onClick={() => changeView('landing')}
-                className={`px-3.5 py-1.5 border font-semibold text-xs rounded-xl transition-all cursor-pointer ${
-                  isLight ? 'bg-white border-neutral-300 text-neutral-800 hover:bg-neutral-100' : 'bg-neutral-900/80 border-white/10 text-neutral-300 hover:bg-neutral-800'
-                }`}
-              >
-                Вернуться на главную
-              </button>
-            </div>
-            <FAQSection theme={theme} />
-          </div>
-        )}
-
-        {/* VIEW 5: RULES (Регламент) */}
-        {currentView === 'rules' && (
-          <RulesAndPrivacy initialTab="rules" onBack={() => changeView('landing')} theme={theme} />
-        )}
-
-        {/* VIEW 6: PRIVACY (Конфиденциальность) */}
-        {currentView === 'privacy' && (
-          <RulesAndPrivacy initialTab="privacy" onBack={() => changeView('landing')} theme={theme} />
-        )}
+        {currentView === 'commands' && <CommandsDirectory theme={theme} />}
+        {currentView === 'faq' && <FAQSection theme={theme} />}
+        {currentView === 'rules' && <RulesAndPrivacy initialTab="rules" onBack={() => changeView('landing')} theme={theme} />}
+        {currentView === 'privacy' && <RulesAndPrivacy initialTab="privacy" onBack={() => changeView('landing')} theme={theme} />}
       </main>
 
-      {/* Footer */}
-      <footer className={`border-t py-8 text-xs mt-auto backdrop-blur-xl transition-colors duration-300 ${
-        isLight ? 'bg-white/80 border-neutral-200 text-neutral-600' : 'border-white/5 bg-black/80 text-neutral-500'
-      }`}>
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <button
-            onClick={() => changeView('landing')}
-            className="flex items-center gap-2.5 font-bold hover:opacity-90 transition-opacity cursor-pointer text-left group"
-          >
-            <div className="w-7 h-7 rounded-lg overflow-hidden border border-violet-500/30 shrink-0 bg-neutral-900 flex items-center justify-center">
-              <img src="/ming.jpg" alt="Логотип" className="w-full h-full object-cover" />
+      <footer className={`border-t py-12 mt-auto transition-colors ${isLight ? 'bg-white border-neutral-200' : 'bg-black border-white/5'}`}>
+        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/10">
+               <img src="/ming.jpg" alt="Mint" className="w-full h-full object-cover" />
             </div>
-            <span className={isLight ? 'text-neutral-800' : 'text-neutral-300'}>
-              «Mint» © 2026. Чат-менеджер для бесед ВКонтакте.
-            </span>
-          </button>
-
-          <div className="flex flex-wrap items-center gap-5 sm:gap-6">
-            <button onClick={() => changeView('landing')} className="hover:text-violet-500 transition-colors cursor-pointer">
-              Главная
-            </button>
-            <button onClick={() => changeView('commands')} className="hover:text-violet-500 transition-colors cursor-pointer">
-              Команды
-            </button>
-            <button onClick={() => changeView('bans')} className="hover:text-violet-500 transition-colors cursor-pointer">
-              Блокировки в беседах
-            </button>
-            <button onClick={() => changeView('faq')} className="hover:text-violet-500 transition-colors cursor-pointer">
-              Вопросы (FAQ)
-            </button>
-            <button onClick={() => changeView('rules')} className="hover:text-violet-500 transition-colors cursor-pointer">
-              Регламент и правила
-            </button>
-            <button onClick={() => changeView('privacy')} className="hover:text-violet-500 transition-colors cursor-pointer">
-              Конфиденциальность
-            </button>
-            <a
-              href="https://vk.ru/app6441755_-239281784"
-              target="_blank"
-              rel="noreferrer"
-              className="text-violet-600 dark:text-violet-400 hover:opacity-80 transition-opacity flex items-center gap-1 font-bold"
-            >
-              <span>Добавить бота</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
+            <div className="text-left">
+              <div className={`text-lg font-black ${isLight ? 'text-neutral-900' : 'text-white'}`}>Mint</div>
+              <div className="text-[10px] uppercase tracking-tighter text-neutral-500">© 2026 Все права защищены</div>
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-center gap-8 text-[11px] font-black uppercase tracking-widest text-neutral-500">
+             <button onClick={() => changeView('landing')} className="hover:text-violet-500 transition-colors cursor-pointer">Главная</button>
+             <button onClick={() => changeView('commands')} className="hover:text-violet-500 transition-colors cursor-pointer">Команды</button>
+             <button onClick={() => changeView('faq')} className="hover:text-violet-500 transition-colors cursor-pointer">Помощь</button>
+             <button onClick={() => changeView('rules')} className="hover:text-violet-500 transition-colors cursor-pointer">Регламент</button>
           </div>
         </div>
       </footer>
 
-      {/* Floating Scroll-to-Top Button */}
       <ScrollToTop />
     </div>
   );

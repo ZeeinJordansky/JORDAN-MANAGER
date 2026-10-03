@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { HelpCircle, ChevronDown, MessageSquare, Shield, ShieldCheck, Zap, Sparkles, Terminal, Users, ExternalLink } from 'lucide-react';
+import { HelpCircle, ChevronDown, Shield, Users, Command, Sliders, MessageSquare, AlertTriangle, Coins, LifeBuoy } from 'lucide-react';
 
 interface FAQItem {
   id: string;
-  category: 'general' | 'moderation' | 'economy' | 'troubleshooting';
+  category: 'general' | 'moderation' | 'roles' | 'economy' | 'troubleshooting';
   question: string;
   answer: string;
   details?: string[];
@@ -13,74 +13,136 @@ const FAQ_DATA: FAQItem[] = [
   {
     id: 'add-bot',
     category: 'general',
-    question: 'Как добавить чат-менеджера «Mint» в беседу ВКонтакте?',
-    answer: 'Добавить бота очень просто:',
+    question: 'Как добавить чат-менеджера «Mint» в свою беседу?',
+    answer: 'Добавление бота максимально упрощено:',
     details: [
-      '1. Нажмите кнопку «Добавить в беседу» в шапке сайта или перейдите по официальной ссылке приложения VK.',
-      '2. Выберите нужную беседу из предложенного списка.',
-      '3. Зайдите в настройки беседы ВКонтакте и обязательно выдайте боту права Администратора (чтобы он мог исключать нарушителей, удалять спам и управлять правами).',
-      '4. Напишите в чат /хелп или /инфо для проверки работоспособности.'
+      '1. Перейдите по кнопке «Добавить в беседу» в верхней части сайта.',
+      '2. Выберите нужную беседу из предложенного списка диалогов ВКонтакте.',
+      '3. Зайдите в управление беседой и обязательно назначьте бота Администратором. Это критически важно для работы функций удаления сообщений, выдачи мутов и кика участников.',
+      '4. Напишите в чате команду /инфо или /пинг, чтобы убедиться, что бот активен и видит сообщения.'
     ]
   },
   {
     id: 'pricing',
     category: 'general',
-    question: 'Бот бесплатный или нужно платить за использование?',
-    answer: 'Основной функционал бота «Mint» полностью бесплатный! Сюда входят автомодерация, защита от спама и рейдов, приветствия новых участников, экономика, игры, дуэли, кланы и полная система команд. Для масштабных сетей бесед доступны дополнительные функции кастомизации.',
-  },
-  {
-    id: 'bans-registry',
-    category: 'moderation',
-    question: 'Что такое реестр блокировок и как он работает?',
-    answer: 'Реестр блокировок — это инструмент проверки пользователей по всем подключенным к «Mint» беседам. Введя ID или ссылку на профиль (например, /getbans=durov), администраторы могут мгновенно увидеть, есть ли у пользователя активные баны за спам, скам или рейды в других беседах сети.',
+    question: 'Является ли использование бота платным?',
+    answer: 'Основной функционал «Mint» — абсолютно бесплатный. Мы предоставляем все инструменты модерации, игровую экономику, систему кланов и приветствий без каких-либо обязательных подписок. Проект поддерживается за счёт добровольных пожертвований и дополнительных игровых возможностей, не влияющих на безопасность вашей беседы.'
   },
   {
     id: 'prefixes',
     category: 'general',
-    question: 'Какие префиксы поддерживаются для вызова команд?',
-    answer: 'Чат-менеджер «Mint» поддерживает гибкую систему префиксов. Вы можете использовать любой из следующих вариантов перед названием команды:',
+    question: 'Какие символы (префиксы) нужно писать перед командами?',
+    answer: 'Бот «Mint» поддерживает несколько удобных способов вызова:',
     details: [
-      '• Слэш: / (например, /профиль, /бан, /кик, /топ)',
-      '• Восклицательный знак: ! (например, !профиль, !варн)',
-      '• Точка: . (например, .профиль, .мут)',
-      '• Текстовые префиксы: «минт» или «см» (например, минт профиль, см баланс)'
+      '• Стандартные знаки: / (слэш), ! (восклицательный знак) или . (точка).',
+      '• Обращение по имени: «Минт, ...», «Mint, ...» или «Бот, ...».'
     ]
   },
   {
-    id: 'bot-not-responding',
-    category: 'troubleshooting',
-    question: 'Что делать, если бот не отвечает на команды в беседе?',
-    answer: 'Если бот молчит, выполните следующие шаги проверки:',
+    id: 'roles-hierarchy',
+    category: 'roles',
+    question: 'Какие уровни прав существуют в боте?',
+    answer: 'В «Mint» используется строгая иерархия должностей:',
     details: [
-      '1. Проверьте права администратора: перейдите в список участников беседы и убедитесь, что боту присвоен статус «Администратор».',
-      '2. Доступ к сообщениям: в настройках группы ВК у бота должен быть включен доступ к переписке.',
-      '3. Проверьте пинг: введите /пинг в чате.',
-      '4. Если бот временно перезагружается, статус и пинг можно проверить на главной странице нашего сайта в реальном времени.'
+      '• Участник (0) — базовые команды и игры.',
+      '• Модератор (1) — базовое наказание нарушителей (варны, муты, кики).',
+      '• Ст. Модератор (2) — полное управление наказаниями и бан-листом.',
+      '• Администратор (3) — настройка модулей бота, приветствий и прав доступа.',
+      '• Владелец (4) — полный доступ ко всем системным настройкам беседы.'
     ]
   },
   {
-    id: 'automod',
+    id: 'assign-role',
+    category: 'roles',
+    question: 'Как выдать права модератора другому участнику?',
+    answer: 'Назначать модераторов может Владелец или Администратор беседы командами:',
+    details: [
+      '• /модер @упоминание — сразу назначить на должность модератора.',
+      '• /админ @упоминание — назначить на должность администратора.'
+    ]
+  },
+  {
+    id: 'automod-setup',
     category: 'moderation',
-    question: 'Как настроить авто-модерацию и защиту от спама/рейдов?',
-    answer: 'Администраторы беседы могут тонко настраивать правила автомодерации:',
+    question: 'Как настроить защиту от спама и ссылок?',
+    answer: 'По умолчанию основные фильтры включены. Вы можете тонко настроить их в меню /настройки. Бот автоматически распознает флуд, массовые упоминания, сторонние ссылки и нецензурную лексику, применяя соответствующие меры (удаление или мут).'
+  },
+  {
+    id: 'ban-system',
+    category: 'moderation',
+    question: 'В чём разница между киком, мутом и баном?',
+    answer: 'Это разные степени наказания:',
     details: [
-      '• Защита от спама и флуда: бот автоматически ограничивает пользователей, отправляющих одинаковые сообщения.',
-      '• Анти-ссылки: авто-удаление сторонних ссылок и рекламных постов.',
-      '• Фильтр нецензурных выражений и капса: автоматическая выдача мута или предупреждения.',
-      '• Анти-рейд: запрет на массовый вход подозрительных страниц.'
+      '• Кик (/кик) — простое исключение из беседы. Участник может вернуться по ссылке.',
+      '• Мут (/мут) — временный запрет на отправку сообщений (бот будет удалять их).',
+      '• Бан (/бан) — занесение в чёрный список. Бот будет мгновенно исключать участника при попытке зайти обратно.'
     ]
   },
   {
-    id: 'clans-economy',
+    id: 'economy-how',
     category: 'economy',
-    question: 'Как создать клан и участвовать в битвах?',
-    answer: 'Для создания клана используйте команду /создать клан [название]. Создатель становится лидером клана, может приглашать участников (/клан пригласить), устанавливать налоги в казну и объявлять клановые битвы за рейтинг.',
+    question: 'Как зарабатывать монеты в экономике бота?',
+    answer: 'Существует множество способов пополнить баланс:',
+    details: [
+      '• Активность: Пишите сообщения в чате и получайте за это вознаграждение.',
+      '• Бонусы: Используйте /бонус раз в сутки.',
+      '• Работа: Команда /работа позволяет получать стабильный доход.',
+      '• Игры: Выигрывайте монеты в дуэлях, рулетке или открывая кейсы.'
+    ]
   },
   {
-    id: 'command-help',
+    id: 'clans-create',
+    category: 'economy',
+    question: 'Зачем нужны кланы и как их создавать?',
+    answer: 'Кланы объединяют участников для совместной игры и борьбы за место в глобальном топе. Создать клан можно командой /создать клан [название]. После этого вы сможете приглашать друзей, развивать клановую казну и участвовать в битвах.'
+  },
+  {
+    id: 'bot-ignoring',
+    category: 'troubleshooting',
+    question: 'Бот не реагирует на команды. Что делать?',
+    answer: 'Проверьте следующие пункты:',
+    details: [
+      '1. Убедитесь, что бот является Администратором беседы.',
+      '2. Проверьте, разрешены ли сообщения в настройках группы бота.',
+      '3. Проверьте пинг на главной странице этого сайта — если он красный, возможны временные перебои на стороне VK.',
+      '4. Попробуйте написать «Минт хелп» или «/инфо».'
+    ]
+  },
+  {
+    id: 'data-privacy',
     category: 'general',
-    question: 'Как посмотреть подробное объяснение любой команды?',
-    answer: 'На главной странице сайта или во вкладке «Команды» нажмите на любую карточку команды. Откроется подробная справка с точным форматом ввода, объяснением всех аргументов и готовым примером.',
+    question: 'Какие данные сохраняет бот?',
+    answer: 'Мы храним только минимально необходимую информацию для работы экономики и прав доступа: ваш ID ВКонтакте, баланс монет, статистику сообщений и настройки вашей беседы. Мы никогда не читаем и не передаём личные переписки третьим лицам.'
+  },
+  {
+    id: 'custom-welcome',
+    category: 'moderation',
+    question: 'Как изменить сообщение приветствия?',
+    answer: 'Используйте команду /приветствие [ваш текст]. Вы можете использовать переменные {user} для упоминания вошедшего и {chat} для вывода названия вашей беседы.'
+  },
+  {
+    id: 'transfer-coins',
+    category: 'economy',
+    question: 'Можно ли передавать монеты другим игрокам?',
+    answer: 'Да, для этого используйте команду /передать @упоминание [сумма]. Обратите внимание, что системная комиссия при переводе отсутствует.'
+  },
+  {
+    id: 'support-contact',
+    category: 'troubleshooting',
+    question: 'Как пожаловаться на баг или предложить идею?',
+    answer: 'Лучший способ — воспользоваться внутренней системой тикетов. Напишите прямо в чате: /тикет [ваше сообщение]. Наша команда поддержки рассмотрит его в кратчайшие сроки.'
+  },
+  {
+    id: 'delete-messages',
+    category: 'moderation',
+    question: 'Может ли бот удалять сообщения других участников?',
+    answer: 'Да, если он назначен администратором беседы. Команда /очистить [число] позволяет быстро прибраться в чате после флуда или спама.'
+  },
+  {
+    id: 'clan-wars',
+    category: 'economy',
+    question: 'Будут ли добавлены клановые войны?',
+    answer: 'Мы активно работаем над системой захвата территорий и клановых сражений. Следите за обновлениями в нашей официальной группе и через команду /новости.'
   }
 ];
 
@@ -91,9 +153,10 @@ interface FAQSectionProps {
 export default function FAQSection({ theme = 'dark' }: FAQSectionProps) {
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({
     'add-bot': true,
-    'bans-registry': true
+    'prefixes': true,
+    'automod-setup': true
   });
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'general' | 'moderation' | 'economy' | 'troubleshooting'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'general' | 'moderation' | 'roles' | 'economy' | 'troubleshooting'>('all');
 
   const isLight = theme === 'light';
 
@@ -110,43 +173,44 @@ export default function FAQSection({ theme = 'dark' }: FAQSectionProps) {
 
   const categories = [
     { id: 'all', label: 'Все вопросы' },
-    { id: 'general', label: 'Общие вопросы' },
-    { id: 'moderation', label: 'Модерация и Баны' },
+    { id: 'general', label: 'Общие' },
+    { id: 'moderation', label: 'Модерация и Защита' },
+    { id: 'roles', label: 'Иерархия и Права' },
     { id: 'economy', label: 'Экономика и Кланы' },
-    { id: 'troubleshooting', label: 'Помощь и Решение проблем' }
+    { id: 'troubleshooting', label: 'Решение проблем' }
   ];
 
   return (
     <section className="space-y-8 max-w-4xl mx-auto">
-      <div className="text-center space-y-3">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-violet-500/15 border border-violet-500/30 text-violet-400 text-xs font-bold">
+      <div className="text-center space-y-2.5">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-semibold">
           <HelpCircle className="w-3.5 h-3.5" />
-          <span>Справка и Поддержка</span>
+          <span>База знаний</span>
         </div>
-        <h2 className={`text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+        <h2 className={`text-2xl sm:text-3xl font-black tracking-tight ${isLight ? 'text-neutral-900' : 'text-white'}`}>
           Часто задаваемые вопросы (FAQ)
         </h2>
         <p className={`text-xs sm:text-sm max-w-xl mx-auto ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
-          Ответы на самые популярные вопросы по добавлению, настройке команд и возможностям чат-менеджера «Mint»
+          Подробные ответы на все вопросы по настройке, ролям, безопасности и командам «Mint»
         </p>
       </div>
 
       {/* Category Filter Chips */}
-      <div className="flex items-center justify-center gap-2 flex-wrap pb-2">
+      <div className="flex items-center justify-center gap-2 flex-wrap pb-1">
         {categories.map(cat => {
           const active = selectedCategory === cat.id;
           return (
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id as any)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                 active
                   ? isLight
-                    ? 'bg-neutral-900 text-white border-neutral-900 shadow-sm'
-                    : 'bg-violet-600 border-violet-500 text-white shadow-lg shadow-violet-600/30'
+                    ? 'bg-neutral-900 text-white border-neutral-900 shadow-xs'
+                    : 'bg-violet-600 border-violet-500 text-white shadow-md shadow-violet-600/25'
                   : isLight
                   ? 'bg-white border-neutral-200 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
-                  : 'bg-neutral-900/60 border-white/5 text-neutral-400 hover:text-white hover:bg-neutral-850'
+                  : 'bg-neutral-900/70 border-white/5 text-neutral-400 hover:text-white hover:bg-neutral-800'
               }`}
             >
               {cat.label}
@@ -165,27 +229,27 @@ export default function FAQSection({ theme = 'dark' }: FAQSectionProps) {
               className={`rounded-2xl border transition-all overflow-hidden ${
                 isLight
                   ? isOpen
-                    ? 'bg-white border-violet-300 shadow-md'
-                    : 'bg-white/80 border-neutral-200 hover:border-neutral-300'
+                    ? 'bg-white border-violet-300 shadow-sm'
+                    : 'bg-white/90 border-neutral-200 hover:border-neutral-300'
                   : isOpen
-                  ? 'bg-neutral-900/90 border-violet-500/40 shadow-xl shadow-violet-950/20'
-                  : 'bg-neutral-950/60 border-white/5 hover:border-white/10'
+                  ? 'bg-neutral-900/90 border-violet-500/40 shadow-lg shadow-violet-950/20'
+                  : 'bg-neutral-950/70 border-white/5 hover:border-white/10'
               }`}
             >
               <button
                 onClick={() => toggleItem(item.id)}
-                className="w-full p-5 sm:p-6 text-left flex items-center justify-between gap-4 cursor-pointer"
+                className="w-full p-4 sm:p-5 text-left flex items-center justify-between gap-4 cursor-pointer"
               >
                 <span className={`text-sm sm:text-base font-bold transition-colors ${
                   isOpen
-                    ? 'text-violet-500'
+                    ? isLight ? 'text-violet-700' : 'text-violet-400'
                     : isLight ? 'text-neutral-900' : 'text-neutral-200'
                 }`}>
                   {item.question}
                 </span>
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 border ${
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-200 border ${
                   isOpen
-                    ? 'rotate-180 bg-violet-500/20 border-violet-500/30 text-violet-400'
+                    ? 'rotate-180 bg-violet-500/15 border-violet-500/30 text-violet-400'
                     : isLight
                     ? 'bg-neutral-100 border-neutral-200 text-neutral-500'
                     : 'bg-neutral-800 border-white/5 text-neutral-400'
@@ -195,12 +259,12 @@ export default function FAQSection({ theme = 'dark' }: FAQSectionProps) {
               </button>
 
               {isOpen && (
-                <div className={`px-5 sm:px-6 pb-6 pt-1 text-xs sm:text-sm leading-relaxed border-t ${
+                <div className={`px-4 sm:px-5 pb-5 pt-0 text-xs sm:text-sm leading-relaxed border-t ${
                   isLight ? 'border-neutral-100 text-neutral-700' : 'border-white/5 text-neutral-300'
                 }`}>
-                  <p className="font-medium">{item.answer}</p>
+                  <p className="font-medium pt-3">{item.answer}</p>
                   {item.details && item.details.length > 0 && (
-                    <div className="mt-3 space-y-1.5 pl-1 font-normal">
+                    <div className="mt-2.5 space-y-1.5 pl-1 font-normal">
                       {item.details.map((detail, idx) => (
                         <div key={idx} className={isLight ? 'text-neutral-600' : 'text-neutral-400'}>
                           {detail}
@@ -215,27 +279,19 @@ export default function FAQSection({ theme = 'dark' }: FAQSectionProps) {
         })}
       </div>
 
-      {/* Still have questions banner */}
-      <div className={`p-6 rounded-3xl border text-center space-y-3 backdrop-blur-xl ${
-        isLight ? 'bg-violet-50/60 border-violet-200' : 'bg-gradient-to-r from-violet-950/30 to-indigo-950/30 border-violet-500/20'
+      {/* Support Callout Banner: exact requested text and replacement */}
+      <div className={`p-6 sm:p-7 rounded-3xl border text-center space-y-3 backdrop-blur-xl ${
+        isLight ? 'bg-neutral-100/90 border-neutral-200' : 'bg-neutral-900/80 border-white/10'
       }`}>
-        <h3 className={`text-base font-bold ${isLight ? 'text-neutral-900' : 'text-white'}`}>
-          Не нашли ответ на свой вопрос?
-        </h3>
-        <p className={`text-xs max-w-md mx-auto ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
-          Напишите команду <code className="font-mono font-bold text-violet-400">/хелп</code> прямо в беседе с ботом или обратитесь в официальную группу поддержки ВКонтакте.
-        </p>
-        <div className="pt-1">
-          <a
-            href="https://vk.ru/app6441755_-239281784"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
-          >
-            <span>Перейти к боту ВК</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+        <div className="w-10 h-10 mx-auto rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+          <LifeBuoy className="w-5 h-5" />
         </div>
+        <h3 className={`text-base sm:text-lg font-black ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+          Остались вопросы по работе бота?
+        </h3>
+        <p className={`text-xs sm:text-sm max-w-lg mx-auto ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
+          обратитесь в поддержку по команде <code className="px-2 py-0.5 rounded-md font-mono font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20">/тикет</code> в чат-менеджере
+        </p>
       </div>
     </section>
   );

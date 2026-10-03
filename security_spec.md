@@ -1,23 +1,25 @@
-# Security Specification for VK Bot Dashboard
+# Security Specification for Mint Control Panel
 
 ## Data Invariants
-- A message must have a valid `userId` and `timestamp`.
-- `fromBot` must be a boolean.
+- An authentication key document must have a valid VK ID, fullName, and avatarUrl.
+- Keys are read-only for the client (to fetch profile info).
+- Keys should not be listable to prevent scraping.
 
-## The Dirty Dozen Payloads
-1. Message without `userId`.
-2. Message with non-integer `timestamp`.
-3. Message with missing `text`.
-4. Unauthorized user trying to read messages.
-5. Unauthorized user trying to write messages.
-6. Message with a very long `text` (e.g. 1MB).
-7. Message with `fromBot` as a string.
-8. Message with `userId` as a string.
-9. Trying to delete a message (not allowed).
-10. Trying to update a message's `timestamp`.
-11. Trying to inject a ghost field `isVerified`.
-12. Trying to write a message with a future timestamp.
+## The "Dirty Dozen" Payloads
+1. Create a key from client (forbidden).
+2. Update a key's linked VK ID (forbidden).
+3. List all keys (forbidden).
+4. Fetch a key by ID (allowed if they know the ID).
+5. Delete a key from client (forbidden).
+6. Create key with missing fields.
+7. Create key with extra "admin" field.
+8. Update createdAt.
+9. Fetch non-existent key.
+10. Query keys by VK ID (forbidden).
+11. Spoof VK ID in creation.
+12. Modify avatarUrl after creation.
 
 ## Rules Draft
-I will use a simple rule: only the admin (user email) can read/write to the messages collection.
-Admin email: sirotininoleg5@gmail.com
+- `match /auth_keys/{key}`
+  - `allow get: if true;` // Publicly readable if you know the key to show confirmation screen
+  - `allow list, create, update, delete: if false;` // Only server-side (or manual) creation/management

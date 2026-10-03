@@ -1,26 +1,34 @@
 {
   "entities": {
-    "tickets": {
-      "title": "Tickets",
-      "description": "User support tickets",
+    "authKey": {
+      "title": "Authentication Key",
+      "description": "Access key for the control panel linked to a VK user.",
       "type": "object",
       "properties": {
-        "id": { "type": "number" },
-        "userId": { "type": "number" },
-        "text": { "type": "string" },
-        "status": { "type": "string", "enum": ["open", "considering", "closed"] },
-        "agentId": { "type": "number" },
-        "createdAt": { "type": "number" },
-        "updatedAt": { "type": "number" },
-        "rating": { "type": "number" }
+        "vkId": {
+          "type": "string",
+          "description": "VK ID of the user."
+        },
+        "fullName": {
+          "type": "string",
+          "description": "Full name of the VK user."
+        },
+        "avatarUrl": {
+          "type": "string",
+          "description": "Avatar URL of the VK user."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       },
-      "required": ["id", "userId", "text", "status", "createdAt"]
+      "required": ["vkId", "fullName", "avatarUrl", "createdAt"]
     }
   },
   "firestore": {
-    "tickets": {
-      "schema": "tickets",
-      "description": "Collection of user support tickets"
+    "/auth_keys/{key}": {
+      "schema": "authKey",
+      "description": "Collection of authentication keys where document ID is the key itself."
     }
   }
 }
