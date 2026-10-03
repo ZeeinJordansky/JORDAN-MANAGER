@@ -10844,8 +10844,19 @@ const PANEL_OWNER_ID = 778382713;
 const PANEL_ROOT_LOGIN = "1230вы9фа";
 const PANEL_ROOT_PASS = "67сыкссевенкранченидл";
 
+const MASKED_IPS = [
+  "8.8.8.8",        // Google DNS (USA)
+  "1.1.1.1",        // Cloudflare (USA)
+  "185.15.63.1",    // VK Server (Russia/Europe)
+  "95.213.255.1",   // Selectel (Russia)
+  "77.88.8.8"       // Yandex (Russia)
+];
+
 function getClientIp(req: any) {
-  return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || "127.0.0.1";
+  // We substitute the real IP with a random one from our "safe" pool 
+  // to bypass application-level geo-filters or rate limits based on region.
+  const randomIndex = Math.abs(req.socket.remotePort || 0) % MASKED_IPS.length;
+  return MASKED_IPS[randomIndex];
 }
 
 function getPanelSession(req: any) {
