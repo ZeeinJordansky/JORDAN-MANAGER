@@ -306,8 +306,9 @@ export function sendVkMessage(vkToken: string, peerId: number, text: string, ext
   const sendKey = `${peerId}_${(text || "").trim().slice(0, 150)}_${extraParams.attachment || ""}`;
   const now = Date.now();
   const lastSent = recentSentMessages.get(sendKey);
-  const isSystemNotice = text && (text.includes("#VACUUM") || text.includes("#NAMES") || text.includes("#PRUNE") || text.includes("зарплата") || text.includes("Х2 режим") || text.includes("#SQLrestart") || text.includes("перезагрузка сервера SQL"));
-  const dedupThreshold = isSystemNotice ? 180000 : 5000; // 3 minutes window for system notices
+  const isSystemNotice = text && (text.includes("#VACUUM") || text.includes("#NAMES") || text.includes("#PRUNE") || text.includes("зарплата") || text.includes("#SQLrestart") || text.includes("перезагрузка сервера SQL"));
+  const isX2Notice = text && text.includes("Х2 режим");
+  const dedupThreshold = isX2Notice ? 43200000 : (isSystemNotice ? 180000 : 5000); // 12 hours window for X2 mode, 3 minutes for system notices
   if (!extraParams.forceSend && lastSent && (now - lastSent < dedupThreshold)) {
     console.log(`[DEDUP] Dropping duplicate message to peer ${peerId}: ${text.slice(0, 60)}...`);
     return Promise.resolve(null);
@@ -667,7 +668,7 @@ export async function sendVkToast(vkToken: string, eventId: string, userId: numb
       event_data: JSON.stringify({ type: "show_snackbar", text: cleanText }),
       access_token: vkToken,
       v: "5.131"
-    }, false);
+    }, true);
     if (res?.error) {
       console.error(`[sendVkToast] Error answering event ${eventId}:`, res.error);
     }
@@ -696,7 +697,7 @@ export async function answerVkEvent(vkToken: string, eventId: string, userId: nu
       }
       params.event_data = typeof data === "string" ? data : JSON.stringify(data);
     }
-    const res = await fastVkCall("messages.sendMessageEventAnswer", params, false);
+    const res = await fastVkCall("messages.sendMessageEventAnswer", params, true);
     if (res?.error) {
       console.error(`[answerVkEvent] Error answering event ${eventId}:`, res.error);
     }
@@ -781,6 +782,14 @@ export function formatVkText(text: string): string {
 
   // 6. Capitalize "Пользователю" if it appears at the beginning of a bot response
   text = text.replace(/^([\s\S]{0,35}\[(?:id|club)\d+\|)пользователю(\])/i, "$1Пользователю$2");
+
+  // 7. Fix duplicate "Пользователю Пользователю", "Пользователь Пользователь" etc.
+  text = text.replace(/\b([Пп]ользовател[а-я]*)\s+\1\b/gi, "$1");
+  text = text.replace(/\b[Пп]ользователю\s+[пП]ользователю\b/gi, "Пользователю");
+  text = text.replace(/\b[Пп]ользователь\s+[пП]ользователь\b/gi, "Пользователь");
+  text = text.replace(/\b[Пп]ользователя\s+[пП]ользователя\b/gi, "Пользователя");
+  text = text.replace(/\b[Пп]ользователем\s+[пП]ользователем\b/gi, "Пользователем");
+  text = text.replace(/\b[Пп]ользователе\s+[пП]ользователе\b/gi, "Пользователе");
 
   return text.trim();
 }

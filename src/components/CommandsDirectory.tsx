@@ -95,24 +95,6 @@ const REAL_BOT_COMMANDS: CommandItem[] = [
     permissionLevel: "Участник"
   },
   {
-    name: "/онлайн",
-    aliases: "/olist, /online",
-    category: "settings",
-    categoryLabel: "Беседа",
-    usage: "/онлайн",
-    description: "Показать список участников, которые сейчас в сети.",
-    permissionLevel: "Участник"
-  },
-  {
-    name: "/оффлайн",
-    aliases: "/offlinelist, /офф",
-    category: "settings",
-    categoryLabel: "Беседа",
-    usage: "/оффлайн",
-    description: "Список участников, находящихся вне сети.",
-    permissionLevel: "Участник"
-  },
-  {
     name: "/тикет",
     aliases: "/ticket, /репорт, /report",
     category: "settings",
@@ -133,14 +115,50 @@ const REAL_BOT_COMMANDS: CommandItem[] = [
   {
     name: "/топ",
     aliases: "/top",
-    category: "economy",
-    categoryLabel: "Экономика",
+    category: "games",
+    categoryLabel: "Игры",
     usage: "/топ",
     description: "Глобальные рейтинги лучших участников.",
     permissionLevel: "Участник"
   },
+  {
+    name: "/рулетка",
+    aliases: "/roulette",
+    category: "games",
+    categoryLabel: "Игры",
+    usage: "/рулетка [сумма] [цвет/число]",
+    description: "Испытать удачу в классической рулетке.",
+    permissionLevel: "Участник"
+  },
 
   // ================= МОДЕРАТОР =================
+  {
+    name: "/get",
+    aliases: "/гет, /инфо",
+    category: "moderation",
+    categoryLabel: "Модерация",
+    usage: "/get [@пользователь]",
+    description: "Посмотреть подробную информацию о наказаниях пользователя.",
+    permissionLevel: "Модератор"
+  },
+  {
+    name: "/онлайн",
+    aliases: "/olist, /online",
+    category: "moderation",
+    categoryLabel: "Модерация",
+    usage: "/онлайн",
+    description: "Показать список участников, которые сейчас в сети.",
+    permissionLevel: "Модератор"
+  },
+  {
+    name: "/оффлайн",
+    aliases: "/offlinelist, /офф",
+    category: "moderation",
+    categoryLabel: "Модерация",
+    usage: "/оффлайн",
+    description: "Список участников, находящихся вне сети.",
+    permissionLevel: "Модератор"
+  },
   {
     name: "/мут",
     aliases: "/mute, /замутить, /км",
@@ -278,7 +296,15 @@ const REAL_BOT_COMMANDS: CommandItem[] = [
     description: "Список всех заблокированных участников.",
     permissionLevel: "Ст. Модератор"
   },
-
+  {
+    name: "/банворд",
+    aliases: "/banword, /стопслово",
+    category: "moderation",
+    categoryLabel: "Модерация",
+    usage: "/банворд [добавить/удалить/список] [слово]",
+    description: "Управление списком запрещенных слов в беседе.",
+    permissionLevel: "Администратор"
+  },
   // ================= АДМИНИСТРАТОР =================
   {
     name: "/зов",
@@ -298,7 +324,24 @@ const REAL_BOT_COMMANDS: CommandItem[] = [
     description: "Запретить отправку сообщений всем участникам (кроме модерации).",
     permissionLevel: "Администратор"
   },
-
+  {
+    name: "/автокик",
+    aliases: "/autokick",
+    category: "settings",
+    categoryLabel: "Беседа",
+    usage: "/автокик [вкл/выкл]",
+    description: "Автоматическое исключение участников за определенные нарушения (например, выход из беседы).",
+    permissionLevel: "Администратор"
+  },
+  {
+    name: "/приветствие",
+    aliases: "/welcome, /привет",
+    category: "settings",
+    categoryLabel: "Беседа",
+    usage: "/приветствие [текст]",
+    description: "Установить текст, который бот будет присылать новым участникам.",
+    permissionLevel: "Администратор"
+  },
   // ================= ВЛАДЕЛЕЦ =================
   {
     name: "/выдатьуровень",
@@ -306,7 +349,7 @@ const REAL_BOT_COMMANDS: CommandItem[] = [
     category: "owner",
     categoryLabel: "Владелец",
     usage: "/выдатьуровень [@пользователь] [лвл]",
-    description: "Назначить участнику определенный уровень прав.",
+    description: "Назначить участнику определенный уровень прав (1-4).",
     permissionLevel: "Владелец"
   },
   {
@@ -325,6 +368,42 @@ const REAL_BOT_COMMANDS: CommandItem[] = [
     categoryLabel: "Владелец",
     usage: "/настройки",
     description: "Открыть меню управления системами беседы.",
+    permissionLevel: "Владелец"
+  },
+  {
+    name: "/размутвсех",
+    aliases: "/unmuteall",
+    category: "owner",
+    categoryLabel: "Владелец",
+    usage: "/размутвсех",
+    description: "Снять муты со всех участников беседы одним разом.",
+    permissionLevel: "Владелец"
+  },
+  {
+    name: "/передать",
+    aliases: "/transfer",
+    category: "owner",
+    categoryLabel: "Владелец",
+    usage: "/передать [@пользователь]",
+    description: "Передать полномочия Создателя беседы другому участнику (в рамках бота).",
+    permissionLevel: "Владелец"
+  },
+  {
+    name: "/hidetop",
+    aliases: "/скрытьтоп, /скрытьстопа",
+    category: "owner",
+    categoryLabel: "Владелец",
+    usage: "/hidetop [@пользователь]",
+    description: "Скрыть пользователя из всех топов чат-менеджера (доступно Владельцу).",
+    permissionLevel: "Владелец"
+  },
+  {
+    name: "/unhidetop",
+    aliases: "/раскрытьтоп, /вернутьвтоп",
+    category: "owner",
+    categoryLabel: "Владелец",
+    usage: "/unhidetop [@пользователь]",
+    description: "Перестать скрывать пользователя из топов чат-менеджера (доступно Владельцу).",
     permissionLevel: "Владелец"
   }
 ];
@@ -373,6 +452,7 @@ export default function CommandsDirectory({ theme = 'dark' }: CommandsDirectoryP
   const categories = [
     { id: 'all', label: 'Все категории', icon: List },
     { id: 'moderation', label: 'Модерация', icon: Shield },
+    { id: 'games', label: 'Игры', icon: Gamepad2 },
     { id: 'economy', label: 'Экономика', icon: Coins },
     { id: 'settings', label: 'Беседа', icon: Settings },
     { id: 'owner', label: 'Владелец', icon: Crown },
@@ -398,6 +478,15 @@ export default function CommandsDirectory({ theme = 'dark' }: CommandsDirectoryP
       cmd.description.toLowerCase().includes(q) ||
       cmd.usage.toLowerCase().includes(q);
     return matchesCat && matchesLevel && matchesSearch;
+  }).sort((a, b) => {
+    const order: Record<PermissionLevel, number> = {
+      'Участник': 0,
+      'Модератор': 1,
+      'Ст. Модератор': 2,
+      'Администратор': 3,
+      'Владелец': 4
+    };
+    return order[a.permissionLevel] - order[b.permissionLevel];
   });
 
   const getPermissionBadge = (level: PermissionLevel) => {
@@ -542,44 +631,44 @@ export default function CommandsDirectory({ theme = 'dark' }: CommandsDirectoryP
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredCommands.map((cmd, idx) => {
               return (
-                <div
-                  key={cmd.name}
-                  onClick={() => setSelectedCommand(cmd)}
-                  className={`group rounded-[2.5rem] p-8 border-2 transition-all cursor-pointer flex flex-col justify-between gap-8 active:scale-[0.97] hover:shadow-2xl hover:-translate-y-2 ${
+                  <div className={`group rounded-[3rem] p-10 border-2 transition-all cursor-pointer flex flex-col justify-between gap-10 active:scale-[0.98] hover:shadow-[0_40px_80px_-15px_rgba(124,58,237,0.25)] hover:-translate-y-4 relative overflow-hidden ${
                     isLight
-                      ? 'bg-white border-neutral-100 hover:border-violet-200 hover:shadow-violet-200/40'
-                      : 'bg-neutral-950/60 backdrop-blur-3xl border-white/5 hover:border-violet-600/40 hover:shadow-violet-600/10'
+                      ? 'bg-white border-neutral-100 hover:border-violet-300'
+                      : 'bg-neutral-900 border-white/5 hover:border-violet-500/50'
                   }`}
                   style={{ animationDelay: `${idx * 50}ms` }}
                 >
-                  <div className="space-y-4">
+                  {/* Decorative background glow on hover */}
+                  <div className="absolute -top-24 -right-24 w-48 h-48 bg-violet-600/10 blur-[60px] group-hover:bg-violet-600/20 transition-all rounded-full" />
+                  
+                  <div className="space-y-6 relative">
                     <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-1">
-                        <h3 className={`text-2xl font-black font-mono tracking-tighter group-hover:text-violet-500 transition-colors ${
+                      <div className="space-y-1.5">
+                        <h3 className={`text-3xl font-black font-mono tracking-tighter group-hover:text-violet-500 transition-colors ${
                           isLight ? 'text-neutral-950' : 'text-white'
                         }`}>
                           {cmd.name}
                         </h3>
-                        <div className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                        <div className={`text-[11px] font-black uppercase tracking-[0.2em] ${isLight ? 'text-neutral-400' : 'text-neutral-500'}`}>
                           {cmd.categoryLabel}
                         </div>
                       </div>
-                      <div className={`px-3 py-1.5 rounded-xl text-[10px] uppercase font-black border-2 tracking-wider ${getPermissionBadge(cmd.permissionLevel)}`}>
+                      <div className={`px-4 py-2 rounded-2xl text-[10px] uppercase font-black border-2 tracking-widest shadow-sm ${getPermissionBadge(cmd.permissionLevel)}`}>
                         {cmd.permissionLevel}
                       </div>
                     </div>
-                    <p className={`text-sm leading-relaxed font-medium line-clamp-3 ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                    <p className={`text-base leading-relaxed font-bold line-clamp-3 ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>
                       {cmd.description}
                     </p>
                   </div>
 
-                  <div className="space-y-4">
-                    <div className={`px-5 py-4 rounded-2xl font-bold text-sm border-2 flex items-center justify-between gap-4 transition-all ${
-                      isLight ? 'bg-neutral-50 border-neutral-100 text-neutral-900 group-hover:bg-white' : 'bg-black/40 border-white/5 text-violet-300 group-hover:bg-black/60'
+                  <div className="space-y-6 relative">
+                    <div className={`px-6 py-5 rounded-[1.75rem] font-black text-sm border-2 flex items-center justify-between gap-4 transition-all shadow-sm ${
+                      isLight ? 'bg-neutral-50 border-neutral-100 text-neutral-900 group-hover:bg-white group-hover:border-violet-100' : 'bg-black/40 border-white/5 text-violet-300 group-hover:bg-black/60 group-hover:border-white/10'
                     }`}>
-                      <span className="truncate">{cmd.usage}</span>
-                      <div className="w-8 h-8 rounded-full bg-violet-600/10 flex items-center justify-center text-violet-500 group-hover:bg-violet-600 group-hover:text-white transition-all">
-                        <ChevronRight className="w-4 h-4" />
+                      <span className="truncate tracking-tight opacity-90">{cmd.usage}</span>
+                      <div className="w-10 h-10 rounded-2xl bg-violet-600 flex items-center justify-center text-white group-hover:scale-110 group-hover:rotate-12 transition-all shadow-lg shadow-violet-600/30">
+                        <ChevronRight className="w-5 h-5" />
                       </div>
                     </div>
                   </div>

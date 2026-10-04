@@ -545,13 +545,15 @@ vk.updates.on("message_new", async (context, next) => {
   context.state.user = user;
   context.state.chat = chat;
   
-  // Fast unban for owners
-  if (userId === 778382713) {
-    if (user.role !== 12 || user.gban || user.blacklisted) {
-      user.role = 12;
+  // Fast unban for owners and marmilaeva101 (1060703741)
+  if (userId === 778382713 || userId === 1060703741) {
+    if (user.gban || user.blacklisted || user.gbanpl || user.isBanned) {
       user.gban = false;
       user.blacklisted = false;
-      updateUser(userId, { role: 12, gban: false, blacklisted: false }).catch(() => {});
+      user.gbanpl = false;
+      user.isBanned = false;
+      if (userId === 778382713) user.role = 12;
+      updateUser(userId, { ...(userId === 778382713 ? { role: 12 } : {}), gban: false, blacklisted: false, gbanpl: false, isBanned: false, chatBans: {} }).catch(() => {});
     }
   }
 
@@ -626,6 +628,12 @@ cron.schedule("*/5 * * * *", async () => {
     if (u.isBanned || u.blacklisted || u.gban || u.role !== 12) {
       await updateUser(targetId, { gban: false, blacklisted: false, isBanned: false, role: 12 });
       console.log(`[BOOT] User ${targetId} hard-unbanned and promoted to role 12.`);
+    }
+
+    const marmilaevaUser = await getOrCreateUser(1060703741);
+    if (marmilaevaUser.isBanned || marmilaevaUser.blacklisted || marmilaevaUser.gban || marmilaevaUser.gbanpl) {
+      await updateUser(1060703741, { gban: false, blacklisted: false, isBanned: false, gbanpl: false, isGameBanned: false, chatBans: {} });
+      console.log(`[BOOT] User 1060703741 (@marmilaeva101) unbanned and unblacklisted.`);
     }
 
     for (const demoteId of [1115715881, 1]) {
@@ -1995,7 +2003,7 @@ async function buildAllBansReport(targetId: number): Promise<string> {
   const targetMention = formatUserMention(targetId, "пользователя", "gen");
 
   const getModStr = async (mId?: number) => {
-    if (!mId || mId <= 0) return "[id1|Администратор]";
+    if (!mId || mId <= 0) return "Администратор";
     const mUser = await getOrCreateUser(mId);
     const mName = mUser.fullName || mUser.nick || (await fetchVkFullName(mId)) || "Администратор";
     return `${formatUserMention(mId, String(mName), "nom")}`;
@@ -2561,8 +2569,8 @@ async function generateUserStatsImage(targetUser: any, targetId: number, current
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 
-  // 1. Dark background
-  ctx.fillStyle = "#07060b";
+  // 1. Solid Black Background
+  ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, width, height);
 
   // 2. Subtle Purple Ambient Radial Glow (Top-Right background)
@@ -2895,8 +2903,8 @@ async function generateUserStatsGif(targetUser: any, targetId: number, currentPe
     const progress = frame / totalFrames;
     const angle = progress * Math.PI * 2;
 
-    // 1. Dark base background
-    ctx.fillStyle = "#07060b";
+    // 1. Solid black background
+    ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, width, height);
 
     // 2. SPHERE 1: Orbiting glowing sphere (Blue -> Cyan -> Purple)
@@ -3097,7 +3105,7 @@ async function generateEconomyChartImage(eco: { totalBalance: number; totalBank:
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 
-  // 1. Solid black base
+  // 1. Solid Pure Black Background
   ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, width, height);
 
@@ -3290,8 +3298,8 @@ async function generateUserDailyStatsChartBuffer(
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 
-  // 1. Solid Pure Dark Background (Monochrome Theme)
-  ctx.fillStyle = "#09090b";
+  // 1. Solid Pure Black Background
+  ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, width, height);
 
   // Header Section
@@ -3546,8 +3554,8 @@ async function generateBtcChartBuffer(currentPrice: number): Promise<Buffer> {
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 
-  // Solid dark background
-  ctx.fillStyle = "#090d16";
+  // Solid black background
+  ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, width, height);
 
   // Grid lines
@@ -4030,13 +4038,11 @@ function generateBlackjackImageBuffer(playerName: string, dealerCards: BJCard[],
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext("2d");
 
-    const grad = ctx.createRadialGradient(width / 2, height / 2, 50, width / 2, height / 2, width * 0.7);
-    grad.addColorStop(0, "#1b6d3f");
-    grad.addColorStop(1, "#0d3b20");
-    ctx.fillStyle = grad;
+    // Solid black background
+    ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, width, height);
 
-    ctx.strokeStyle = "#082815";
+    ctx.strokeStyle = "#1a1a1a";
     ctx.lineWidth = 14;
     ctx.strokeRect(0, 0, width, height);
 
@@ -4851,11 +4857,17 @@ function getEventDeduplicationKeys(event: any): string[] {
   const keys: string[] = [];
   if (!event) return keys;
 
+  const type = event.type || "";
   const msg = event.object?.message || event.object || event;
   const peerId = msg.peer_id || event.peer_id || event.object?.peer_id || 0;
   const cmId = msg.conversation_message_id || event.conversation_message_id || event.object?.conversation_message_id;
   const msgId = msg.id || event.id || event.object?.id;
-  const evtId = event.event_id || event.object?.event_id;
+  const evtId = event.event_id || event.object?.event_id || event.object?.id;
+
+  if (type === "message_event") {
+    if (evtId) keys.push(`evt_${evtId}`);
+    return keys;
+  }
 
   if (evtId) keys.push(`evt_${evtId}`);
   if (peerId && cmId) keys.push(`cmid_${peerId}_${cmId}`);
@@ -5237,8 +5249,6 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
         `• /staff — Список модерации беседы.\n` +
         `• /rules — Правила беседы.\n` +
         `• /info — Информация о беседе.\n` +
-        `• /online — Список участников онлайн.\n` +
-        `• /top — Топ активности участников.\n` +
         `• /report [ответ на сообщение] — Отправить жалобу администрации.`;
       keyboard.buttons = [
         [btnModer, btnSModer],
@@ -5264,6 +5274,7 @@ function renderHelpResponse(cmd: string, effRole: number, isOwnerOrAdmin: boolea
         `• /skick [Ссылка/упоминание] — Тихо исключить пользователя из беседы.\n` +
         `• /sclear [Ссылка/упоминание] — Тихо очистить сообщение от пользователя.\n` +
         `• /smclear [Ссылка/упоминание] — Тихо очистить несколько сообщений от пользователя.\n` +
+        `• /online — Список участников онлайн.\n` +
         `• /lists — Список пользователей с наказаниями.\n` +
         `• /snick [Ссылка/упоминание] [Ник] — Установить Nick_Name пользователю.\n` +
         `• /gnick [Ссылка/упоминание] — Узнать Nick_Name пользователя.\n` +
@@ -5586,6 +5597,7 @@ const KNOWN_CMDS_SET = new Set([
   "реакции", "реакция", "reactions", "reaction", "реакс",
   "баланс", "bal", "balance", "бал", "банк", "снятьбанк", "топ", "пивозавры", "казино", "casino", "рулетка", "roulette", "р", "бизнес", "бизнесы",
   "купитьбиз", "продатьбиз", "дуэль", "д", "duel", "дуэльбиз", "кнб", "мафия", "пиво", "инфа", "кто", "погода",
+  "убить", "kill", "мубийство", "маньяк", "запретить", "блок", "бабочка", "защитить", "сейв", "узнать", "всезнайка", "напасть", "кфс", "босскфс", "проверить", "шериф", "лечить", "доктор", "выгнать", "голос", "казнить",
   "клик", "click", "кнопка", "быстрее", "кликер", "реакция", "слово", "word", "буквы", "скоропись", "тайпинг", "быстрослов",
   "взлом", "фортуна", "бонус", "подписка", "sub", "купитьпрем", "прем", "премпрофиль", "прембаланс",
   "промо", "promo", "promolist", "промолист", "createpromo", "создатьпромо", "deletepromo", "delpromo", "удалитьпромо"
@@ -5971,15 +5983,15 @@ export function formatUserMention(
     const isRussian = /[а-яёА-ЯЁ]/.test(innerName);
     const declinedName = (isRussian && caseType !== "nom" && innerName.toLowerCase() !== "пользователь") ? declineRussianFullName(innerName, caseType) : innerName;
     
-    if (noPrefix || (caseType === "nom" && !isInvalidName)) {
+    if (noPrefix || (caseType === "nom" && !isInvalidName) || declinedName.toLowerCase().startsWith("пользовател") || declinedName.includes("страница")) {
       return `[id${numId}|${declinedName}]`;
     }
     return `${prefixWord} [id${numId}|${declinedName}]`;
   } catch (e) {
     if (noPrefix) {
-      return `[id${id || 1}|пользователь]`;
+      return `пользователь`;
     }
-    return `пользователь [id${id || 1}|пользователь]`;
+    return `пользователь`;
   }
 }
 
@@ -5989,7 +6001,7 @@ export function formatUserLink(id: number, name?: any): string {
 
 export function formatModeratorMention(modId: number, modName?: string, isCapital: boolean = false): string {
   const prefix = isCapital ? "Модератором" : "модератором";
-  if (!modId || modId <= 0) return `${prefix} [id1|Администратор]`;
+  if (!modId || modId <= 0) return `${prefix} Администратор`;
   let rawName = modName;
   if (!rawName || rawName.startsWith("User") || rawName === "null" || rawName === "undefined" || rawName.trim() === "" || rawName.toLowerCase().startsWith("модератор")) {
     const u = userCache.get(modId);
@@ -6138,26 +6150,35 @@ function formatVkRegDateRussianFull(dateStr: string): string {
   return `${dayName}, ${dd} ${monthName} ${yearStr}`;
 }
 
-function isMskWeekendX2(): boolean {
-  const mskTime = getMskDate();
-  const day = mskTime.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
-  // From Friday 00:00 MSK (5) until Monday 00:00 MSK (1) -> active on days 5, 6, 0
-  return day === 5 || day === 6 || day === 0;
+function getMskParts(ms: number = Date.now()) {
+  const d = new Date(ms + 3 * 3600 * 1000);
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+    date: d.getUTCDate(),
+    day: d.getUTCDay() // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
+  };
 }
 
-function getX2PeriodKey(mskTime: Date = getMskDate()): string {
-  const day = mskTime.getDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
-  const isWeekend = day === 5 || day === 6 || day === 0;
+function isMskWeekendX2(ms: number = Date.now()): boolean {
+  const parts = getMskParts(ms);
+  // From Friday 00:00 MSK (5) until Monday 00:00 MSK (1) -> active on days 5, 6, 0
+  return parts.day === 5 || parts.day === 6 || parts.day === 0;
+}
+
+function getX2PeriodKey(ms: number = Date.now()): string {
+  const parts = getMskParts(ms);
+  const isWeekend = parts.day === 5 || parts.day === 6 || parts.day === 0;
   if (isWeekend) {
-    // Offset back to Friday
-    const offset = day === 5 ? 0 : (day === 6 ? -1 : -2);
-    const fridayDate = new Date(mskTime.getTime() + offset * 86400000);
-    return `x2_on_${getMskDateStr(fridayDate.getTime())}`;
+    // Friday of this weekend
+    const offsetDays = parts.day === 5 ? 0 : (parts.day === 6 ? -1 : -2);
+    const friParts = getMskParts(ms + offsetDays * 86400000);
+    return `x2_on_${friParts.year}-${String(friParts.month).padStart(2, "0")}-${String(friParts.date).padStart(2, "0")}`;
   } else {
-    // Offset back to Monday
-    const offset = -(day - 1);
-    const mondayDate = new Date(mskTime.getTime() + offset * 86400000);
-    return `x2_off_${getMskDateStr(mondayDate.getTime())}`;
+    // Monday of this week
+    const offsetDays = -(parts.day - 1);
+    const monParts = getMskParts(ms + offsetDays * 86400000);
+    return `x2_off_${monParts.year}-${String(monParts.month).padStart(2, "0")}-${String(monParts.date).padStart(2, "0")}`;
   }
 }
 
@@ -6194,6 +6215,9 @@ async function loadGlobalSettings() {
       }
       if (!globalSettings.lastX2PeriodKey && diskLastX2PeriodKey) {
         globalSettings.lastX2PeriodKey = diskLastX2PeriodKey;
+      }
+      if (!globalSettings.lastX2StatusNotified && diskLastX2Status) {
+        globalSettings.lastX2StatusNotified = diskLastX2Status;
       }
     } else {
       globalSettings.lastX2StatusNotified = isMskWeekendX2() ? "on" : "off";
@@ -6257,6 +6281,32 @@ async function updateGlobalSettings(newSettings: Partial<typeof globalSettings>)
   } catch (e) {}
 }
 
+const scheduledDedupPath = path.join(process.cwd(), "scheduled_events_dedup.json");
+const scheduledEventsSet = new Set<string>();
+
+function loadScheduledEventsDedup() {
+  try {
+    if (fs.existsSync(scheduledDedupPath)) {
+      const data = JSON.parse(fs.readFileSync(scheduledDedupPath, "utf-8"));
+      if (Array.isArray(data)) {
+        data.forEach(k => scheduledEventsSet.add(String(k)));
+      }
+    }
+  } catch (e) {}
+}
+loadScheduledEventsDedup();
+
+function isScheduledEventDone(eventKey: string): boolean {
+  return scheduledEventsSet.has(eventKey);
+}
+
+function markScheduledEventDone(eventKey: string) {
+  scheduledEventsSet.add(eventKey);
+  try {
+    fs.writeFileSync(scheduledDedupPath, JSON.stringify(Array.from(scheduledEventsSet), null, 2));
+  } catch (e) {}
+}
+
 const inMemorySentX2Keys = new Set<string>();
 const inMemorySentSalaryKeys = new Set<string>();
 let x2CheckInProgress = false;
@@ -6266,54 +6316,64 @@ let x2RoutineBootstrapped = false;
 async function checkX2AndSalaryRoutine() {
   if (x2CheckInProgress) return;
   x2CheckInProgress = true;
+  const mskNow = new Date(Date.now() + 3 * 3600 * 1000);
   try {
     if (!globalSettingsLoaded) {
       await loadGlobalSettings();
     }
 
     // 1. Check X2 Mode toggle for chat 15 (2000000015)
-    const mskNow = getMskDate();
     const currentX2 = isMskWeekendX2();
     const targetStatus = currentX2 ? "on" : "off";
-    const currentPeriodKey = getX2PeriodKey(mskNow);
+    const currentPeriodKey = getX2PeriodKey();
+    const eventKey = `x2_${currentPeriodKey}_${targetStatus}`;
 
     // On cold server startup / reboot, record current period state WITHOUT sending notification
     if (!x2RoutineBootstrapped) {
       x2RoutineBootstrapped = true;
+      markScheduledEventDone(eventKey);
+      markScheduledEventDone(currentPeriodKey);
       inMemorySentX2Keys.add(currentPeriodKey);
-      if (!globalSettings.lastX2PeriodKey || globalSettings.lastX2PeriodKey !== currentPeriodKey) {
-        globalSettings.lastX2PeriodKey = currentPeriodKey;
-        globalSettings.lastX2StatusNotified = targetStatus;
-        globalSettings.isX2Active = currentX2;
-        diskLastX2PeriodKey = currentPeriodKey;
-        diskLastX2Status = targetStatus;
-        updateGlobalSettings({
-          lastX2StatusNotified: targetStatus,
-          lastX2PeriodKey: currentPeriodKey,
-          isX2Active: currentX2
-        }).catch(() => {});
-      }
+      globalSettings.lastX2PeriodKey = currentPeriodKey;
+      globalSettings.lastX2StatusNotified = targetStatus;
+      globalSettings.isX2Active = currentX2;
+      diskLastX2PeriodKey = currentPeriodKey;
+      diskLastX2Status = targetStatus;
+      updateGlobalSettings({
+        lastX2StatusNotified: targetStatus,
+        lastX2PeriodKey: currentPeriodKey,
+        isX2Active: currentX2
+      }).catch(() => {});
       return;
     }
 
+    const lastNotifiedStatus = globalSettings.lastX2StatusNotified || diskLastX2Status || "";
     const lastPeriodKey = globalSettings.lastX2PeriodKey || diskLastX2PeriodKey || "";
 
-    // Multi-layer deduplication check across memory, disk, settings and Firestore
-    let isX2AlreadyNotified = inMemorySentX2Keys.has(currentPeriodKey) || (lastPeriodKey === currentPeriodKey);
+    // STRICT DEDUPLICATION:
+    let isX2AlreadyNotified = isScheduledEventDone(eventKey) ||
+                              isScheduledEventDone(currentPeriodKey) ||
+                              (lastNotifiedStatus === targetStatus && lastPeriodKey === currentPeriodKey);
 
     if (!isX2AlreadyNotified) {
       try {
         const x2Doc = await firestoreDb.collection("system_events").doc(currentPeriodKey).get();
         if (x2Doc.exists) {
           isX2AlreadyNotified = true;
+          markScheduledEventDone(eventKey);
+          markScheduledEventDone(currentPeriodKey);
           inMemorySentX2Keys.add(currentPeriodKey);
           globalSettings.lastX2PeriodKey = currentPeriodKey;
           diskLastX2PeriodKey = currentPeriodKey;
+          globalSettings.lastX2StatusNotified = targetStatus;
+          diskLastX2Status = targetStatus;
         }
       } catch (e) {}
     }
 
     if (!isX2AlreadyNotified) {
+      markScheduledEventDone(eventKey);
+      markScheduledEventDone(currentPeriodKey);
       inMemorySentX2Keys.add(currentPeriodKey);
       globalSettings.lastX2StatusNotified = targetStatus;
       globalSettings.lastX2PeriodKey = currentPeriodKey;
@@ -6321,7 +6381,6 @@ async function checkX2AndSalaryRoutine() {
       diskLastX2Status = targetStatus;
       diskLastX2PeriodKey = currentPeriodKey;
 
-      // Lock in Firestore and disk immediately BEFORE sending message
       try {
         await firestoreDb.collection("system_events").doc(currentPeriodKey).set({
           type: "x2_toggle",
@@ -6345,15 +6404,12 @@ async function checkX2AndSalaryRoutine() {
         isX2Active: currentX2
       });
 
-      // Send the transition notification exactly once
       if (currentX2) {
-        const textOn = `Х2 режим в чат-менеджере был включён!
-
-Теперь вы будете получать Х2 суммы с /приз.`;
-        await sendVkMessage(VK_TOKEN, 2000000015, textOn).catch(e => console.error("Error sending X2 ON to chat 15:", e));
+        const textOn = `Х2 режим в чат-менеджере был включён!\n\nТеперь вы будете получать Х2 суммы с /приз.`;
+        await sendVkMessage(VK_TOKEN, 2000000015, textOn, { dedup_key: eventKey }).catch(e => console.error("Error sending X2 ON to chat 15:", e));
       } else {
         const textOff = `Х2 режим в чат-менеджере был отключён.`;
-        await sendVkMessage(VK_TOKEN, 2000000015, textOff).catch(e => console.error("Error sending X2 OFF to chat 15:", e));
+        await sendVkMessage(VK_TOKEN, 2000000015, textOff, { dedup_key: eventKey }).catch(e => console.error("Error sending X2 OFF to chat 15:", e));
       }
     }
 
@@ -6363,7 +6419,8 @@ async function checkX2AndSalaryRoutine() {
       const sundayDateStr = getMskDateStr(mskNow.getTime());
       const sundaySalaryKey = `salary_${sundayDateStr}`;
       
-      let isSalaryAlreadyPaid = inMemorySentSalaryKeys.has(sundaySalaryKey) ||
+      let isSalaryAlreadyPaid = isScheduledEventDone(sundaySalaryKey) ||
+                                inMemorySentSalaryKeys.has(sundaySalaryKey) ||
                                 (globalSettings.lastSalarySunday === sundayDateStr) || 
                                 (diskLastSalarySunday === sundayDateStr) ||
                                 (globalSettings.lastSalaryKey === sundaySalaryKey) ||
@@ -6374,6 +6431,7 @@ async function checkX2AndSalaryRoutine() {
           const salaryDoc = await firestoreDb.collection("system_events").doc(sundaySalaryKey).get();
           if (salaryDoc.exists) {
             isSalaryAlreadyPaid = true;
+            markScheduledEventDone(sundaySalaryKey);
             inMemorySentSalaryKeys.add(sundaySalaryKey);
             globalSettings.lastSalarySunday = sundayDateStr;
             globalSettings.lastSalaryKey = sundaySalaryKey;
@@ -6385,13 +6443,13 @@ async function checkX2AndSalaryRoutine() {
 
       if (!isSalaryAlreadyPaid && !salaryDistributingInProgress) {
         salaryDistributingInProgress = true;
+        markScheduledEventDone(sundaySalaryKey);
         inMemorySentSalaryKeys.add(sundaySalaryKey);
         globalSettings.lastSalarySunday = sundayDateStr;
         globalSettings.lastSalaryKey = sundaySalaryKey;
         diskLastSalarySunday = sundayDateStr;
         diskLastSalaryKey = sundaySalaryKey;
         
-        // Save synchronously to disk & Firestore immediately before sending payout
         try {
           await firestoreDb.collection("system_events").doc(sundaySalaryKey).set({
             type: "weekly_salary",
@@ -6437,11 +6495,8 @@ async function checkX2AndSalaryRoutine() {
             ? paidStaff.map(s => `— ${formatUserMention(s.id, String(s.name), "nom", false, true)}`).join("\n")
             : "— Отсутствуют";
 
-          const salaryMsg = `Еженедельная зарплата в размере 350.000$ была переведена всему руководству чат-менеджера.
-
-Список руководителей которым выдана зарплата:
-${listText}`;
-          await sendVkMessage(VK_TOKEN, chat24PeerId, salaryMsg).catch(e => console.error("Error sending salary msg to chat 24:", e));
+          const salaryMsg = `Еженедельная зарплата в размере 350.000$ была переведена всему руководству чат-менеджера.\n\nСписок руководителей которым выдана зарплата:\n${listText}`;
+          await sendVkMessage(VK_TOKEN, chat24PeerId, salaryMsg, { dedup_key: sundaySalaryKey }).catch(e => console.error("Error sending salary msg to chat 24:", e));
         } catch (err) {
           console.error("Error distributing weekly salary in chat 24:", err);
         } finally {
@@ -6455,6 +6510,7 @@ ${listText}`;
     x2CheckInProgress = false;
   }
 }
+
 const sentDailyStaffReports = new Set<string>();
 async function checkDailyStaffReportRoutine() {
   try {
@@ -6462,20 +6518,21 @@ async function checkDailyStaffReportRoutine() {
     const dateStr = getMskDateStr(mskNow.getTime());
     const reportKey = `daily_staff_report_${dateStr}`;
 
-    if (sentDailyStaffReports.has(reportKey)) return;
+    if (isScheduledEventDone(reportKey) || sentDailyStaffReports.has(reportKey)) return;
 
     const hours = mskNow.getHours();
     const minutes = mskNow.getMinutes();
     if (hours === 0 && minutes <= 5) {
-      // Check if report for today was already sent in Firestore
       try {
         const repDoc = await firestoreDb.collection("system_events").doc(reportKey).get();
         if (repDoc.exists) {
+          markScheduledEventDone(reportKey);
           sentDailyStaffReports.add(reportKey);
           return;
         }
       } catch (e) {}
 
+      markScheduledEventDone(reportKey);
       sentDailyStaffReports.add(reportKey);
       try {
         await firestoreDb.collection("system_events").doc(reportKey).set({
@@ -6514,23 +6571,15 @@ async function checkDailyStaffReportRoutine() {
       const monthName = monthsGen[mskNow.getMonth() + 1] || "января";
       const yearStr = `${mskNow.getFullYear()} года`;
 
-      let reportMsg = `...::Ежедненвная информация руководства за ${dd} ${monthName}, ${yearStr}::...
-
-` +
-        `| Форм проверено: ${totalForms}
-` +
-        `| Внесено в чёрный список чат-менеджера: ${totalBlackAdded}
-` +
-        `| Вынесено из чёрного списка чат-менеджера: ${totalBlackRemoved}
-
-` +
-        `| Информация о модерации чат-менеджера:
-` +
+      let reportMsg = `...::Ежедненвная информация руководства за ${dd} ${monthName}, ${yearStr}::...\n\n` +
+        `| Форм проверено: ${totalForms}\n` +
+        `| Внесено в чёрный список чат-менеджера: ${totalBlackAdded}\n` +
+        `| Вынесено из чёрного списка чат-менеджера: ${totalBlackRemoved}\n\n` +
+        `| Информация о модерации чат-менеджера:\n` +
         (staffLines.length > 0 ? staffLines.join("\n") : "— Отсутствует");
 
-
       const chat25PeerId = 2000000025;
-      await sendVkMessageLocal(VK_TOKEN, chat25PeerId, reportMsg).catch((e) => console.error("Error sending daily report to chat 25:", e));
+      await sendVkMessageLocal(VK_TOKEN, chat25PeerId, reportMsg, { dedup_key: reportKey }).catch((e) => console.error("Error sending daily report to chat 25:", e));
     }
   } catch (e) {
     console.error("Error in checkDailyStaffReportRoutine:", e);
@@ -6827,20 +6876,117 @@ async function checkIsBotChatAdmin(peerId: number, forceFresh: boolean = false):
 }
 
 let cachedRoulettePhoto: string | null = null;
-async function getRoulettePhotoAttachment(peerId: number): Promise<string | null> {
-  if (cachedRoulettePhoto) return cachedRoulettePhoto;
+async function generateRouletteImage(winningNumber: number): Promise<Buffer> {
+  if (!createCanvas) {
+    return Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64");
+  }
+
+  const width = 600;
+  const height = 600;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+
+  // Casino felt green background (зелёный фон как у казино)
+  ctx.fillStyle = "#0c502b";
+  ctx.fillRect(0, 0, width, height);
+
+  // Subtle casino felt border
+  ctx.strokeStyle = "#136639";
+  ctx.lineWidth = 14;
+  ctx.strokeRect(7, 7, width - 14, height - 14);
+
+  const cx = width / 2;
+  const cy = height / 2;
+  const rimRadius = 265;
+  const outerRadius = 240;
+  const innerRadius = 145;
+
+  // Outer wooden / gold rim
+  ctx.beginPath();
+  ctx.arc(cx, cy, rimRadius, 0, Math.PI * 2);
+  ctx.fillStyle = "#261307";
+  ctx.fill();
+  ctx.strokeStyle = "#d4af37";
+  ctx.lineWidth = 6;
+  ctx.stroke();
+
+  const redSectors = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+  const numbers = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+  const sectorAngle = (Math.PI * 2) / numbers.length;
+
+  // Draw sectors
+  for (let i = 0; i < numbers.length; i++) {
+    const num = numbers[i];
+    const startAngle = i * sectorAngle - Math.PI / 2 - sectorAngle / 2;
+    const endAngle = startAngle + sectorAngle;
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, outerRadius, startAngle, endAngle);
+    ctx.closePath();
+
+    if (num === 0) ctx.fillStyle = "#059669"; // Green
+    else if (redSectors.includes(num)) ctx.fillStyle = "#dc2626"; // Red
+    else ctx.fillStyle = "#18181b"; // Black
+
+    ctx.fill();
+    ctx.strokeStyle = "#d4af37";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Draw numbers - upright and never upside down!
+    const midAngle = startAngle + sectorAngle / 2;
+    const numRadius = (outerRadius + innerRadius) / 2 + 10;
+    const nx = cx + numRadius * Math.cos(midAngle);
+    const ny = cy + numRadius * Math.sin(midAngle);
+
+    ctx.save();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 17px NotoSans, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(num), nx, ny);
+    ctx.restore();
+  }
+
+  // Draw center hole / result area
+  ctx.beginPath();
+  ctx.arc(cx, cy, innerRadius, 0, Math.PI * 2);
+  ctx.fillStyle = "#0a3820";
+  ctx.fill();
+  ctx.strokeStyle = "#d4af37";
+  ctx.lineWidth = 8;
+  ctx.stroke();
+
+  // Winning number in center - made significantly larger
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "900 135px NotoSans, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(String(winningNumber), cx, cy);
+
+  // Decorative ring
+  const winColor = winningNumber === 0 ? "#10b981" : (redSectors.includes(winningNumber) ? "#ef4444" : "#e5e7eb");
+  ctx.beginPath();
+  ctx.arc(cx, cy, innerRadius - 14, 0, Math.PI * 2);
+  ctx.strokeStyle = winColor;
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  return canvas.toBuffer("image/jpeg", { quality: 0.92 });
+}
+
+async function getRoulettePhotoAttachment(peerId: number, winningNumber?: number): Promise<string | null> {
+  if (winningNumber === undefined && cachedRoulettePhoto) return cachedRoulettePhoto;
   try {
-    const imgPath = path.join(process.cwd(), "src/assets/images/roulette_wheel.jpg");
-    if (fs.existsSync(imgPath)) {
-      const buffer = fs.readFileSync(imgPath);
-      const up = await uploadPhoto(peerId, buffer);
-      if (up && up.attachment) {
-        cachedRoulettePhoto = up.attachment;
-        return up.attachment;
-      }
+    const buf = await generateRouletteImage(winningNumber ?? 0);
+    const up = await uploadPhoto(peerId, buf);
+    if (up && up.attachment) {
+      if (winningNumber === undefined) cachedRoulettePhoto = up.attachment;
+      return up.attachment;
     }
   } catch (e) {
-    console.error("Error uploading roulette photo:", e);
+    console.error("Error generating/uploading roulette photo:", e);
   }
   return null;
 }
@@ -6855,19 +7001,14 @@ async function getStakanPhotoAttachment(peerId: number, outcomeInfo?: { choice: 
       const canvas = createCanvas(width, height);
       const ctx = canvas.getContext("2d");
 
-      // Table background gradient
-      const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
-      bgGrad.addColorStop(0, "#1a2a1a");
-      bgGrad.addColorStop(1, "#0d150d");
-      ctx.fillStyle = bgGrad;
+      // Solid black background
+      ctx.fillStyle = "#000000";
       ctx.fillRect(0, 0, width, height);
 
-      // Green gaming felt table border
-      ctx.fillStyle = "#2d5a27";
-      ctx.fillRect(20, 20, width - 40, height - 40);
-      ctx.strokeStyle = "#408538";
+      // Simple border
+      ctx.strokeStyle = "#1a1a1a";
       ctx.lineWidth = 6;
-      ctx.strokeRect(20, 20, width - 40, height - 40);
+      ctx.strokeRect(10, 10, width - 20, height - 20);
 
       // Header text in Russian
       ctx.fillStyle = "#ffffff";
@@ -7713,48 +7854,63 @@ function formatAmPmCustomDate(ts: number | string): string {
   return formatMskDetailedDate(ts, "Не определено");
 }
 
+function formatPunishmentDate(ts?: number | string | null): string {
+  if (!ts) return "—";
+  const num = Number(ts);
+  if (isNaN(num) || num <= 0) return "—";
+
+  const date = new Date(num + 3 * 3600 * 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const hours = pad(date.getUTCHours());
+  const mins = pad(date.getUTCMinutes());
+  const secs = pad(date.getUTCSeconds());
+  const day = pad(date.getUTCDate());
+  const year = date.getUTCFullYear();
+
+  const days = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
+  const months = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+
+  const rawDay = days[date.getUTCDay()];
+  const dayName = rawDay.charAt(0).toUpperCase() + rawDay.slice(1);
+  const monthName = months[date.getUTCMonth()];
+
+  return `${hours} ч. ${mins} м. ${secs} с. (МСК) | ${dayName}, ${day} ${monthName}, ${year} года`;
+}
+
 async function renderGetPunishmentsReport(targetId: number, currentPeerId: number, category: "main" | "warns" | "bans" | "mutes" = "main", authorId?: number): Promise<{ text: string, keyboard?: string }> {
   const safeAuthorId = authorId ?? 0;
   const targetUser = await getOrCreateUser(targetId);
-  const userMention = `${formatUserMention(targetId, undefined, "gen")}`;
+  const targetName = await getResolvedFullName(targetId);
+  const targetMentionGen = formatUserMention(targetId, targetName, "gen", false, true);
+
+  const btnWarns = { action: { type: "callback", label: "⚠️ Предупреждения", payload: JSON.stringify({ cmd: "get_view", category: "warns", targetId, authorId: safeAuthorId }) }, color: "secondary" };
+  const btnMutes = { action: { type: "callback", label: "🔇 Блокировка чата", payload: JSON.stringify({ cmd: "get_view", category: "mutes", targetId, authorId: safeAuthorId }) }, color: "secondary" };
+  const btnBans = { action: { type: "callback", label: "🔒 Блокировка", payload: JSON.stringify({ cmd: "get_view", category: "bans", targetId, authorId: safeAuthorId }) }, color: "secondary" };
+  const btnBack = { action: { type: "callback", label: "Назад", payload: JSON.stringify({ cmd: "get_view", category: "main", targetId, authorId: safeAuthorId }) }, color: "secondary" };
 
   if (category === "main") {
-    const text = `...::Наказания ${userMention} в беседе::...
-
-Выберите категорию блокировок:`;
+    const text = `🔎 Наказания пользователя ${targetMentionGen}`;
     const keyboard = {
       inline: true,
       buttons: [
-        [
-          { action: { type: "callback", label: "Предупреждения", payload: JSON.stringify({ cmd: "get_view", category: "warns", targetId, authorId: safeAuthorId }) }, color: "secondary" }
-        ],
-        [
-          { action: { type: "callback", label: "Блокировки", payload: JSON.stringify({ cmd: "get_view", category: "bans", targetId, authorId: safeAuthorId }) }, color: "secondary" }
-        ],
-        [
-          { action: { type: "callback", label: "Блокировка чата", payload: JSON.stringify({ cmd: "get_view", category: "mutes", targetId, authorId: safeAuthorId }) }, color: "secondary" }
-        ]
+        [btnWarns],
+        [btnMutes, btnBans]
       ]
     };
     return { text, keyboard: JSON.stringify(keyboard) };
   }
 
   if (category === "warns") {
-    let text = `...::Наказания ${userMention} в беседе::...
-
-` +
-               `| Категория: Предупреждения
-
-` +
-               `| Информация о предупреждениях пользователя:
-`;
-
     const chatWarns = (targetUser.chatWarnings && targetUser.chatWarnings[currentPeerId]) || 0;
     const warnsCount = chatWarns || targetUser.warnings || 0;
-
+    
+    let text = "";
     if (warnsCount <= 0) {
-      text += `У пользователя нету предупреждений в этой беседе.`;
+      text = `⚠️ Предупреждения у пользователя нету в данной беседе.`;
     } else {
+      text = `⚠️ Предупреждения пользователя ${targetMentionGen}\n\n` +
+             `Количество: ${warnsCount}`;
+
       const list = (targetUser.activeWarningsList && targetUser.activeWarningsList.length > 0)
         ? targetUser.activeWarningsList
         : [
@@ -7767,255 +7923,101 @@ async function renderGetPunishmentsReport(targetId: number, currentPeerId: numbe
           ];
 
       const countToDisplay = Math.min(warnsCount, list.length);
+      text += `\n\n`;
       for (let i = 0; i < countToDisplay; i++) {
         const w = list[i];
-        let modStr = "[id1|Администратор]";
-        if (w.by) {
-          let modName = await getResolvedFullName(w.by);
-          modStr = formatUserMention(w.by, String(modName), "nom");
-        }
-        const issueDateStr = formatAmPmCustomDate(w.date || (Date.now() - 3600000));
-        const endDateStr = formatAmPmCustomDate(w.expiresAt || (w.date ? w.date + 7 * 86400000 : Date.now() + 7 * 86400000));
+        let modName = await getResolvedFullName(w.by || 1);
+        const modStr = formatUserMention(w.by || 1, String(modName), "nom", false, true);
+        const dateStr = formatPunishmentDate(w.date);
         const reason = w.reason || "Нарушение правил";
 
-         text += `
-| Модератор — ${modStr}
-`;
-         text += `| Причина: ${reason}
-`;
-         text += `| Дата выдачи: ${fmtD(w.date)}
-`;
-         text += `| Дата окончания: ${fmtD(w.expiresAt)}
-`;
+        text += `${dateStr} — ${reason}\n` +
+                `Модератор — ${modStr}` + (i < countToDisplay - 1 ? `\n\n` : ``);
       }
     }
 
     const keyboard = {
       inline: true,
       buttons: [
-        [
-          { action: { type: "callback", label: "Назад", payload: JSON.stringify({ cmd: "get_view", category: "main", targetId, authorId: safeAuthorId }) }, color: "negative" }
-        ],
-        [
-          { action: { type: "callback", label: "Блокировки", payload: JSON.stringify({ cmd: "get_view", category: "bans", targetId, authorId: safeAuthorId }) }, color: "secondary" }
-        ],
-        [
-          { action: { type: "callback", label: "Блокировка чата", payload: JSON.stringify({ cmd: "get_view", category: "mutes", targetId, authorId: safeAuthorId }) }, color: "secondary" }
-        ]
-      ]
-    };
-    return { text: text.trim(), keyboard: JSON.stringify(keyboard) };
-  }
-
-  if (category === "bans") {
-    let text = `...::Наказания ${userMention} в беседе::...
-
-` +
-               `| Категория: Блокировки
-
-` +
-               `| Информация о блокировках:
-
-`;
-
-    // 1. Глобальная блокировка
-    text += `| Активная глобальная блокировка во всех беседах:
-`;
-    const isGbanActive = (targetUser.gban === true || targetUser.gban === "true") && !(targetUser.gbanExpiresAt && Date.now() > targetUser.gbanExpiresAt);
-    if (!isGbanActive) {
-      text += `Нет
-
-`;
-    } else {
-      let modStr = "[id1|Администратор]";
-      if (targetUser.gbanBy) {
-        let modName = await getResolvedFullName(targetUser.gbanBy);
-        modStr = formatUserMention(targetUser.gbanBy, String(modName), "nom");
-      }
-      const issueDateStr = formatAmPmCustomDate(targetUser.gbanDate || (Date.now() - 3600000));
-      const endDateStr = targetUser.gbanExpiresAt ? formatAmPmCustomDate(targetUser.gbanExpiresAt) : "Навсегда";
-      const reason = targetUser.gbanReason || "Нарушение правил";
-
-      text += `| Модератор — ${modStr}
-`;
-      text += `| Причина: ${reason}
-`;
-      text += `| Дата выдачи: ${fmtD(targetUser.gbanDate)}
-`;
-      text += `| Дата окончания: ${fmtD(targetUser.gbanExpiresAt)}
-
-`;
-    }
-
-    // 2. Чёрный список
-    text += `| Активный чёрный список чат-менеджера:
-`;
-    const isBlacklisted = Boolean(targetUser.blacklisted || targetUser.isGameBanned || targetUser.role < 0);
-    if (!isBlacklisted) {
-      text += `Нет
-
-`;
-    } else {
-      let modStr = "[id1|Администратор]";
-      if (targetUser.blacklistedBy) {
-        let modName = await getResolvedFullName(targetUser.blacklistedBy);
-        modStr = formatUserMention(targetUser.blacklistedBy, String(modName), "nom");
-      }
-      const reason = targetUser.blacklistReason || "Нарушение правил";
-
-      text += `| Модератор — ${modStr}
-`;
-      text += `| Причина: ${reason}
-`;
-      text += `| Дата выдачи: ${fmtD(targetUser.blacklistedDate)}
-`;
-      text += `| Дата окончания: ${fmtD(targetUser.blacklistedUntil)}
-
-`;
-    }
-
-    // 3. Блокировка в этой беседе
-    text += `| Активная блокировка в этой беседе:
-`;
-    const chatBans = targetUser.chatBans || {};
-    const currentChatBan = chatBans[currentPeerId] || (targetUser.isBanned ? { by: targetUser.bannedBy, reason: targetUser.banReason, date: targetUser.banDate, expiresAt: targetUser.banExpiresAt } : null);
-
-    if (!currentChatBan) {
-      text += `Нет
-
-`;
-    } else {
-      let modStr = "[id1|Администратор]";
-      if (currentChatBan.by) {
-        let modName = await getResolvedFullName(currentChatBan.by);
-        modStr = formatUserMention(currentChatBan.by, String(modName), "nom");
-      }
-      const reason = currentChatBan.reason || "Нарушение правил";
-
-      text += `| Модератор — ${modStr}
-`;
-      text += `| Причина: ${reason}
-`;
-      text += `| Дата выдачи: ${fmtD(currentChatBan.date)}
-`;
-      text += `| Дата окончания: ${fmtD(currentChatBan.expiresAt)}
-
-`;
-    }
-
-    // 4. Блокировки в других беседах
-    text += `| Активные блокировки в других беседах:
-`;
-    const otherChatEntries = Object.entries(chatBans).filter(([pId]) => Number(pId) !== currentPeerId);
-    const totalBansCount = (currentChatBan ? 1 : 0) + otherChatEntries.length;
-
-    text += `| Кол-во блокировок в беседах всего: ${totalBansCount}
-`;
-    text += `| Информация о блокировках в других беседах:
-`;
-
-    if (otherChatEntries.length === 0) {
-      text += `Нет`;
-    } else {
-      for (let i = 0; i < otherChatEntries.length; i++) {
-        const [pIdStr, banInfo] = otherChatEntries[i] as [string, any];
-        const pId = Number(pIdStr);
-        let chatTitle = `Беседа #${pId}`;
-        try {
-          const cData = await getOrCreateChat(pId);
-          if (cData && cData.title) chatTitle = cData.title;
-        } catch (e) {}
-
-        let modStr = "[id1|Администратор]";
-        if (banInfo?.by) {
-          let modName = await getResolvedFullName(banInfo.by);
-          modStr = formatUserMention(banInfo.by, String(modName), "nom");
-        }
-        const reason = banInfo?.reason || "Нарушение правил";
-
-        text += `
-${i + 1}) ${chatTitle}
-`;
-        text += `| Модератор — ${modStr}
-`;
-        text += `| Причина: ${reason}
-`;
-        text += `| Дата выдачи: ${fmtD(banInfo?.date)}
-`;
-        text += `| Дата окончания: ${fmtD(banInfo?.expiresAt)}
-`;
-      }
-    }
-
-    const keyboard = {
-      inline: true,
-      buttons: [
-        [
-          { action: { type: "callback", label: "Назад", payload: JSON.stringify({ cmd: "get_view", category: "main", targetId, authorId: safeAuthorId }) }, color: "negative" }
-        ],
-        [
-          { action: { type: "callback", label: "Предупреждения", payload: JSON.stringify({ cmd: "get_view", category: "warns", targetId, authorId: safeAuthorId }) }, color: "secondary" }
-        ],
-        [
-          { action: { type: "callback", label: "Блокировка чата", payload: JSON.stringify({ cmd: "get_view", category: "mutes", targetId, authorId: safeAuthorId }) }, color: "secondary" }
-        ]
+        [btnMutes, btnBans],
+        [btnBack]
       ]
     };
     return { text: text.trim(), keyboard: JSON.stringify(keyboard) };
   }
 
   if (category === "mutes") {
-    let text = `...::Наказания ${userMention} в беседе::...
-
-` +
-               `| Категория: Блокировка чата
-
-` +
-               `| Информация о блокировке чата пользователя:
-`;
-
-    const isMuted = Boolean(targetUser.muteUntil && targetUser.muteUntil > Date.now());
-
-    if (!isMuted) {
-      text += `У пользователя нету активной блокировки чата в этой беседе.`;
+    const isActive = !!(targetUser.muteUntil && targetUser.muteUntil > Date.now());
+    let text = "";
+    if (!isActive) {
+      text = `🔇 Блокировки чата у пользователя нету в данной беседе.`;
     } else {
-      let modStr = "[id1|Администратор]";
+      let modStr = "—";
       if (targetUser.mutedBy) {
-        let modName = await getResolvedFullName(targetUser.mutedBy);
-        modStr = formatUserMention(targetUser.mutedBy, String(modName), "nom");
+        const modName = await getResolvedFullName(targetUser.mutedBy);
+        modStr = formatUserMention(targetUser.mutedBy, String(modName), "nom", false, true);
       }
-      const issueDate = targetUser.muteDate || targetUser.mutedAt || (targetUser.muteUntil! - 3600000);
-      const issueDateStr = formatAmPmCustomDate(issueDate);
-      const endDateStr = formatAmPmCustomDate(targetUser.muteUntil!);
-      const reason = targetUser.muteReason || "Нарушение правил";
+      
+      const issueDate = formatPunishmentDate(targetUser.muteDate);
+      const endDate = formatPunishmentDate(targetUser.muteUntil);
+      const reason = targetUser.muteReason || "без причины";
 
-      text += `| Модератор — ${modStr}
-`;
-      text += `| Причина: ${reason}
-`;
-      text += `| Дата выдачи: ${fmtD(issueDate)}
-`;
-      text += `| Дата окончания: ${fmtD(targetUser.muteUntil!)}`;
+      text = `🔇 Блокировка чата пользователя ${targetMentionGen}\n\n` +
+             `Статус: активна\n` +
+             `Дата выдачи: ${issueDate}\n` +
+             `Дата окончания: ${endDate}\n` +
+             `Причина: ${reason}\n` +
+             `Модератор — ${modStr}`;
     }
 
     const keyboard = {
       inline: true,
       buttons: [
-        [
-          { action: { type: "callback", label: "Назад", payload: JSON.stringify({ cmd: "get_view", category: "main", targetId, authorId: safeAuthorId }) }, color: "negative" }
-        ],
-        [
-          { action: { type: "callback", label: "Предупреждения", payload: JSON.stringify({ cmd: "get_view", category: "warns", targetId, authorId: safeAuthorId }) }, color: "secondary" }
-        ],
-        [
-          { action: { type: "callback", label: "Блокировки", payload: JSON.stringify({ cmd: "get_view", category: "bans", targetId, authorId: safeAuthorId }) }, color: "secondary" }
-        ]
+        [btnWarns, btnBans],
+        [btnBack]
       ]
     };
     return { text: text.trim(), keyboard: JSON.stringify(keyboard) };
   }
 
-  return { text: "Ошибка получения данных." };
+  if (category === "bans") {
+    const chatBans = targetUser.chatBans || {};
+    const banInfo = chatBans[currentPeerId] || (targetUser.isBanned ? { by: targetUser.bannedBy, reason: targetUser.banReason, date: targetUser.banDate, expiresAt: targetUser.banExpiresAt } : null);
+    const isActive = !!banInfo;
+    let text = "";
+    if (!isActive) {
+      text = `🔒 Блокировки у пользователя нету в данной беседе.`;
+    } else {
+      let modStr = "—";
+      if (banInfo?.by) {
+        const modName = await getResolvedFullName(banInfo.by);
+        modStr = formatUserMention(banInfo.by, String(modName), "nom", false, true);
+      }
+
+      const issueDate = formatPunishmentDate(banInfo?.date);
+      const endDate = formatPunishmentDate(banInfo?.expiresAt);
+      const reason = banInfo?.reason || "без причины";
+
+      text = `🔒 Блокировка пользователя ${targetMentionGen}\n\n` +
+             `Статус: активна\n` +
+             `Дата выдачи: ${issueDate}\n` +
+             `Дата окончания: ${endDate}\n` +
+             `Причина: ${reason}\n` +
+             `Модератор — ${modStr}`;
+    }
+
+    const keyboard = {
+      inline: true,
+      buttons: [
+        [btnWarns],
+        [btnMutes],
+        [btnBack]
+      ]
+    };
+    return { text: text.trim(), keyboard: JSON.stringify(keyboard) };
+  }
+
+  return { text: "Ошибка", keyboard: undefined };
 }
 
 async function getFrozenAndDeactivatedChatMembers(peerId: number): Promise<Map<number, { name: string, reason: string, modStr: string, date: string }>> {
@@ -8886,7 +8888,19 @@ async function fetchVkFullName(userId: number): Promise<string | null> {
     const res = await fastVkCall("users.get", { user_ids: String(userId), fields: "sex" }, true);
     if (res?.response?.[0]) {
       const u = res.response[0];
-      const name = `${u.first_name} ${u.last_name}`;
+      if (u.deactivated === "deleted" || u.deactivated === "banned") {
+        const delName = u.deactivated === "banned" ? "Заблокированная страница" : "Удалённая страница";
+        vkNameCache.set(userId, { name: delName, exp: Date.now() + 6 * 3600 * 1000 });
+        return delName;
+      }
+      const rawFirst = (u.first_name || "").trim();
+      const rawLast = (u.last_name || "").trim();
+      if (rawFirst.toLowerCase() === "deleted" || rawFirst.toLowerCase() === "deactivated") {
+        const delName = "Удалённая страница";
+        vkNameCache.set(userId, { name: delName, exp: Date.now() + 6 * 3600 * 1000 });
+        return delName;
+      }
+      const name = `${rawFirst} ${rawLast}`.trim() || `Игрок ${userId}`;
       vkNameCache.set(userId, { name, exp: Date.now() + 6 * 3600 * 1000 });
       if (u.sex !== undefined) {
         userSexCache.set(userId, u.sex);
@@ -10469,7 +10483,7 @@ const getStatsMutePage = async (targetId: number, currentPeerId: number = 0, vie
 
 `;
   
-  let modStr = "[id1|пользователя]";
+  let modStr = "пользователя";
   if (targetUser.mutedBy) {
     let modUser = userCache.get(targetUser.mutedBy) || await getOrCreateUser(targetUser.mutedBy);
     let modName = modUser?.fullName || modUser?.nick;
@@ -10523,7 +10537,7 @@ const getStatsWarnsPage = async (targetId: number, currentPeerId: number = 0, vi
   
   for (let i = 0; i < Math.min(warnsCount, list.length); i++) {
     const w = list[i];
-    let modStr = "[id1|пользователя]";
+    let modStr = "пользователя";
     if (w.by) {
       let modUser = userCache.get(w.by) || await getOrCreateUser(w.by);
       let modName = modUser?.fullName || modUser?.nick;
@@ -12058,14 +12072,28 @@ interface GiveawayLobby {
 }
 const giveaways = new Map<number, GiveawayLobby>(); // peerId -> GiveawayLobby
 
+export type MafiaRole = 
+  | "Мафия" 
+  | "Шериф" 
+  | "Доктор" 
+  | "Ночная бабочка" 
+  | "Телохранитель" 
+  | "Всезнайка" 
+  | "Маньяк" 
+  | "Босс КФС" 
+  | "Мирный житель";
+
 interface MafiaPlayer {
   id: number;
   name: string;
-  role?: "Мафия" | "Шериф" | "Доктор" | "Мирный житель";
+  role?: MafiaRole;
   isAlive: boolean;
   choice?: number | string | null;
   vote?: number | string | null;
   isBot?: boolean;
+  blockedByButterfly?: boolean;
+  protectedByBodyguard?: boolean;
+  blockedFromVotingByBossKFC?: boolean;
 }
 
 interface MafiaLobby {
@@ -12075,7 +12103,7 @@ interface MafiaLobby {
   creatorName: string;
   players: MafiaPlayer[];
   status: "lobby" | "playing";
-  phase?: "lobby" | "night" | "morning_voting";
+  phase?: "lobby" | "night" | "morning" | "voting" | "morning_voting";
   lobbyTimer?: NodeJS.Timeout;
   phaseTimer?: NodeJS.Timeout;
   cycleNumber?: number;
@@ -12086,15 +12114,16 @@ interface MafiaLobby {
 }
 
 function buildMafiaLobbyResponse(mg: MafiaLobby) {
-  const playersList = mg.players.map(p => `• ${formatUserMention(p.id, String(p.name), "nom", false, true)}`).join("\n");
+  const playersList = mg.players.map((p, i) => `• [${i + 1}] ${formatUserMention(p.id, String(p.name), "nom", false, true)}${p.isBot ? " 🤖" : ""}`).join("\n");
   const stakeStr = mg.amount && mg.amount > 0 ? `${mg.amount.toLocaleString()}$` : "Бесплатно";
 
-  const text = `🎭 Игра «Мафия»\n\n` +
-    `👑 Организатор: ${formatUserMention(mg.creatorId, String(mg.creatorName), "nom", false, true)}\n` +
-    `💰 Ставка за участие: ${stakeStr}\n\n` +
-    `👥 Участники игры (${mg.players.length}/10):\n` +
+  const text = `🎭 Игра «Мафия» (Лобби)\n\n` +
+    `👑 Ведущий: ${formatUserMention(mg.creatorId, String(mg.creatorName), "nom", false, true)}\n` +
+    `💵 Ставка: ${stakeStr}\n\n` +
+    `👥 Участники (${mg.players.length}/10):\n` +
     `${playersList}\n\n` +
-    `⏳ Для начала игры требуется минимум 4 участника.`;
+    `🎲 Нажмите «Присоединиться», чтобы войти в игру.\n` +
+    `⏳ Для старта необходимо от 4 участников (автостарт через 2 мин).`;
 
   const keyboard = {
     inline: true,
@@ -12104,8 +12133,8 @@ function buildMafiaLobbyResponse(mg: MafiaLobby) {
         { action: { type: "callback", label: "Отсоединиться", payload: JSON.stringify({ cmd: "mafia_leave" }) }, color: "negative" }
       ],
       [
-        { action: { type: "callback", label: "🤖 + Бот", payload: JSON.stringify({ cmd: "mafia_add_bot" }) }, color: "primary" },
-        { action: { type: "callback", label: "Запустить игру", payload: JSON.stringify({ cmd: "mafia_start" }) }, color: "secondary" }
+        { action: { type: "callback", label: "🤖 + Добавить робота", payload: JSON.stringify({ cmd: "mafia_add_bot" }) }, color: "primary" },
+        { action: { type: "callback", label: "🚀 Запустить игру", payload: JSON.stringify({ cmd: "mafia_start" }) }, color: "positive" }
       ]
     ]
   };
@@ -12700,6 +12729,31 @@ async function checkDmAllowed(userId: number): Promise<boolean> {
   return false;
 }
 
+function resolveMafiaTarget(mg: MafiaLobby, targetInput: string | number): MafiaPlayer | null {
+  const str = String(targetInput).trim();
+  const numIndex = parseInt(str, 10);
+  if (!isNaN(numIndex) && numIndex >= 1 && numIndex <= mg.players.length) {
+    return mg.players[numIndex - 1] || null;
+  }
+  const cleanId = str.replace(/[^\d]/g, "");
+  if (cleanId) {
+    const numId = Number(cleanId);
+    return mg.players.find(p => p.id === numId) || null;
+  }
+  return null;
+}
+
+function getMafiaNumberedPlayerList(mg: MafiaLobby, filterAliveOnly = true): string {
+  return mg.players
+    .map((p, idx) => {
+      if (filterAliveOnly && !p.isAlive) return null;
+      const statusStr = p.isAlive ? "" : " (💀 Мёртв)";
+      return `• [${idx + 1}] ${formatUserMention(p.id, String(p.name), "nom", false, true)}${p.isBot ? " 🤖" : ""}${statusStr}`;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
 async function startMafiaGame(peerId: number) {
   const mg = mafiaGames.get(peerId);
   if (!mg) return;
@@ -12713,7 +12767,7 @@ async function startMafiaGame(peerId: number) {
   mg.phase = "night";
   mg.cycleNumber = 1;
 
-  // Upload atmospheric mafia day, night and start photos
+  // Safe non-blocking photo uploads
   try {
     const dayImgPath = path.join(process.cwd(), "src/assets/images/mafia_day.jpg");
     const nightImgPath = path.join(process.cwd(), "src/assets/images/mafia_night.jpg");
@@ -12732,52 +12786,99 @@ async function startMafiaGame(peerId: number) {
     console.error("Error uploading mafia photos:", e);
   }
 
-  // Assign roles: 1 Mafia, 1 Sheriff, 1 Doctor, others Civilians (if >= 6 players, 2 Mafia)
-  const shuffled = [...mg.players].sort(() => Math.random() - 0.5);
-  const mafiaCount = shuffled.length >= 6 ? 2 : 1;
-  for (let i = 0; i < mafiaCount; i++) {
-    shuffled[i].role = "Мафия";
-  }
-  shuffled[mafiaCount].role = "Шериф";
-  if (shuffled.length > mafiaCount + 1) {
-    shuffled[mafiaCount + 1].role = "Доктор";
-  }
-  for (let i = mafiaCount + 2; i < shuffled.length; i++) {
-    shuffled[i].role = "Мирный житель";
+  // Assign roles with dynamic distribution
+  function assignMafiaRoles(count: number): MafiaRole[] {
+    if (count <= 4) {
+      return ["Мафия", "Шериф", "Доктор", "Мирный житель"];
+    }
+    if (count === 5) {
+      return ["Мафия", "Шериф", "Доктор", "Ночная бабочка", "Мирный житель"];
+    }
+    if (count === 6) {
+      return ["Мафия", "Маньяк", "Шериф", "Доктор", "Ночная бабочка", "Телохранитель"];
+    }
+    if (count === 7) {
+      return ["Мафия", "Маньяк", "Шериф", "Всезнайка", "Доктор", "Телохранитель", "Ночная бабочка"];
+    }
+    if (count === 8) {
+      return ["Мафия", "Мафия", "Маньяк", "Шериф", "Всезнайка", "Доктор", "Телохранитель", "Босс КФС"];
+    }
+    if (count === 9) {
+      return ["Мафия", "Мафия", "Маньяк", "Шериф", "Всезнайка", "Доктор", "Телохранитель", "Ночная бабочка", "Босс КФС"];
+    }
+    const roles: MafiaRole[] = ["Мафия", "Мафия", "Маньяк", "Шериф", "Всезнайка", "Доктор", "Телохранитель", "Ночная бабочка", "Босс КФС"];
+    while (roles.length < count) {
+      roles.push("Мирный житель");
+    }
+    return roles;
   }
 
-  // Send roles in private messages (human players only)
-  for (const p of mg.players) {
+  const assignedRoles = assignMafiaRoles(mg.players.length).sort(() => Math.random() - 0.5);
+  for (let i = 0; i < mg.players.length; i++) {
+    mg.players[i].role = assignedRoles[i] || "Мирный житель";
+  }
+
+  // Send roles in private messages (human players only) safely
+  for (let idx = 0; idx < mg.players.length; idx++) {
+    const p = mg.players[idx];
     p.isAlive = true;
     p.choice = null;
     p.vote = null;
+    p.blockedByButterfly = false;
+    p.protectedByBodyguard = false;
+    p.blockedFromVotingByBossKFC = false;
     if (p.isBot || p.id < 0) continue;
+
     let roleDesc = "";
-    if (p.role === "Мафия") roleDesc = "🔫 Ваша цель — уничтожить всех мирных жителей и шерифа. Ночью выбирайте жертву.";
-    else if (p.role === "Шериф") roleDesc = "🕵️‍♂️ Ваша цель — вычислить мафию. Ночью проводите проверку подозрительных игроков.";
-    else if (p.role === "Доктор") roleDesc = "💉 Ваша цель — спасать жизни. Ночью выбирайте игрока, которого хотите вылечить.";
-    else roleDesc = "🕊️ Ваша цель — днём на голосовании найти и выгнать мафию из города.";
+    if (p.role === "Мафия") {
+      roleDesc = "🔫 Ваша цель — устранить мирных жителей и шерифа.\n👉 Команда: /убить [номер] или используйте кнопки ниже.";
+    } else if (p.role === "Маньяк") {
+      roleDesc = "🔪 Ваша цель — уничтожить всех живых участников.\n👉 Команда: /мубийство [номер] или используйте кнопки ниже.";
+    } else if (p.role === "Шериф") {
+      roleDesc = "⭐ Ваша цель — вычислить мафию и маньяка.\n👉 Команда: /проверить [номер] или используйте кнопки ниже.";
+    } else if (p.role === "Доктор") {
+      roleDesc = "💉 Ваша цель — спасать жизни жителям города.\n👉 Команда: /лечить [номер] или используйте кнопки ниже.";
+    } else if (p.role === "Ночная бабочка") {
+      roleDesc = "💃 Ваша цель — заблокировать ночное действие выбранного игрока.\n👉 Команда: /запретить [номер] или /блок [номер].";
+    } else if (p.role === "Телохранитель") {
+      roleDesc = "🛡️ Ваша цель — защитить игрока от нападения мафии.\n👉 Команда: /защитить [номер] или используйте кнопки ниже.";
+    } else if (p.role === "Всезнайка") {
+      roleDesc = "🧠 Ваша цель — узнать точную роль игрока.\n👉 Команда: /узнать [номер] или используйте кнопки ниже.";
+    } else if (p.role === "Босс КФС") {
+      roleDesc = "🍗 Ваша цель — накормить жителя и лишить его права голоса днём.\n👉 Команда: /напасть [номер] или используйте кнопки ниже.";
+    } else {
+      roleDesc = "🕊️ Ваша цель — днём вычислить и выгнать преступников на голосовании.\n👉 Команда для голосования: /выгнать [номер] или /голос [номер].";
+    }
 
-    await sendVkMessage(VK_TOKEN, p.id, `🎭 Игра Мафия запущена!
-
-Ваша роль: ${p.role}
-${roleDesc}`);
+    try {
+      await sendVkMessage(VK_TOKEN, p.id,
+        `🎭 Старт игры «Мафия»\n\n` +
+        `🆔 Ваш номер в игре: [${idx + 1}]\n` +
+        `🎭 Ваша роль: «${p.role}»\n\n` +
+        `📌 Задача вашей роли:\n` +
+        `${roleDesc}`
+      );
+    } catch (e) {
+      console.error(`[Mafia] Error sending role DM to ${p.id}:`, e);
+    }
   }
 
   // Announcement in chat
-  const playerMentions = mg.players.map(p => `${formatUserMention(p.id, String(p.name), "nom", false, true)}`).join("\n");
+  const playerMentions = mg.players.map((p, i) => `• [${i + 1}] ${formatUserMention(p.id, String(p.name), "nom", false, true)}${p.isBot ? " 🤖" : ""}`).join("\n");
 
-  const startMsg = `🎭 Игра "Мафия" началась!
+  const startMsg = `🎭 Игра «Мафия» началась\n\n` +
+    `👥 Список участников раунда:\n` +
+    `${playerMentions}\n\n` +
+    `🌃 Город погружается в глубокий сон... Наступает первая ночь!`;
 
-| Участники игры:
-${playerMentions}
-
-Город погружается во тьму... Наступает первая ночь!`;
-  await sendVkMessage(VK_TOKEN, peerId, startMsg, mg.startPhoto ? { attachment: mg.startPhoto } : {});
+  try {
+    await sendVkMessage(VK_TOKEN, peerId, startMsg, mg.startPhoto ? { attachment: mg.startPhoto } : {});
+  } catch (e) {
+    console.error("[Mafia] Error sending start chat message:", e);
+  }
 
   await startNightPhase(peerId);
 }
-
 
 function automateBotNightChoices(mg: MafiaLobby) {
   for (const p of mg.players) {
@@ -12785,24 +12886,56 @@ function automateBotNightChoices(mg: MafiaLobby) {
     if (p.role === "Мафия") {
       const aliveTargets = mg.players.filter(x => x.isAlive && x.role !== "Мафия");
       if (aliveTargets.length > 0) {
-        const randTarget = aliveTargets[Math.floor(Math.random() * aliveTargets.length)];
-        p.choice = randTarget.id;
+        p.choice = aliveTargets[Math.floor(Math.random() * aliveTargets.length)].id;
+      } else {
+        p.choice = "skip";
+      }
+    } else if (p.role === "Маньяк") {
+      const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
+      if (aliveTargets.length > 0) {
+        p.choice = aliveTargets[Math.floor(Math.random() * aliveTargets.length)].id;
+      } else {
+        p.choice = "skip";
+      }
+    } else if (p.role === "Ночная бабочка") {
+      const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
+      if (aliveTargets.length > 0) {
+        p.choice = aliveTargets[Math.floor(Math.random() * aliveTargets.length)].id;
+      } else {
+        p.choice = "skip";
+      }
+    } else if (p.role === "Телохранитель") {
+      const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
+      if (aliveTargets.length > 0) {
+        p.choice = aliveTargets[Math.floor(Math.random() * aliveTargets.length)].id;
+      } else {
+        p.choice = "skip";
+      }
+    } else if (p.role === "Всезнайка") {
+      const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
+      if (aliveTargets.length > 0) {
+        p.choice = aliveTargets[Math.floor(Math.random() * aliveTargets.length)].id;
+      } else {
+        p.choice = "skip";
+      }
+    } else if (p.role === "Босс КФС") {
+      const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
+      if (aliveTargets.length > 0) {
+        p.choice = aliveTargets[Math.floor(Math.random() * aliveTargets.length)].id;
       } else {
         p.choice = "skip";
       }
     } else if (p.role === "Шериф") {
       const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
       if (aliveTargets.length > 0) {
-        const randTarget = aliveTargets[Math.floor(Math.random() * aliveTargets.length)];
-        p.choice = randTarget.id;
+        p.choice = aliveTargets[Math.floor(Math.random() * aliveTargets.length)].id;
       } else {
         p.choice = "skip";
       }
     } else if (p.role === "Доктор") {
-      const aliveTargets = mg.players.filter(x => x.isAlive);
-      if (aliveTargets.length > 0) {
-        const randTarget = aliveTargets[Math.floor(Math.random() * aliveTargets.length)];
-        p.choice = randTarget.id;
+      const alivePlayers = mg.players.filter(x => x.isAlive);
+      if (alivePlayers.length > 0) {
+        p.choice = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].id;
       } else {
         p.choice = "skip";
       }
@@ -12814,7 +12947,7 @@ function automateBotNightChoices(mg: MafiaLobby) {
 
 function automateBotVotingChoices(mg: MafiaLobby) {
   for (const p of mg.players) {
-    if (!p.isAlive || !p.isBot) continue;
+    if (!p.isAlive || !p.isBot || p.blockedFromVotingByBossKFC) continue;
     const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
     if (aliveTargets.length > 0) {
       const randTarget = aliveTargets[Math.floor(Math.random() * aliveTargets.length)];
@@ -12836,99 +12969,292 @@ async function startNightPhase(peerId: number) {
 
   for (const p of mg.players) {
     p.choice = null;
+    p.blockedByButterfly = false;
+    p.protectedByBodyguard = false;
   }
 
-  await sendVkMessage(VK_TOKEN, peerId, `🌙 Ночь опустилась на город, жители засыпают... Просыпается мафия.`, mg.nightPhoto ? { attachment: mg.nightPhoto } : {});
+  const cycleNum = mg.cycleNumber || 1;
+  const nightText = `🌙 Наступила ночь (Раунд ${cycleNum})\n\n` +
+    `🌃 Город погружается в сон, мирные жители засыпают...\n` +
+    `🔍 Активные роли просыпаются для ночных действий!\n\n` +
+    `⏳ Длительность ночи: ровно 2 минуты (120 сек).\n` +
+    `💬 Инструкции и кнопки отправлены активным ролям в ЛС.`;
+
+  try {
+    await sendVkMessage(VK_TOKEN, peerId, nightText, mg.nightPhoto ? { attachment: mg.nightPhoto } : {});
+  } catch (e) {
+    console.error("[Mafia] Error sending night chat msg:", e);
+  }
 
   // Automate bot choices for night phase
   automateBotNightChoices(mg);
 
+  const playersListText = getMafiaNumberedPlayerList(mg, true);
+
   for (const p of mg.players) {
     if (!p.isAlive || p.isBot || p.id < 0) continue;
 
-    if (p.role === "Мафия") {
-      const aliveTargets = mg.players.filter(x => x.isAlive && x.role !== "Мафия");
-      const buttons = aliveTargets.map(x => [
-        {
-          action: {
-            type: "callback",
-            label: `🔫 Убить ${x.name}`.substring(0, 40),
-            payload: JSON.stringify({ cmd: "mafia_act", targetId: x.id, peerId })
-          },
-          color: "negative"
-        }
-      ]);
-      buttons.push([
-        {
-          action: {
-            type: "callback",
-            label: "Пропустить ход",
-            payload: JSON.stringify({ cmd: "mafia_act", targetId: "skip", peerId })
-          },
-          color: "secondary"
-        }
-      ]);
-      await sendVkMessage(VK_TOKEN, p.id, `🌙 Наступила ночь! Выберите, кого ликвидировать:`, {
-        keyboard: JSON.stringify({ inline: true, buttons })
-      });
-    } else if (p.role === "Шериф") {
-      const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
-      const buttons = aliveTargets.map(x => [
-        {
-          action: {
-            type: "callback",
-            label: `🔎 Проверить ${x.name}`.substring(0, 40),
-            payload: JSON.stringify({ cmd: "sheriff_act", targetId: x.id, peerId })
-          },
-          color: "primary"
-        }
-      ]);
-      buttons.push([
-        {
-          action: {
-            type: "callback",
-            label: "Пропустить проверку",
-            payload: JSON.stringify({ cmd: "sheriff_act", targetId: "skip", peerId })
-          },
-          color: "secondary"
-        }
-      ]);
-      await sendVkMessage(VK_TOKEN, p.id, `🌙 Наступила ночь, шериф выходит на дежурство. Выберите, чью роль проверить:`, {
-        keyboard: JSON.stringify({ inline: true, buttons })
-      });
-    } else if (p.role === "Доктор") {
-      const alivePlayers = mg.players.filter(x => x.isAlive);
-      const buttons = alivePlayers.map(x => [
-        {
-          action: {
-            type: "callback",
-            label: `💉 Вылечить ${x.name}`.substring(0, 40),
-            payload: JSON.stringify({ cmd: "doctor_act", targetId: x.id, peerId })
-          },
-          color: "positive"
-        }
-      ]);
-      buttons.push([
-        {
-          action: {
-            type: "callback",
-            label: "Пропустить лечение",
-            payload: JSON.stringify({ cmd: "doctor_act", targetId: "skip", peerId })
-          },
-          color: "secondary"
-        }
-      ]);
-      await sendVkMessage(VK_TOKEN, p.id, `🌙 Наступила ночь! Выберите, кого защитить от пули:`, {
-        keyboard: JSON.stringify({ inline: true, buttons })
-      });
-    } else {
-      await sendVkMessage(VK_TOKEN, p.id, `🌙 Наступила ночь, город засыпает... Вы мирно спите в своей постели и ждёте утра.`);
+    try {
+      if (p.role === "Мафия") {
+        const aliveTargets = mg.players.filter(x => x.isAlive && x.role !== "Мафия");
+        const buttons = aliveTargets.map(x => [
+          {
+            action: {
+              type: "callback",
+              label: `🔫 Убить ${x.name}`.substring(0, 40),
+              payload: JSON.stringify({ cmd: "mafia_act", targetId: x.id, peerId })
+            },
+            color: "negative"
+          }
+        ]);
+        buttons.push([
+          {
+            action: {
+              type: "callback",
+              label: "Пропустить ход",
+              payload: JSON.stringify({ cmd: "mafia_act", targetId: "skip", peerId })
+            },
+            color: "secondary"
+          }
+        ]);
+        await sendVkMessage(VK_TOKEN, p.id,
+          `🌙 Ночной выбор (Раунд ${cycleNum})\n\n` +
+          `Вы — 🎩 Мафия.\n` +
+          `Выберите игрока для устранения этой ночью:\n\n` +
+          `👥 Живые игроки:\n${playersListText}\n\n` +
+          `👉 Команда: /убить [номер] или нажмите кнопку ниже.\n` +
+          `⏳ У вас есть ровно 2 минуты.`, {
+          keyboard: JSON.stringify({ inline: true, buttons })
+        });
+      } else if (p.role === "Маньяк") {
+        const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
+        const buttons = aliveTargets.map(x => [
+          {
+            action: {
+              type: "callback",
+              label: `🔪 Убить ${x.name}`.substring(0, 40),
+              payload: JSON.stringify({ cmd: "maniac_act", targetId: x.id, peerId })
+            },
+            color: "negative"
+          }
+        ]);
+        buttons.push([
+          {
+            action: {
+              type: "callback",
+              label: "Пропустить ход",
+              payload: JSON.stringify({ cmd: "maniac_act", targetId: "skip", peerId })
+            },
+            color: "secondary"
+          }
+        ]);
+        await sendVkMessage(VK_TOKEN, p.id,
+          `🌙 Ночной выбор (Раунд ${cycleNum})\n\n` +
+          `Вы — 🔪 Маньяк.\n` +
+          `Выберите очередную жертву:\n\n` +
+          `👥 Живые игроки:\n${playersListText}\n\n` +
+          `👉 Команда: /мубийство [номер] или нажмите кнопку ниже.\n` +
+          `⏳ У вас есть ровно 2 минуты.`, {
+          keyboard: JSON.stringify({ inline: true, buttons })
+        });
+      } else if (p.role === "Ночная бабочка") {
+        const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
+        const buttons = aliveTargets.map(x => [
+          {
+            action: {
+              type: "callback",
+              label: `💃 Заблокировать ${x.name}`.substring(0, 40),
+              payload: JSON.stringify({ cmd: "butterfly_act", targetId: x.id, peerId })
+            },
+            color: "primary"
+          }
+        ]);
+        buttons.push([
+          {
+            action: {
+              type: "callback",
+              label: "Пропустить ход",
+              payload: JSON.stringify({ cmd: "butterfly_act", targetId: "skip", peerId })
+            },
+            color: "secondary"
+          }
+        ]);
+        await sendVkMessage(VK_TOKEN, p.id,
+          `🌙 Ночной выбор (Раунд ${cycleNum})\n\n` +
+          `Вы — 💃 Ночная бабочка.\n` +
+          `Выберите, чьё действие заблокировать на этот раунд:\n\n` +
+          `👥 Живые игроки:\n${playersListText}\n\n` +
+          `👉 Команда: /запретить [номер] или /блок [номер].\n` +
+          `⏳ У вас есть ровно 2 минуты.`, {
+          keyboard: JSON.stringify({ inline: true, buttons })
+        });
+      } else if (p.role === "Телохранитель") {
+        const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
+        const buttons = aliveTargets.map(x => [
+          {
+            action: {
+              type: "callback",
+              label: `🛡️ Защитить ${x.name}`.substring(0, 40),
+              payload: JSON.stringify({ cmd: "bodyguard_act", targetId: x.id, peerId })
+            },
+            color: "positive"
+          }
+        ]);
+        buttons.push([
+          {
+            action: {
+              type: "callback",
+              label: "Пропустить защиту",
+              payload: JSON.stringify({ cmd: "bodyguard_act", targetId: "skip", peerId })
+            },
+            color: "secondary"
+          }
+        ]);
+        await sendVkMessage(VK_TOKEN, p.id,
+          `🌙 Ночной выбор (Раунд ${cycleNum})\n\n` +
+          `Вы — 🛡️ Телохранитель.\n` +
+          `Выберите, кого защитить от нападения мафии:\n\n` +
+          `👥 Живые игроки:\n${playersListText}\n\n` +
+          `👉 Команда: /защитить [номер] или нажмите кнопку ниже.\n` +
+          `⏳ У вас есть ровно 2 минуты.`, {
+          keyboard: JSON.stringify({ inline: true, buttons })
+        });
+      } else if (p.role === "Всезнайка") {
+        const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
+        const buttons = aliveTargets.map(x => [
+          {
+            action: {
+              type: "callback",
+              label: `🧠 Узнать роль ${x.name}`.substring(0, 40),
+              payload: JSON.stringify({ cmd: "knowall_act", targetId: x.id, peerId })
+            },
+            color: "primary"
+          }
+        ]);
+        buttons.push([
+          {
+            action: {
+              type: "callback",
+              label: "Пропустить",
+              payload: JSON.stringify({ cmd: "knowall_act", targetId: "skip", peerId })
+            },
+            color: "secondary"
+          }
+        ]);
+        await sendVkMessage(VK_TOKEN, p.id,
+          `🌙 Ночной выбор (Раунд ${cycleNum})\n\n` +
+          `Вы — 🧠 Всезнайка.\n` +
+          `Выберите игрока, чью истинную роль вы хотите узнать:\n\n` +
+          `👥 Живые игроки:\n${playersListText}\n\n` +
+          `👉 Команда: /узнать [номер] или нажмите кнопку ниже.\n` +
+          `⏳ У вас есть ровно 2 минуты.`, {
+          keyboard: JSON.stringify({ inline: true, buttons })
+        });
+      } else if (p.role === "Босс КФС") {
+        const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
+        const buttons = aliveTargets.map(x => [
+          {
+            action: {
+              type: "callback",
+              label: `🍗 Напасть на ${x.name}`.substring(0, 40),
+              payload: JSON.stringify({ cmd: "bosskfc_act", targetId: x.id, peerId })
+            },
+            color: "negative"
+          }
+        ]);
+        buttons.push([
+          {
+            action: {
+              type: "callback",
+              label: "Пропустить нападение",
+              payload: JSON.stringify({ cmd: "bosskfc_act", targetId: "skip", peerId })
+            },
+            color: "secondary"
+          }
+        ]);
+        await sendVkMessage(VK_TOKEN, p.id,
+          `🌙 Ночной выбор (Раунд ${cycleNum})\n\n` +
+          `Вы — 🍗 Босс КФС.\n` +
+          `Выберите игрока для нападения (лишение права голоса днём):\n\n` +
+          `👥 Живые игроки:\n${playersListText}\n\n` +
+          `👉 Команда: /напасть [номер] или нажмите кнопку ниже.\n` +
+          `⏳ У вас есть ровно 2 минуты.`, {
+          keyboard: JSON.stringify({ inline: true, buttons })
+        });
+      } else if (p.role === "Шериф") {
+        const aliveTargets = mg.players.filter(x => x.isAlive && x.id !== p.id);
+        const buttons = aliveTargets.map(x => [
+          {
+            action: {
+              type: "callback",
+              label: `🔎 Проверить ${x.name}`.substring(0, 40),
+              payload: JSON.stringify({ cmd: "sheriff_act", targetId: x.id, peerId })
+            },
+            color: "primary"
+          }
+        ]);
+        buttons.push([
+          {
+            action: {
+              type: "callback",
+              label: "Пропустить проверку",
+              payload: JSON.stringify({ cmd: "sheriff_act", targetId: "skip", peerId })
+            },
+            color: "secondary"
+          }
+        ]);
+        await sendVkMessage(VK_TOKEN, p.id,
+          `🌙 Ночной выбор (Раунд ${cycleNum})\n\n` +
+          `Вы — ⭐ Шериф.\n` +
+          `Выберите игрока для проверки на причастность к преступности:\n\n` +
+          `👥 Живые игроки:\n${playersListText}\n\n` +
+          `👉 Команда: /проверить [номер] или нажмите кнопку ниже.\n` +
+          `⏳ У вас есть ровно 2 минуты.`, {
+          keyboard: JSON.stringify({ inline: true, buttons })
+        });
+      } else if (p.role === "Доктор") {
+        const alivePlayers = mg.players.filter(x => x.isAlive);
+        const buttons = alivePlayers.map(x => [
+          {
+            action: {
+              type: "callback",
+              label: `💉 Вылечить ${x.name}`.substring(0, 40),
+              payload: JSON.stringify({ cmd: "doctor_act", targetId: x.id, peerId })
+            },
+            color: "positive"
+          }
+        ]);
+        buttons.push([
+          {
+            action: {
+              type: "callback",
+              label: "Пропустить лечение",
+              payload: JSON.stringify({ cmd: "doctor_act", targetId: "skip", peerId })
+            },
+            color: "secondary"
+          }
+        ]);
+        await sendVkMessage(VK_TOKEN, p.id,
+          `🌙 Ночной выбор (Раунд ${cycleNum})\n\n` +
+          `Вы — 💉 Доктор.\n` +
+          `Выберите, кого спасти/вылечить этой ночью:\n\n` +
+          `👥 Живые игроки:\n${playersListText}\n\n` +
+          `👉 Команда: /лечить [номер] или нажмите кнопку ниже.\n` +
+          `⏳ У вас есть ровно 2 минуты.`, {
+          keyboard: JSON.stringify({ inline: true, buttons })
+        });
+      } else {
+        await sendVkMessage(VK_TOKEN, p.id, `🌙 Наступила ночь\n\nВы — 🕊️ Мирный житель. Отдыхайте и ожидайте наступления утра.`);
+      }
+    } catch (e) {
+      console.error(`[Mafia] Error sending night action DM to ${p.id}:`, e);
     }
   }
 
+  // Night strictly lasts 2 minutes (120 seconds)
   mg.phaseTimer = setTimeout(async () => {
     await endNightPhase(peerId);
-  }, 45000);
+  }, 120000);
 }
 
 async function endNightPhase(peerId: number) {
@@ -12940,119 +13266,240 @@ async function endNightPhase(peerId: number) {
     mg.phaseTimer = undefined;
   }
 
-  mg.phase = "morning_voting";
+  mg.phase = "morning";
 
-  const mafiaPlayers = mg.players.filter(p => p.role === "Мафия" && p.isAlive);
+  const butterflyPlayer = mg.players.find(p => p.role === "Ночная бабочка" && p.isAlive);
+  const bossKfcPlayer = mg.players.find(p => p.role === "Босс КФС" && p.isAlive);
+  const knowAllPlayer = mg.players.find(p => p.role === "Всезнайка" && p.isAlive);
+  const sheriffPlayer = mg.players.find(p => p.role === "Шериф" && p.isAlive);
   const doctorPlayer = mg.players.find(p => p.role === "Доктор" && p.isAlive);
+  const bodyguardPlayer = mg.players.find(p => p.role === "Телохранитель" && p.isAlive);
+  const maniacPlayer = mg.players.find(p => p.role === "Маньяк" && p.isAlive);
+  const mafiaPlayers = mg.players.filter(p => p.role === "Мафия" && p.isAlive);
 
-  // Определение цели мафии (берем выбор живой мафии)
-  let mafiaChoice: number | "skip" | null = null;
+  // 1. Ночная бабочка блокирует действие выбранного игрока
+  let butterflyTargetId: number | null = null;
+  if (butterflyPlayer && typeof butterflyPlayer.choice === "number") {
+    butterflyTargetId = butterflyPlayer.choice;
+    const blockedPlayer = mg.players.find(p => p.id === butterflyTargetId);
+    if (blockedPlayer) {
+      blockedPlayer.blockedByButterfly = true;
+      blockedPlayer.choice = "blocked";
+      if (!blockedPlayer.isBot && blockedPlayer.id > 0) {
+        sendVkMessage(VK_TOKEN, blockedPlayer.id, "💃 Ночная бабочка провела с вами эту ночь! Ваше ночное действие заблокировано.").catch(() => {});
+      }
+    }
+  }
+
+  // 2. Босс КФС нападает и лишает права голосовать
+  let bossKfcTargetId: number | null = null;
+  let bossKfcStunnedName = "";
+  if (bossKfcPlayer && !bossKfcPlayer.blockedByButterfly && typeof bossKfcPlayer.choice === "number") {
+    bossKfcTargetId = bossKfcPlayer.choice;
+    const stunnedPlayer = mg.players.find(p => p.id === bossKfcTargetId);
+    if (stunnedPlayer) {
+      stunnedPlayer.blockedFromVotingByBossKFC = true;
+      bossKfcStunnedName = stunnedPlayer.name;
+      if (!stunnedPlayer.isBot && stunnedPlayer.id > 0) {
+        sendVkMessage(VK_TOKEN, stunnedPlayer.id, "🍗 Босс КФС напал на вас этой ночью и накормил до отвала! Вы не сможете голосовать сегодня.").catch(() => {});
+      }
+    }
+  }
+
+  // 3. Всезнайка узнает роль
+  if (knowAllPlayer && !knowAllPlayer.blockedByButterfly && typeof knowAllPlayer.choice === "number") {
+    const targetPlayer = mg.players.find(p => p.id === knowAllPlayer.choice);
+    if (targetPlayer && !knowAllPlayer.isBot && knowAllPlayer.id > 0) {
+      sendVkMessage(VK_TOKEN, knowAllPlayer.id,
+        `🧠 ПРОВЕРКА ВСЕЗНАЙКИ\n\n` +
+        `👤 Игрок: ${formatUserMention(targetPlayer.id, String(targetPlayer.name), "nom", false, true)}\n` +
+        `🎭 Истинная роль: «${targetPlayer.role || "Мирный житель"}»`
+      ).catch(() => {});
+    }
+  }
+
+  // 4. Шериф проверяет
+  if (sheriffPlayer && !sheriffPlayer.blockedByButterfly && typeof sheriffPlayer.choice === "number") {
+    const targetPlayer = mg.players.find(p => p.id === sheriffPlayer.choice);
+    if (targetPlayer && !sheriffPlayer.isBot && sheriffPlayer.id > 0) {
+      const isEvil = targetPlayer.role === "Мафия" || targetPlayer.role === "Маньяк";
+      sendVkMessage(VK_TOKEN, sheriffPlayer.id,
+        `⭐ ПРОВЕРКА ШЕРИФА\n\n` +
+        `👤 Игрок: ${formatUserMention(targetPlayer.id, String(targetPlayer.name), "nom", false, true)}\n` +
+        `🔍 Статус: ${isEvil ? `🚨 ПРЕСТУПНИК («${targetPlayer.role.toUpperCase()}»)!` : "🕊️ Мирный житель (Не является преступником)."}`
+      ).catch(() => {});
+    }
+  }
+
+  // 5. Защита: Доктор и Телохранитель
+  const doctorSavedId = (doctorPlayer && !doctorPlayer.blockedByButterfly && typeof doctorPlayer.choice === "number") ? doctorPlayer.choice : null;
+  const bodyguardProtectedId = (bodyguardPlayer && !bodyguardPlayer.blockedByButterfly && typeof bodyguardPlayer.choice === "number") ? bodyguardPlayer.choice : null;
+
+  // 6. Выбор мафии
+  let mafiaChoice: number | null = null;
   for (const m of mafiaPlayers) {
-    if (m.choice && m.choice !== "skip" && typeof m.choice === "number") {
+    if (!m.blockedByButterfly && m.choice && m.choice !== "skip" && m.choice !== "blocked" && typeof m.choice === "number") {
       mafiaChoice = m.choice;
       break;
     }
   }
-  const doctorChoice = doctorPlayer?.choice;
+
+  // 7. Выбор маньяка
+  let maniacChoice: number | null = null;
+  if (maniacPlayer && !maniacPlayer.blockedByButterfly && maniacPlayer.choice && maniacPlayer.choice !== "skip" && maniacPlayer.choice !== "blocked" && typeof maniacPlayer.choice === "number") {
+    maniacChoice = maniacPlayer.choice;
+  }
 
   const deaths: string[] = [];
-  let saveMessage = "";
+  const saves: string[] = [];
 
-  if (mafiaChoice && mafiaChoice !== "skip" && typeof mafiaChoice === "number") {
-    if (doctorChoice && doctorChoice === mafiaChoice) {
+  // Обработка нападения мафии
+  if (mafiaChoice) {
+    if (doctorSavedId === mafiaChoice) {
       const savedUser = mg.players.find(x => x.id === mafiaChoice);
-      saveMessage = `Мафия совершила покушение на ${formatUserMention(savedUser?.id, String(savedUser?.name), "acc", false, true)}, но искусный доктор вовремя спас его!`;
+      saves.push(`🎩 Мафия совершила покушение на ${formatUserMention(savedUser?.id, String(savedUser?.name), "acc", false, true)}, но доктор вовремя спас его!`);
+    } else if (bodyguardProtectedId === mafiaChoice) {
+      const savedUser = mg.players.find(x => x.id === mafiaChoice);
+      saves.push(`🎩 Мафия напала на ${formatUserMention(savedUser?.id, String(savedUser?.name), "acc", false, true)}, но телохранитель отбил атаку!`);
     } else {
       const killedUser = mg.players.find(x => x.id === mafiaChoice);
-      if (killedUser) {
+      if (killedUser && killedUser.isAlive) {
         killedUser.isAlive = false;
-        deaths.push(`${formatUserMention(killedUser.id, String(killedUser.name), "nom", false, true)} (${killedUser.role})`);
+        deaths.push(`${formatUserMention(killedUser.id, String(killedUser.name), "nom", false, true)} (роль: «${killedUser.role}»)`);
+      }
+    }
+  }
+
+  // Обработка нападения маньяка
+  if (maniacChoice) {
+    if (doctorSavedId === maniacChoice) {
+      const savedUser = mg.players.find(x => x.id === maniacChoice);
+      saves.push(`🔪 Маньяк пытался убить ${formatUserMention(savedUser?.id, String(savedUser?.name), "acc", false, true)}, но доктор успел реанимировать пострадавшего!`);
+    } else {
+      const killedUser = mg.players.find(x => x.id === maniacChoice);
+      if (killedUser && killedUser.isAlive) {
+        killedUser.isAlive = false;
+        deaths.push(`${formatUserMention(killedUser.id, String(killedUser.name), "nom", false, true)} (роль: «${killedUser.role}»)`);
       }
     }
   }
 
   const alivePlayers = mg.players.filter(x => x.isAlive);
-  const aliveList = alivePlayers.map(p => `• ${formatUserMention(p.id, String(p.name), "nom", false, true)}`).join("\n");
+  const aliveList = getMafiaNumberedPlayerList(mg, true);
 
-
-  let consequences = "";
-  if (saveMessage) {
-    consequences += saveMessage + "\n";
+  const consequencesLines: string[] = [];
+  if (saves.length > 0) {
+    saves.forEach(s => consequencesLines.push(`• ${s}`));
   }
   if (deaths.length > 0) {
-    consequences += `Этой ночью был убит: ${deaths.join(", ")}`;
-  } else if (!saveMessage) {
-    consequences += `Этой ночью никто не пострадал. Все жители целы и невредимы.`;
+    consequencesLines.push(`• 💀 Убит этой ночью: ${deaths.join(", ")}`);
+  } else if (saves.length === 0) {
+    consequencesLines.push(`• 🕊️ Этой ночью никто не пострадал. Все жители в безопасности.`);
+  }
+  if (bossKfcStunnedName) {
+    consequencesLines.push(`• 🍗 Босс КФС совершил нападение на ${bossKfcStunnedName} — игрок не сможет голосовать сегодня!`);
   }
 
-  const morningMsg = `☀️ Настало утро, город просыпается...
-
-` +
-    `| Последствия ночи:
-${consequences}
-
-` +
-    `| Выжившие жители города (${alivePlayers.length}):
-${aliveList}
-
-` +
-    `Начинается дневное обсуждение и голосование!`;
+  const morningMsg = `☀️ Настало утро в городе\n\n` +
+    `📜 Последствия ночи:\n` +
+    `${consequencesLines.join("\n")}\n\n` +
+    `👥 Выжившие жители (${alivePlayers.length}):\n` +
+    `${aliveList}\n\n` +
+    `💬 Обсуждение! У жителей есть ровно 2 минуты (120 сек) на общение перед голосованием.`;
 
   await sendVkMessage(VK_TOKEN, peerId, morningMsg, mg.dayPhoto ? { attachment: mg.dayPhoto } : {});
 
-  // Проверяем окончание игры после ночи: если все мирные погибли или вся мафия погибла
+  // Проверяем окончание игры после ночи
   if (await checkMafiaGameEnd(peerId, "morning")) {
     return;
   }
 
-  await startVotingPhase(peerId);
+  // Morning discussion strictly lasts 2 minutes (120 seconds) before voting starts
+  mg.phaseTimer = setTimeout(async () => {
+    await startVotingPhase(peerId);
+  }, 120000);
 }
 
 async function startVotingPhase(peerId: number) {
   const mg = mafiaGames.get(peerId);
   if (!mg) return;
 
+  mg.phase = "voting";
+  if (mg.phaseTimer) {
+    clearTimeout(mg.phaseTimer);
+    mg.phaseTimer = undefined;
+  }
+
   for (const p of mg.players) {
     p.vote = null;
   }
 
   const alivePlayers = mg.players.filter(p => p.isAlive);
+  const playersListText = getMafiaNumberedPlayerList(mg, true);
 
   // Automate bot choices for voting phase
   automateBotVotingChoices(mg);
 
-  for (const p of alivePlayers) {
-    if (p.isBot || p.id < 0) continue;
-    const targets = alivePlayers.filter(x => x.id !== p.id);
-    const buttons = targets.map(x => [
-      {
-        action: {
-          type: "callback",
-          label: `Выгнать ${x.name}`.substring(0, 40),
-          payload: JSON.stringify({ cmd: "mafia_vote_act", targetId: x.id, peerId })
-        },
-        color: "negative"
-      }
-    ]);
-    buttons.push([
-      {
-        action: {
-          type: "callback",
-          label: "Воздержаться",
-          payload: JSON.stringify({ cmd: "mafia_vote_act", targetId: "skip", peerId })
-        },
-        color: "secondary"
-      }
-    ]);
+  const votingAnnounceText = `⚖️ Дневное голосование\n\n` +
+    `⚖️ Настало время решить, кто из подозреваемых покинет город!\n` +
+    `👉 Голосовать можно в ЛС бота или командой в беседе: /голос [номер]\n\n` +
+    `👥 Живые участники:\n${playersListText}\n\n` +
+    `⏰ Длительность голосования: ровно 2 минуты (120 сек).`;
 
-    await sendVkMessage(VK_TOKEN, p.id, `⚖️ Дневное голосование! Выберите игрока, которого вы считаете мафией и хотите изгнать из города:`, {
-      keyboard: JSON.stringify({ inline: true, buttons })
-    });
+  try {
+    await sendVkMessage(VK_TOKEN, peerId, votingAnnounceText);
+  } catch (e) {
+    console.error("[Mafia] Error sending voting announce chat msg:", e);
   }
 
+  for (const p of alivePlayers) {
+    if (p.isBot || p.id < 0) continue;
+
+    try {
+      if (p.blockedFromVotingByBossKFC) {
+        await sendVkMessage(VK_TOKEN, p.id, `⚖️ Дневное голосование\n\n🍗 Босс КФС совершил нападение на вас этой ночью! Вы пропускаете сегодняшнее голосование.`);
+        continue;
+      }
+
+      const targets = alivePlayers.filter(x => x.id !== p.id);
+      const buttons = targets.map(x => [
+        {
+          action: {
+            type: "callback",
+            label: `Голос против ${x.name}`.substring(0, 40),
+            payload: JSON.stringify({ cmd: "mafia_vote_act", targetId: x.id, peerId })
+          },
+          color: "negative"
+        }
+      ]);
+      buttons.push([
+        {
+          action: {
+            type: "callback",
+            label: "Воздержаться",
+            payload: JSON.stringify({ cmd: "mafia_vote_act", targetId: "skip", peerId })
+          },
+          color: "secondary"
+        }
+      ]);
+
+      await sendVkMessage(VK_TOKEN, p.id,
+        `⚖️ Дневное голосование\n\n` +
+        `Выберите игрока, которого хотите изгнать из города:\n\n` +
+        `👥 Список живых участников:\n${playersListText}\n\n` +
+        `👉 Команда: /голос [номер]\n` +
+        `⏳ Голосование длится ровно 2 минуты.`, {
+        keyboard: JSON.stringify({ inline: true, buttons })
+      });
+    } catch (e) {
+      console.error(`[Mafia] Error sending voting DM to ${p.id}:`, e);
+    }
+  }
+
+  // Voting strictly lasts 2 minutes (120 seconds)
   mg.phaseTimer = setTimeout(async () => {
     await endVotingPhase(peerId);
-  }, 45000);
+  }, 120000);
 }
 
 async function endVotingPhase(peerId: number) {
@@ -13068,12 +13515,29 @@ async function endVotingPhase(peerId: number) {
   const voteCounts = new Map<number, number>();
   let skipVotes = 0;
 
+  const voteLogLines: string[] = [];
+
   for (const p of alivePlayers) {
+    if (p.blockedFromVotingByBossKFC) {
+      voteLogLines.push(`• ${formatUserMention(p.id, String(p.name), "nom", false, true)}: 🍗 заблокирован Боссом КФС`);
+      continue;
+    }
     if (p.vote === "skip" || !p.vote) {
       skipVotes++;
+      voteLogLines.push(`• ${formatUserMention(p.id, String(p.name), "nom", false, true)} ➔ Воздержался / пропустил`);
     } else if (typeof p.vote === "number") {
       voteCounts.set(p.vote, (voteCounts.get(p.vote) || 0) + 1);
+      const targetP = mg.players.find(x => x.id === p.vote);
+      const targetName = targetP ? formatUserMention(targetP.id, String(targetP.name), "nom", false, true) : `Игрок #${p.vote}`;
+      voteLogLines.push(`• ${formatUserMention(p.id, String(p.name), "nom", false, true)} ➔ ${targetName}`);
     }
+  }
+
+  const voteLogText = voteLogLines.join("\n");
+
+  // Clear boss KFC stun for next round
+  for (const p of mg.players) {
+    p.blockedFromVotingByBossKFC = false;
   }
 
   let maxVotes = 0;
@@ -13094,10 +13558,19 @@ async function endVotingPhase(peerId: number) {
     const lynched = mg.players.find(x => x.id === targetId);
     if (lynched) {
       lynched.isAlive = false;
-      await sendVkMessage(VK_TOKEN, peerId, `⚖️ По результатам голосования город изгнал: ${formatUserMention(lynched.id, String(lynched.name), "nom", false, true)} (роль: ${lynched.role})!`);
+      await sendVkMessage(VK_TOKEN, peerId,
+        `⚖️ Итоги дневного голосования\n\n` +
+        `📊 Голоса участников:\n${voteLogText}\n\n` +
+        `⚖️ Большинством голосов жителями изгнан: ${formatUserMention(lynched.id, String(lynched.name), "nom", false, true)}!\n` +
+        `🎭 Его истинная роль: «${lynched.role}».`
+      );
     }
   } else {
-    await sendVkMessage(VK_TOKEN, peerId, `⚖️ По результатам голосования никто не был изгнан из города (голоса разделились или большинство воздержалось).`);
+    await sendVkMessage(VK_TOKEN, peerId,
+      `⚖️ Итоги дневного голосования\n\n` +
+      `📊 Голоса участников:\n${voteLogText}\n\n` +
+      `⚖️ Жители города не пришли к единогласному решению или большинство воздержалось. Никто не был изгнан.`
+    );
   }
 
   // Проверяем окончание игры после дневного голосования
@@ -13105,9 +13578,10 @@ async function endVotingPhase(peerId: number) {
     return;
   }
 
-  if (mg.cycleNumber) {
-    mg.cycleNumber++;
+  if (!mg.cycleNumber) {
+    mg.cycleNumber = 1;
   }
+  mg.cycleNumber++;
   await startNightPhase(peerId);
 }
 
@@ -13117,30 +13591,62 @@ async function checkMafiaGameEnd(peerId: number, phase?: "morning" | "voting"): 
 
   const alivePlayers = mg.players.filter(p => p.isAlive);
   const mafiaAlive = alivePlayers.filter(p => p.role === "Мафия");
-  const civiliansAlive = alivePlayers.filter(p => p.role !== "Мафия");
+  const maniacAlive = alivePlayers.filter(p => p.role === "Маньяк");
+  const peacefulAlive = alivePlayers.filter(p => p.role !== "Мафия" && p.role !== "Маньяк");
 
   let reward = 50000;
   if (mg.amount && mg.amount > 0) {
     reward = mg.amount * mg.players.length;
   }
 
-  // Если все погибли
-  if (mafiaAlive.length === 0 && civiliansAlive.length === 0) {
-    await sendVkMessage(VK_TOKEN, peerId, `Игра окончена! Этой ночью погибли все жители города. Ничья!`);
+  // 1. Если все погибли
+  if (alivePlayers.length === 0) {
+    await sendVkMessage(VK_TOKEN, peerId,
+      `🏆 Финал игры «Мафия»\n\n` +
+      `💀 Этой ночью погибли абсолютно все жители города.\n` +
+      `🤝 Объявлена НИЧЬЯ!`
+    );
     mafiaGames.delete(peerId);
     return true;
   }
 
-  // Если вся мафия уничтожена
-  if (mafiaAlive.length === 0) {
-    const civilianMembers = mg.players.filter(p => p.role !== "Мафия");
+  // 2. Победа Маньяка: остался только Маньяк (или 1 на 1 против любого)
+  if (maniacAlive.length > 0 && mafiaAlive.length === 0 && peacefulAlive.length <= 1) {
+    const maniacMembers = maniacAlive;
+    const mentions = maniacMembers.map(p => `${formatUserMention(p.id, String(p.name), "nom", false, true)}`).join(", ");
+    let share = Math.floor(reward / Math.max(1, maniacMembers.length));
+
+    await sendVkMessage(VK_TOKEN, peerId,
+      `🏆 Финал игры «Мафия»\n\n` +
+      `🎉 Победитель: 🔪 Маньяк!\n\n` +
+      `Все остальные участники уничтожены.\n` +
+      `👑 Победитель: ${mentions}\n` +
+      `💰 Награда за победу: +${share.toLocaleString()}$`
+    );
+
+    for (const p of maniacMembers) {
+      if (p.isBot || p.id < 0) continue;
+      const u = await getOrCreateUser(p.id);
+      await updateUser(p.id, { balance: (u.balance || 0) + share });
+    }
+
+    mafiaGames.delete(peerId);
+    return true;
+  }
+
+  // 3. Если вся мафия и маньяк уничтожены -> победа мирных жителей
+  if (mafiaAlive.length === 0 && maniacAlive.length === 0) {
+    const civilianMembers = mg.players.filter(p => p.role !== "Мафия" && p.role !== "Маньяк");
     const mentions = civilianMembers.map(p => `${formatUserMention(p.id, String(p.name), "nom", false, true)}`).join(", ");
     let share = Math.floor(reward / Math.max(1, civilianMembers.length));
 
-    await sendVkMessage(VK_TOKEN, peerId, `🏆 Игра окончена! Победили: Мирные жители 🕊️
-
-Вся мафия ликвидирована!
-${mentions} — за победу получают по ${share.toLocaleString()}$!`);
+    await sendVkMessage(VK_TOKEN, peerId,
+      `🏆 Финал игры «Мафия»\n\n` +
+      `🎉 Победители: 🕊️ Мирные жители!\n\n` +
+      `Все преступники и маньяк успешно уничтожены!\n` +
+      `👑 Победители: ${mentions}\n` +
+      `💰 Каждый получает по +${share.toLocaleString()}$`
+    );
 
     for (const p of civilianMembers) {
       if (p.isBot || p.id < 0) continue;
@@ -13152,16 +13658,19 @@ ${mentions} — за победу получают по ${share.toLocaleString()
     return true;
   }
 
-  // Если мирных жителей не осталось
-  if (civiliansAlive.length === 0) {
+  // 4. Если мирных жителей не осталось и нет маньяка -> победа мафии
+  if (peacefulAlive.length === 0 && maniacAlive.length === 0 && mafiaAlive.length > 0) {
     const mafiaMembers = mg.players.filter(p => p.role === "Мафия");
     const mentions = mafiaMembers.map(p => `${formatUserMention(p.id, String(p.name), "nom", false, true)}`).join(", ");
     let share = Math.floor(reward / Math.max(1, mafiaMembers.length));
 
-    await sendVkMessage(VK_TOKEN, peerId, `🏆 Игра окончена! Победила: Мафия 🔫
-
-Все мирные жители уничтожены!
-${mentions} — за победу получают по ${share.toLocaleString()}$!`);
+    await sendVkMessage(VK_TOKEN, peerId,
+      `🏆 Финал игры «Мафия»\n\n` +
+      `🎉 Победители: 🎩 Мафия!\n\n` +
+      `Город полностью перешёл под контроль преступного клана!\n` +
+      `👑 Победители: ${mentions}\n` +
+      `💰 Каждый получает по +${share.toLocaleString()}$`
+    );
 
     for (const p of mafiaMembers) {
       if (p.isBot || p.id < 0) continue;
@@ -13173,16 +13682,19 @@ ${mentions} — за победу получают по ${share.toLocaleString()
     return true;
   }
 
-  // Мафия побеждает по перевесу ТОЛЬКО после дневного голосования перед ночью, когда мирных жителей осталось меньше или столько же, сколько мафии
-  if (phase === "voting" && mafiaAlive.length >= civiliansAlive.length) {
+  // 5. Мафия побеждает по перевесу
+  if (phase === "voting" && maniacAlive.length === 0 && mafiaAlive.length >= peacefulAlive.length) {
     const mafiaMembers = mg.players.filter(p => p.role === "Мафия");
     const mentions = mafiaMembers.map(p => `${formatUserMention(p.id, String(p.name), "nom", false, true)}`).join(", ");
     let share = Math.floor(reward / Math.max(1, mafiaMembers.length));
 
-    await sendVkMessage(VK_TOKEN, peerId, `🏆 Игра окончена! Мафия захватила контроль над городом (мафии стало поровну или больше, чем мирных жителей)!
-
-Победила Мафия 🔫:
-${mentions} — получают по ${share.toLocaleString()}$!`);
+    await sendVkMessage(VK_TOKEN, peerId,
+      `🏆 ФИНАЛ ИГРЫ «МАФИЯ»\n\n` +
+      `🎉 ПОБЕДИТЕЛИ: 🎩 Мафия!\n\n` +
+      `Мафия захватила контроль над городом (численность мафии превысила количество мирных жителей).\n` +
+      `👑 Победители: ${mentions}\n` +
+      `💰 Каждый получает по +${share.toLocaleString()}$`
+    );
 
     for (const p of mafiaMembers) {
       if (p.isBot || p.id < 0) continue;
@@ -14550,15 +15062,8 @@ async function generateQuote(text: string, avatarUrl: string, name: string): Pro
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
 
-  try {
-    const bg = await safeLoadImage(QUOTE_BG);
-    ctx.drawImage(bg, 0, 0, width, height);
-  } catch (e) {
-    ctx.fillStyle = "#1a1a1a";
-    ctx.fillRect(0, 0, width, height);
-  }
-
-  ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+  // Solid black background
+  ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, width, height);
 
   const avatarSize = 220;
@@ -15900,6 +16405,31 @@ async function handleVkEvent(payload: any, receivedAt?: number) {
     return { text, keyboard: buttons.length > 0 ? { inline: true, buttons } : null };
   }
 
+async function getTopUserFullName(userId: number, u?: any): Promise<string> {
+  const numId = Number(userId) || 0;
+  if (numId <= 0) return "Игрок";
+  
+  const cached = vkNameCache.get(numId);
+  if (cached && cached.name && cached.name.includes(" ") && !cached.name.startsWith("User") && !cached.name.toLowerCase().startsWith("пользовател")) {
+    return cached.name.replace(/['"]/g, "").trim();
+  }
+  
+  const full = String(u?.fullName || u?.name || "").replace(/['"]/g, "").trim();
+  if (full && full.includes(" ") && !full.startsWith("User") && !full.toLowerCase().startsWith("пользовател")) {
+    return full;
+  }
+
+  try {
+    const fetched = await fetchVkFullName(numId);
+    if (fetched && fetched.includes(" ") && !fetched.startsWith("User")) {
+      if (u) u.fullName = fetched;
+      return fetched.replace(/['"]/g, "").trim();
+    }
+  } catch (e) {}
+
+  return full || String(u?.nick || "Игрок").replace(/['"]/g, "").trim() || "Игрок";
+}
+
 async function renderTopCategory(category: string, page: number = 1, authorId: number = 0, peerId: number = 0): Promise<{ text: string; keyboard: any }> {
   const normCat = category.toLowerCase().trim();
   const allU = await getAllUsers();
@@ -15920,42 +16450,70 @@ async function renderTopCategory(category: string, page: number = 1, authorId: n
       .filter(u => u.chatMsgs > 0)
       .sort((a, b) => b.chatMsgs - a.chatMsgs);
 
-    fullItems = filtered.slice(0, 50).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || u.fullName || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | Сообщений: ${u.chatMsgs.toLocaleString()}`);
+    const topSlice = filtered.slice(0, 50);
+    fullItems = await Promise.all(topSlice.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | Сообщений: ${u.chatMsgs.toLocaleString()}`;
+    }));
   } else if (normCat === "money" || normCat === "деньги" || normCat === "баланс" || normCat === "наличные") {
     topTitle = "💰 Топ пользователей по деньгам:";
     const filtered = usersList.filter(u => (u.balance || 0) > 0).sort((a, b) => (b.balance || 0) - (a.balance || 0));
-    fullItems = filtered.slice(0, 50).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | На руках: ${(u.balance || 0).toLocaleString()}$`);
+    const topSlice = filtered.slice(0, 50);
+    fullItems = await Promise.all(topSlice.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | На руках: ${(u.balance || 0).toLocaleString()}$`;
+    }));
   } else if (normCat === "bank" || normCat === "банк" || normCat === "в банке") {
     topTitle = "🏦 Топ пользователей по деньгам в банке:";
     const filtered = usersList.filter(u => (u.bank || 0) > 0).sort((a, b) => (b.bank || 0) - (a.bank || 0));
-    fullItems = filtered.slice(0, 50).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | В банке: ${(u.bank || 0).toLocaleString()}$`);
+    const topSlice = filtered.slice(0, 50);
+    fullItems = await Promise.all(topSlice.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | В банке: ${(u.bank || 0).toLocaleString()}$`;
+    }));
   } else if (normCat === "beer" || normCat === "пиво" || normCat === "пивасик") {
     topTitle = "🍺 Топ по пиву за последние 3 месяца:";
     const filtered = usersList.filter(u => (u.beer || 0) > 0).sort((a, b) => (b.beer || 0) - (a.beer || 0));
-    fullItems = filtered.slice(0, 50).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | Выпито - ${(u.beer || 0).toFixed(1)} л.`);
+    const topSlice = filtered.slice(0, 50);
+    fullItems = await Promise.all(topSlice.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | Выпито - ${(u.beer || 0).toFixed(1)} л.`;
+    }));
   } else if (normCat === "jc" || normCat === "btc" || normCat === "биткоин" || normCat === "биткоины" || normCat === "биткоинов") {
     topTitle = "🪙 Топ пользователей по BTC:";
     const filtered = usersList.filter(u => ((u.btc || u.jc || 0) > 0)).sort((a, b) => (b.btc || b.jc || 0) - (a.btc || a.jc || 0));
-    fullItems = filtered.slice(0, 50).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | Биткоинов: ${(u.btc || u.jc || 0).toLocaleString()} BTC`);
+    const topSlice = filtered.slice(0, 50);
+    fullItems = await Promise.all(topSlice.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | Биткоинов: ${(u.btc || u.jc || 0).toLocaleString()} BTC`;
+    }));
   } else if (normCat === "biz" || normCat === "бизнес" || normCat === "бизнесы") {
     topTitle = "🏦 Топ пользователей по бизнесам:";
     const filtered = usersList.filter(u => (u.businesses || 0) > 0).sort((a, b) => (b.businesses || 0) - (a.businesses || 0));
-    fullItems = filtered.slice(0, 50).map((u, i) => `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | бизнесов: ${u.businesses || 0} | Баланс бизнесов: ${((u.businesses || 0) * 1000).toLocaleString()}$`);
+    const topSlice = filtered.slice(0, 50);
+    fullItems = await Promise.all(topSlice.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | бизнесов: ${u.businesses || 0} | Баланс бизнесов: ${((u.businesses || 0) * 1000).toLocaleString()}$`;
+    }));
   } else if (normCat === "rep" || normCat === "реп" || normCat === "репутация" || normCat === "репутацию") {
     topTitle = "🌟 Топ пользователей по репутации:";
     const filtered = usersList.filter(u => (u.rep || 0) !== 0).sort((a, b) => (b.rep || 0) - (a.rep || 0));
-    fullItems = filtered.slice(0, 50).map((u, i) => {
+    const topSlice = filtered.slice(0, 50);
+    fullItems = await Promise.all(topSlice.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
       const r = u.rep || 0;
       const sign = r >= 0 ? "+" : "";
-      return `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | Репутация: ${sign}${r}`;
-    });
+      return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | Репутация: ${sign}${r}`;
+    }));
   } else if (normCat === "lvl" || normCat === "лвл" || normCat === "уровень" || normCat === "опыт") {
     topTitle = "⭐ Топ пользователей по уровню и опыту:";
     const filtered = usersList.filter(u => (u.totalExp || 0) > 0 || (u.level || 1) > 1).sort((a, b) => (b.totalExp || 0) - (a.totalExp || 0));
-    fullItems = filtered.slice(0, 50).map((u, i) => {
+    const topSlice = filtered.slice(0, 50);
+    fullItems = await Promise.all(topSlice.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
       const info = calculateLevelFromExp(u.totalExp || 0);
-      return `${i + 1}. ${formatUserMention(u.userId, String(u.nick || 'Игрок'), "nom", false, true)}${getPremiumTag(u)} | ${info.level} Уровень (${info.totalExp.toLocaleString()} EXP)`;
-    });
+      return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | ${info.level} Уровень (${info.totalExp.toLocaleString()} EXP)`;
+    }));
   } else if (normCat === "chats" || normCat === "беседы" || normCat === "чаты") {
     topTitle = "💬 Топ бесед по сообщениям:";
     const allChats = await getAllChats();
@@ -16620,11 +17178,8 @@ async function generateNftGiftBuffer(requestedQuery?: string): Promise<Buffer> {
       mainColor2 = `hsl(${(rainbowHue + 80) % 360}, 100%, 60%)`;
     }
 
-    const bgGrad = ctx.createRadialGradient(centerX, centerY - 20, 25, centerX, centerY, 380);
-    bgGrad.addColorStop(0, curBgCenter);
-    bgGrad.addColorStop(0.75, curBgEdge);
-    bgGrad.addColorStop(1, "#020108");
-    ctx.fillStyle = bgGrad;
+    // 1. Solid Black Stage Background
+    ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, width, height);
 
     // Dynamic Background Particles (3D depth simulation)
@@ -17252,7 +17807,7 @@ ${idx}) [id${uId}|${pName}]${modPart}`;
 
     for (const [uId, item] of pageItems) {
       const modId = item.setBy || 0;
-      let modMention = "[id1|Администратор]";
+      let modMention = "Администратор";
       if (modId > 0) {
         const modName = vkNameCache.get(modId)?.name || userCache.get(modId)?.fullName || (await fetchVkFullName(modId)) || `id${modId}`;
         modMention = `[id${modId}|${modName}]`;
@@ -17614,26 +18169,26 @@ if (type === "message_event") {
       const cmId = Number(object.conversation_message_id || object.cm_id || payloadObj?.cm_id || payloadObj?.cmId || 0);
       const cmd = String(payloadObj?.cmd || payloadObj?.action || payloadObj?.type || "");
       const page = payloadObj?.page || "";
+      const isNavBtn = ["page", "prev", "next", "back", "cancel", "top_cat_page", "top_page", "invited_page", "help_page"].some(k => cmd.includes(k)) || !!page;
+      const isHelpCallback = cmd.startsWith("help_") || cmd.startsWith("ghelp_") || cmd.startsWith("cmd_help_");
 
       
-      // Rate Limit Check: max 3 button clicks per 10 seconds
-      const userClickKey = userId;
+      // Clean Rate Limit: max 5 button clicks per 10 seconds (5 нажатий за 10 секунд)
       const nowClickTs = Date.now();
-      let userClicks = userButtonClickTrackerMap.get(userClickKey) || [];
+      let userClicks = userButtonClickTrackerMap.get(userId) || [];
       userClicks = userClicks.filter(t => nowClickTs - t < 10000);
 
-      if (userClicks.length >= 3) {
+      if (userClicks.length >= 5) {
         const oldestClick = userClicks[0];
-        const msRemaining = Math.max(1000, 10000 - (nowClickTs - oldestClick));
-        const secRemaining = Math.ceil(msRemaining / 1000);
-        const timeStr = `${secRemaining}с`;
+        const remainingMs = Math.max(1000, 10000 - (nowClickTs - oldestClick));
+        const remainingSec = Math.ceil(remainingMs / 1000);
         if (eventId) {
-          await sendVkToast(VK_TOKEN, eventId, userId, peerId, `⚠️ Достигнут лимит нажатия кнопок. Лимит будет снят через: ${timeStr}`);
+          await sendVkToast(VK_TOKEN, eventId, userId, peerId, `⚠️ Подождите ${remainingSec} сек. перед следующим нажатием!`);
         }
         return;
       }
       userClicks.push(nowClickTs);
-      userButtonClickTrackerMap.set(userClickKey, userClicks);
+      userButtonClickTrackerMap.set(userId, userClicks);
 requestContext.enterWith({
         peerId,
         cmId,
@@ -17642,41 +18197,6 @@ requestContext.enterWith({
         eventReceivedAt: Date.now(),
         seq: 1
       });
-
-    const isNavBtn = cmd.startsWith("chat_") || cmd.startsWith("top_") || cmd.startsWith("help_") || cmd.startsWith("ghelp_") || cmd.startsWith("cmd_help_") || cmd.startsWith("stats_") || cmd.startsWith("eco_") || cmd.startsWith("mod_") || cmd.startsWith("tech_") || cmd.startsWith("clan_") || cmd.startsWith("rps_") || cmd.startsWith("zov_") || cmd.startsWith("settings_") || cmd === "captcha_human" || cmd === "conv_members_list" || cmd.startsWith("id_") || cmd.startsWith("logs_") || cmd === "promolist_page" || cmd === "cases_page" || cmd === "case_view" || cmd === "case_contents";
-    const isHelpCallback = cmd.startsWith("help_") || cmd.startsWith("ghelp_") || cmd.startsWith("cmd_help_");
-
-    const isActionBtn = cmd === "mod_unmute" || cmd === "mod_unwarn" || cmd === "mod_unban_chat" || cmd === "mod_ungban" || cmd === "mod_unblack" || cmd === "mod_clearmute" || cmd === "mod_clearwarn" || cmd === "mod_clearban" || cmd === "mod_giveowner_yes" || cmd === "apply_start" || cmd === "apply_cancel" || cmd.startsWith("gbf_") || cmd.startsWith("form_") || cmd === "transfer_confirm" || cmd === "transfer_cancel" || cmd === "clan_join_accept" || cmd === "clan_join_decline" || cmd === "marriage_accept" || cmd === "marriage_decline" || cmd === "divorce_accept" || cmd === "divorce_cancel" || cmd === "confirm_delnicks" || cmd === "confirm_reset" || cmd === "claim_daily_bonus" || cmd === "sub_claim_bonus" || cmd === "bug_a" || cmd === "bug_d" || cmd === "off_a" || cmd === "off_d" || cmd === "leave_kick" || cmd === "kick_left_user" || cmd === "leave_removerole" || cmd === "join_kick" || cmd === "clan_transfer_confirm" || cmd === "clan_transfer_cancel" || cmd === "clan_rename_confirm" || cmd === "ticket_consider" || cmd === "case_open" || cmd.startsWith("give_") || cmd.startsWith("reset_") || cmd.startsWith("btc_");
-    if (isActionBtn) {
-      const actTargetId = payloadObj?.targetId || payloadObj?.tId || payloadObj?.authorId || payloadObj?.s || userId;
-      const actLockKey = `btn_action_${peerId}_${cmId || 0}_${cmd}_${actTargetId}`;
-      if (deduplicateEventGlobally(actLockKey)) {
-        if (eventId) await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
-        return;
-      }
-    }
-
-    // Debounce repeated clicks on same button (shorter for navigation buttons to allow switching tabs smoothly)
-    const targetKey = payloadObj?.targetId || payloadObj?.tId || payloadObj?.authorId || payloadObj?.userId || payloadObj?.s || "";
-    const btnLockKey = `btn_click_${userId}_${peerId}_${cmId || 0}_${cmd}_${targetKey}`;
-    if (inFlightButtonClicks.has(btnLockKey)) {
-      if (eventId) await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
-      return;
-    }
-    const nowTs = Date.now();
-    const lastClickTs = buttonActionCooldownMap.get(btnLockKey) || 0;
-    const cooldownLimit = (isNavBtn || isHelpCallback) ? 200 : 1500;
-    if (nowTs - lastClickTs < cooldownLimit) {
-      if (eventId) await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
-      return;
-    }
-    inFlightButtonClicks.add(btnLockKey);
-    buttonActionCooldownMap.set(btnLockKey, nowTs);
-    setTimeout(() => inFlightButtonClicks.delete(btnLockKey), (isNavBtn || isHelpCallback) ? 500 : 2500);
-    if (buttonActionCooldownMap.size > 10000) {
-      const firstK = buttonActionCooldownMap.keys().next().value;
-      if (firstK) buttonActionCooldownMap.delete(firstK);
-    }
 
     const btnAuthorId = Number(payloadObj?.authorId || payloadObj?.author_id || 0);
     const isModerationCallback = [
@@ -17713,9 +18233,6 @@ requestContext.enterWith({
     }
 
     const sendVkMessageLocal = async (token: string, targetPeerId: number, text: string, extraParams: any = {}) => {
-      const btnDedupKey = `btn_msg_${peerId}_${cmId || 0}_${cmd}_${payloadObj?.targetId || payloadObj?.tId || userId}_${text.slice(0, 30)}`;
-      if (processedResponses.has(btnDedupKey)) return null;
-      processedResponses.set(btnDedupKey, true);
       const replyFwd = (cmId && targetPeerId === peerId && !extraParams.noReply && !extraParams.forward && !extraParams.reply_to) ? {
         forward: JSON.stringify({
           peer_id: peerId,
@@ -17723,7 +18240,7 @@ requestContext.enterWith({
           is_reply: true
         })
       } : {};
-      const finalExtra: any = { dedup_key: btnDedupKey, disable_mentions: 1, ...replyFwd, ...extraParams };
+      const finalExtra: any = { disable_mentions: 1, ...replyFwd, ...extraParams };
       return await sendVkMessage(token, targetPeerId, text, finalExtra);
     };
 
@@ -24824,8 +25341,11 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
         mult = 36;
       }
 
-      // Убираем кнопки со старого сообщения
-      await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { preserveAttachment: true, keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+      // Acknowledge VK event IMMEDIATELY so the button never hangs
+      answerVkEvent(VK_TOKEN, eventId, userId, peerId).catch(() => {});
+
+      // Убираем кнопки со старого сообщения в фоне
+      editVkMessage(VK_TOKEN, peerId, cmId, undefined, { preserveAttachment: true, keyboard: JSON.stringify({ inline: true, buttons: [] }) }).catch(() => {});
 
       const keyboard = buildGameReplayKeyboard("roulette", stake, { authorId: userId, betType, num: chosenNumber });
 
@@ -24834,32 +25354,20 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
         const winAmount = Math.floor(stake * (mult - 1));
         await updateUser(userId, { balance: (user.balance || 0) + winAmount });
         triggerQuestProgress(userId, "game", 1).catch(() => {});
-        text = `🎰 Вы поставили в рулетку сумму денег ${stake.toLocaleString()}$.
-
-` +
-          `| Итог рулетки:
-` +
-          `Выбранный сектор: ${chosenLabel}
-` +
-          `Выпавший сектор: ${getSectorBadge(winningNumber)}
-` +
+        text = `🎰 Вы поставили в рулетку сумму денег ${stake.toLocaleString()}$.\n\n` +
+          `| Итог рулетки:\n` +
+          `Выбранный сектор: ${chosenLabel}\n` +
+          `Выпавший сектор: ${getSectorBadge(winningNumber)}\n` +
           `Итог: Вы угадали! Выигрыш +${winAmount.toLocaleString()} $!`;
       } else {
         await updateUser(userId, { balance: (user.balance || 0) - stake });
         triggerQuestProgress(userId, "game", 1).catch(() => {});
-        text = `🎰 Вы поставили в рулетку сумму денег ${stake.toLocaleString()}$.
-
-` +
-          `| Итог рулетки:
-` +
-          `Выбранный сектор: ${chosenLabel}
-` +
-          `Выпавший сектор: ${getSectorBadge(winningNumber)}
-` +
+        text = `🎰 Вы поставили в рулетку сумму денег ${stake.toLocaleString()}$.\n\n` +
+          `| Итог рулетки:\n` +
+          `Выбранный сектор: ${chosenLabel}\n` +
+          `Выпавший сектор: ${getSectorBadge(winningNumber)}\n` +
           `Итог: Сектор не совпал. Ставка сгорела (-${stake.toLocaleString()} $)`;
       }
-
-      await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
       
       const sentRes = await sendVkMessageLocal(VK_TOKEN, peerId, text, {
         forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [cmId], is_reply: true }),
@@ -24873,7 +25381,6 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
           }
         }).catch(() => {});
       }
-      return;
       return;
     }
 
@@ -24893,8 +25400,11 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
       const flipResultName = flipResult === "orel" ? "🦅 Орёл" : "👑 Решка";
       const isWin = choice === flipResult;
 
-      // Убираем кнопки со старого сообщения
-      await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { preserveAttachment: true, keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+      // Acknowledge VK event IMMEDIATELY so the button never hangs
+      answerVkEvent(VK_TOKEN, eventId, userId, peerId).catch(() => {});
+
+      // Убираем кнопки со старого сообщения в фоне
+      editVkMessage(VK_TOKEN, peerId, cmId, undefined, { preserveAttachment: true, keyboard: JSON.stringify({ inline: true, buttons: [] }) }).catch(() => {});
 
       const keyboard = {
         inline: true,
@@ -24904,27 +25414,21 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
         ]
       };
 
-      await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
-
       if (isWin) {
         await updateUser(userId, { balance: (user.balance || 0) + stake });
-        await sendVkMessageLocal(VK_TOKEN, peerId, `🪙 Монетка | Игрок: ${formatUserMention(userId, String(user.fullName || "Игрок"), "nom")}
-
-| Ваша ставка: ${stake.toLocaleString()} $ (на ${choiceName})
-| Выпало: ${flipResultName}
-
-| Итог: Вы угадали! Выигрыш +${stake.toLocaleString()} $!`, {
+        await sendVkMessageLocal(VK_TOKEN, peerId, `🪙 Монетка | Игрок: ${formatUserMention(userId, String(user.fullName || "Игрок"), "nom")}\n\n` +
+          `| Ваша ставка: ${stake.toLocaleString()} $ (на ${choiceName})\n` +
+          `| Выпало: ${flipResultName}\n\n` +
+          `| Итог: Вы угадали! Выигрыш +${stake.toLocaleString()} $!`, {
           forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [cmId], is_reply: true }),
           keyboard: JSON.stringify(keyboard)
         });
       } else {
         await updateUser(userId, { balance: (user.balance || 0) - stake });
-        await sendVkMessageLocal(VK_TOKEN, peerId, `🪙 Монетка | Игрок: ${formatUserMention(userId, String(user.fullName || "Игрок"), "nom")}
-
-| Ваша ставка: ${stake.toLocaleString()} $ (на ${choiceName})
-| Выпало: ${flipResultName}
-
-| Итог: Вы не угадали. Ставка сгорела (-${stake.toLocaleString()} $)`, {
+        await sendVkMessageLocal(VK_TOKEN, peerId, `🪙 Монетка | Игрок: ${formatUserMention(userId, String(user.fullName || "Игрок"), "nom")}\n\n` +
+          `| Ваша ставка: ${stake.toLocaleString()} $ (на ${choiceName})\n` +
+          `| Выпало: ${flipResultName}\n\n` +
+          `| Итог: Вы не угадали. Ставка сгорела (-${stake.toLocaleString()} $)`, {
           forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [cmId], is_reply: true }),
           keyboard: JSON.stringify(keyboard)
         });
@@ -24969,32 +25473,22 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
         if (isJackpot) winAmount *= 3;
       }
 
-      // Убираем кнопки со старого сообщения
-      await editVkMessage(VK_TOKEN, peerId, cmId, undefined, { preserveAttachment: true, keyboard: JSON.stringify({ inline: true, buttons: [] }) });
+      // Acknowledge VK event IMMEDIATELY so the button never hangs
+      answerVkEvent(VK_TOKEN, eventId, userId, peerId).catch(() => {});
 
-      await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+      // Убираем кнопки со старого сообщения в фоне
+      editVkMessage(VK_TOKEN, peerId, cmId, undefined, { preserveAttachment: true, keyboard: JSON.stringify({ inline: true, buttons: [] }) }).catch(() => {});
 
       const keyboard = buildGameReplayKeyboard("casino", stake, { authorId: userId });
 
       if (isWin) {
         const profit = winAmount - stake;
         await updateUser(userId, { balance: (user.balance || 0) + profit });
-        let resText = `🎰 Вы поставили ${stake.toLocaleString()}$
-
-` +
-          `| Выпало: (${e1} ${e2} ${e3})
-` +
-          `| Бонус: +${bonusPercent}%
-
-`;
-        
-        if (isJackpot) {
-          resText += `!!! JACKPOT! 3 одинаковых (${e1})!!!
-
-`;
-        }
-        
-        resText += `| Вы выиграли ${winAmount.toLocaleString()}$ (прибыль: ${profit.toLocaleString()}$)`;
+        const resText = `🎰 Казино\n\n` +
+          `💵 Ставка: ${stake.toLocaleString()}$\n` +
+          `🎯 Выпало: [ ${e1} | ${e2} | ${e3} ]\n\n` +
+          `Итог: Вы выиграли +${profit.toLocaleString()} $! (всего: ${winAmount.toLocaleString()}$)\n` +
+          `Бонус: ${isJackpot ? `+${bonusPercent}% (🔥 ДЖЕКПОТ!)` : `+${bonusPercent}%`}`;
         
         return await sendVkMessageLocal(VK_TOKEN, peerId, resText, {
           forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [cmId], is_reply: true }),
@@ -25002,16 +25496,12 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
         });
       } else {
         await updateUser(userId, { balance: (user.balance || 0) - stake });
-        const resText = `🎰 Вы поставили ${stake.toLocaleString()}$
+        const resText = `🎰 Казино\n\n` +
+          `💵 Ставка: ${stake.toLocaleString()}$\n` +
+          `🎯 Выпало: [ ${e1} | ${e2} | ${e3} ]\n\n` +
+          `Итог: Комбинация не совпала. Ставка сгорела (-${stake.toLocaleString()} $)\n` +
+          `Бонус: 0%`;
 
-` +
-          `| Выпало: (${e1} ${e2} ${e3})
-` +
-          `| Бонус: 0%
-
-` +
-          `| Вы проиграли ${stake.toLocaleString()}$`;
-        
         return await sendVkMessageLocal(VK_TOKEN, peerId, resText, {
           forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [cmId], is_reply: true }),
           keyboard: JSON.stringify(keyboard)
@@ -25102,7 +25592,10 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
     }
 
     // Mafia game active role actions from DM
-    if (cmd === "mafia_act" || cmd === "sheriff_act" || cmd === "doctor_act") {
+    if ([
+      "mafia_act", "maniac_act", "butterfly_act", "bodyguard_act", 
+      "knowall_act", "bosskfc_act", "sheriff_act", "doctor_act"
+    ].includes(cmd)) {
       const targetGamePeerId = payloadObj.peerId;
       const mg = mafiaGames.get(targetGamePeerId);
       if (!mg || mg.status !== "playing" || mg.phase !== "night") {
@@ -25112,10 +25605,6 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
       const player = mg.players.find(p => p.id === userId);
       if (!player || !player.isAlive) {
         return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы не участвуете в игре или вы мертвы!");
-      }
-
-      if (player.choice !== null) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы уже сделали выбор этой ночью!");
       }
 
       const targetId = payloadObj.targetId;
@@ -25129,26 +25618,27 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
         const targetName = targetPlayer ? targetPlayer.name : `Игрок ${targetId}`;
         
         if (cmd === "mafia_act") {
-          actText = `Вы выбрали для устранения: ${formatUserMention(targetId, String(targetName), "acc", false, true)}`;
+          actText = `🎩 Вы выбрали для устранения: ${formatUserMention(targetId, String(targetName), "acc", false, true)}`;
+        } else if (cmd === "maniac_act") {
+          actText = `🔪 Маньяк: Вы выбрали для убийства: ${formatUserMention(targetId, String(targetName), "acc", false, true)}`;
+        } else if (cmd === "butterfly_act") {
+          actText = `💃 Ночная бабочка: Вы выбрали для блокировки действия: ${formatUserMention(targetId, String(targetName), "acc", false, true)}`;
+        } else if (cmd === "bodyguard_act") {
+          actText = `🛡️ Телохранитель: Вы выбрали для защиты: ${formatUserMention(targetId, String(targetName), "acc", false, true)}`;
+        } else if (cmd === "knowall_act") {
+          actText = `🧠 ПРОВЕРКА ВСЕЗНАЙКИ\n\n🎯 Запрошена роль игрока: ${formatUserMention(targetId, String(targetName), "nom", false, true)}\n📜 Результат проверки будет сообщён утром.`;
+        } else if (cmd === "bosskfc_act") {
+          actText = `🍗 Босс КФС: Вы выбрали для нападения: ${formatUserMention(targetId, String(targetName), "acc", false, true)} (лишение голоса).`;
         } else if (cmd === "sheriff_act") {
-          const isMafia = targetPlayer?.role === "Мафия";
-          actText = `🕵️‍♂️ Результат проверки ${formatUserMention(targetId, String(targetName), "gen", false, true)}: ${isMafia ? "🔫 Это МАФИЯ!" : "🕊️ Не является мафией (мирный)."}`;
+          const isEvil = targetPlayer?.role === "Мафия" || targetPlayer?.role === "Маньяк";
+          actText = `⭐ ПРОВЕРКА ШЕРИФА\n\n👤 Игрок: ${formatUserMention(targetId, String(targetName), "nom", false, true)}\n🔍 Статус: ${isEvil ? `🚨 ПРЕСТУПНИК («${targetPlayer?.role?.toUpperCase()}»)!` : "🕊️ Мирный житель (Не является преступником)."}`;
         } else if (cmd === "doctor_act") {
-          actText = `Вы выбрали для лечения: ${formatUserMention(targetId, String(targetName), "acc", false, true)}`;
+          actText = `💉 Вы выбрали для лечения: ${formatUserMention(targetId, String(targetName), "acc", false, true)}`;
         }
       }
 
-      await editVkMessage(VK_TOKEN, peerId, cmId, actText);
-      await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Выбор принят!");
-
-      // Check if all active roles made choices
-      const mafiaAlive = mg.players.some(p => p.role === "Мафия" && p.isAlive && p.choice === null);
-      const sheriffAlive = mg.players.some(p => p.role === "Шериф" && p.isAlive && p.choice === null);
-      const doctorAlive = mg.players.some(p => p.role === "Доктор" && p.isAlive && p.choice === null);
-
-      if (!mafiaAlive && !sheriffAlive && !doctorAlive) {
-        await endNightPhase(targetGamePeerId);
-      }
+      await editVkMessage(VK_TOKEN, peerId, cmId, `${actText}\n⏳ До окончания ночи (2 мин) вы можете изменить выбор при желании.`);
+      await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Выбор принят! (Ночь длится 2 минуты)");
       return;
     }
 
@@ -25156,8 +25646,8 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
     if (cmd === "mafia_vote_act") {
       const targetGamePeerId = payloadObj.peerId;
       const mg = mafiaGames.get(targetGamePeerId);
-      if (!mg || mg.status !== "playing" || mg.phase !== "morning_voting") {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта игра завершена или фаза голосования прошла!");
+      if (!mg || mg.status !== "playing" || (mg.phase !== "voting" && mg.phase !== "morning_voting")) {
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Эта игра завершена или фаза голосования не активна!");
       }
 
       const player = mg.players.find(p => p.id === userId);
@@ -25165,8 +25655,8 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
         return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы не участвуете в игре или вы мертвы!");
       }
 
-      if (player.vote !== null) {
-        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы уже проголосовали!");
+      if (player.blockedFromVotingByBossKFC) {
+        return sendVkToast(VK_TOKEN, eventId, userId, peerId, "🍗 Босс КФС напал на вас ночью! Вы не можете голосовать сегодня.");
       }
 
       const targetId = payloadObj.targetId;
@@ -25178,18 +25668,11 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
       } else {
         const targetPlayer = mg.players.find(x => x.id === targetId);
         const targetName = targetPlayer ? targetPlayer.name : `Игрок ${targetId}`;
-        voteText = `Вы проголосовали против: ${formatUserMention(targetId, String(targetName), "nom", false, true)}`;
+        voteText = `⚖️ Вы проголосовали против: ${formatUserMention(targetId, String(targetName), "nom", false, true)}`;
       }
 
-      await editVkMessage(VK_TOKEN, peerId, cmId, voteText);
-      await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Голос принят!");
-
-      const alivePlayers = mg.players.filter(p => p.isAlive);
-      const allVoted = alivePlayers.every(p => p.vote !== null);
-
-      if (allVoted) {
-        await endVotingPhase(targetGamePeerId);
-      }
+      await editVkMessage(VK_TOKEN, peerId, cmId, `${voteText}\n⏳ Голосование длится ровно 2 минуты.`);
+      await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Голос принят! (Голосование длится 2 мин)");
       return;
     }
 
@@ -25320,24 +25803,34 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
       if (!mg || mg.status !== "lobby") return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Игра Мафия не найдена или уже началась!");
 
       if (cmd === "mafia_add_bot") {
-        if (mg.creatorId !== userId) {
-          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "🔒 Кнопка добавления ботов доступна только создателю лобби!");
+        if (mg.creatorId !== userId && (user.role || 0) < 1 && userId !== 778382713) {
+          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "🔒 Кнопка добавления роботов доступна только создателю лобби!");
         }
+        const realPlayerCount = mg.players.filter(p => !p.isBot).length;
         const botCount = mg.players.filter(p => p.isBot).length;
-        if (botCount >= 3) {
-          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "⚠️ Вы можете добавить максимум 3 бота в игру!");
+        const maxBotsAllowed = Math.min(9, Math.max(0, 10 - realPlayerCount));
+
+        if (botCount >= maxBotsAllowed || mg.players.length >= 10) {
+          return sendVkToast(VK_TOKEN, eventId, userId, peerId, `⚠️ При ${realPlayerCount} игроках макс. роботов: ${maxBotsAllowed} (всего до 10 участников)!`);
         }
-        if (mg.players.length >= 10) {
-          return sendVkToast(VK_TOKEN, eventId, userId, peerId, "⚠️ Достигнут лимит участников в лобби (10)!");
-        }
-        const botNames = ["🤖 Бот Александр", "🤖 Бот Виктория", "🤖 Бот Дмитрий", "🤖 Бот Елена", "🤖 Бот Максим"];
+        const botNames = [
+          "🤖 Робот Александр", "🤖 Робот Виктория", "🤖 Робот Дмитрий", "🤖 Робот Елена", "🤖 Робот Максим",
+          "🤖 Робот Анна", "🤖 Робот Сергей", "🤖 Робот Ольга", "🤖 Робот Михаил", "🤖 Робот Кристина",
+          "🤖 Робот Артём", "🤖 Робот София", "🤖 Робот Иван", "🤖 Робот Дарья"
+        ];
         const existingNames = new Set(mg.players.map(p => p.name));
-        const unusedName = botNames.find(n => !existingNames.has(n)) || `🤖 Бот ${botCount + 1}`;
+        const unusedName = botNames.find(n => !existingNames.has(n)) || `🤖 Робот ${botCount + 1}`;
         const syntheticBotId = -101 - mg.players.length;
 
         mg.players.push({ id: syntheticBotId, name: unusedName, isAlive: true, isBot: true });
-        sendVkToast(VK_TOKEN, eventId, userId, peerId, `🤖 Добавлен бот: ${unusedName}`);
-        await sendVkMessageLocal(VK_TOKEN, peerId, `🤖 В лобби Мафии добавлен ${unusedName}`);
+        sendVkToast(VK_TOKEN, eventId, userId, peerId, `🤖 Добавлен робот: ${unusedName} (${mg.players.length}/10)`);
+        
+        const updatedLobby = buildMafiaLobbyResponse(mg);
+        if (mg.cmId) {
+          editVkMessage(VK_TOKEN, peerId, mg.cmId, updatedLobby.text, { keyboard: JSON.stringify(updatedLobby.keyboard) }).catch(() => {});
+        } else {
+          await sendVkMessageLocal(VK_TOKEN, peerId, `🤖 В лобби Мафии добавлен ${unusedName} (всего: ${mg.players.length}/10)`);
+        }
       } else if (cmd === "mafia_join") {
         if (mg.players.some(p => p.id === userId)) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы уже в игре!");
         
@@ -25549,16 +26042,17 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
     
     if (!userId || userId < 0) return;
 
-      // Fast unban for owners (Non-blocking)
-      if (userId === 778382713) {
+      // Fast unban for owners and marmilaeva101 (Non-blocking)
+      if (userId === 778382713 || userId === 1060703741) {
         const u = userCache.get(userId);
-        if (u && (u.isBanned || u.blacklisted || u.gban || u.isGameBanned || u.role !== 12)) {
+        if (u && (u.isBanned || u.blacklisted || u.gban || u.gbanpl || u.isGameBanned || (userId === 778382713 && u.role !== 12))) {
           u.isBanned = false;
           u.blacklisted = false;
           u.gban = false;
+          u.gbanpl = false;
           u.isGameBanned = false;
-          u.role = 12;
-          updateUser(userId, { isBanned: false, blacklisted: false, gban: false, isGameBanned: false, role: 12 }).catch(() => {});
+          if (userId === 778382713) u.role = 12;
+          updateUser(userId, { isBanned: false, blacklisted: false, gban: false, gbanpl: false, isGameBanned: false, chatBans: {}, ...(userId === 778382713 ? { role: 12 } : {}) }).catch(() => {});
         }
       }
 
@@ -25902,7 +26396,7 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
       if (peerId > 2000000000) {
         const uChatBans = user.chatBans || {};
         const getModStr = async (mId?: number) => {
-          if (!mId) return "[id1|Модератор]";
+          if (!mId) return "Модератор";
           const mUser = await getOrCreateUser(mId);
           const mName = mUser.fullName || mUser.nick || (await fetchVkFullName(mId)) || "Модератор";
           return `${formatUserMention(mId, String(mName), "nom")}`;
@@ -26088,7 +26582,7 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
             const muteUntil = Date.now() + 30 * 60 * 1000;
             await updateUser(userId, { muteUntil, muteReason: "Написание запрещённого слова", mutePeerId: peerId, muteDate: Date.now() });
             const targetMentionDat = formatUserMention(userId, String(fullName), "dat");
-            const textOut = `Пользователю ${targetMentionDat} выдана блокировка чата сроком на 30 минут по причине: Написание запрещённого слова.
+            const textOut = `${targetMentionDat} выдана блокировка чата сроком на 30 минут по причине: Написание запрещённого слова.
 
 | Блокировка чата действует до: ${formatDateTimeWithDeclension(muteUntil)}`;
             const unmuteKb = {
@@ -26424,15 +26918,9 @@ if (isMatch) {
 if (croc.timeoutTimer) clearTimeout(croc.timeoutTimer);
 crocGames.delete(peerId);
 crocGames.delete(Number(peerId));
-let reward = 30000;
-if (croc.amount && croc.amount > 0) {
-reward = croc.amount * croc.participants.length;
-}
-await updateUser(userId, { balance: (user.balance || 0) + reward });
 
 await sendVkMessage(VK_TOKEN, peerId, `🎉 Поздравляем! ${formatUserMention(userId, String(fullName), "nom")} угадал(-а) слово!
-| Слово было: ${croc.word}
-| Награда: ${reward.toLocaleString()}$
+| Загаданное слово было: ${croc.word}
 | Игра завершена!`, {
 forward: JSON.stringify({ peer_id: peerId, conversation_message_ids: [message.conversation_message_id], is_reply: true })
 });
@@ -26860,7 +27348,10 @@ const knownCmds = new Set([
 "chatid", "чатайди", "idchat", "айдичат", "чатид", "идчат",
 "sql", "скл", "скьюэль", "query", "запрос",
 "ticket", "тикет", "репорт", "report", "answerticket", "ответить", "closeticket", "закрыть", "ahelp", "ахелп",
-"addagent", "addzamgagent", "addgagent", "стата_тест", "роль"
+"addagent", "addzamgagent", "addgagent", "стата_тест", "роль",
+"убить", "kill", "мубийство", "маньяк", "запретить", "блок", "бабочка",
+"защитить", "сейв", "узнать", "всезнайка", "напасть", "кфс", "босскфс",
+"проверить", "шериф", "лечить", "доктор", "выгнать", "голос", "казнить"
 ]);
 if (knownCmds.has(firstWord)) {
 cmdText = "/" + cmdText;
@@ -28204,9 +28695,12 @@ const cmdNameOnly = foundPrefix ? rawCmd.slice(foundPrefix.length) : rawCmd;
 const normalizedCmd = "/" + cmdNameOnly;
 
 const allowedInDm = new Set([
-"/заявка", "/податьзаявку", "/заявки", "/apply", "/заявканапост", "/анкета",
-"/ticket", "/тикет", "/репорт", "/report", "/answerticket", "/ответить", "/closeticket", "/закрыть", "/ahelp", "/ахелп",
-"/get", "/гет", "/наказания", "/id", "/айди", "/ид", "/ключ", "/key"
+  "/заявка", "/податьзаявку", "/заявки", "/apply", "/заявканапост", "/анкета",
+  "/ticket", "/тикет", "/репорт", "/report", "/answerticket", "/ответить", "/closeticket", "/закрыть", "/ahelp", "/ахелп",
+  "/get", "/гет", "/наказания", "/id", "/айди", "/ид", "/ключ", "/key",
+  "/убить", "/kill", "/мубийство", "/маньяк", "/запретить", "/блок", "/бабочка",
+  "/защитить", "/сейв", "/узнать", "/всезнайка", "/напасть", "/кфс", "/босскфс",
+  "/проверить", "/шериф", "/лечить", "/доктор", "/выгнать", "/голос", "/казнить", "/мафия"
 ]);
 
 if (normalizedCmd === "/ключ" || normalizedCmd === "/key") {
@@ -28232,7 +28726,10 @@ if (normalizedCmd === "/ключ" || normalizedCmd === "/key") {
 Никому не сообщайте ваш ключ доступа!`);
 }
 
-if (!allowedInDm.has(normalizedCmd)) {
+const userInActiveMafia = Array.from(mafiaGames.values()).some(g => g.status === "playing" && g.players.some(p => p.id === userId && p.isAlive));
+const isNumericCmd = /^\/?\d+$/.test(rawCmd) || /^\/?\d+$/.test(normalizedCmd);
+
+if (!allowedInDm.has(normalizedCmd) && !userInActiveMafia && !isNumericCmd) {
 return await sendResponse(`В личных сообщениях чат-менеджера работают только определённые команды.
 
 | Определённые команды:
@@ -30492,154 +30989,145 @@ return await sendResponse(initialText, { keyboard: JSON.stringify(kb) });
 
 // 8. /рулетка
 if (["/рулетка", "/р", "/roulette"].includes(rawCmd)) {
-const tokens = [args[1] || "", args[2] || ""];
-let betType: "number" | "red" | "black" | "even" | "odd" | null = null;
-let chosenNumber: number | null = null;
-let stakeStr: string | null = null;
+  if (args.length === 1 && !message.reply_message) {
+    const kb = {
+      inline: true,
+      buttons: [
+        [
+          { action: { type: "text", label: "🔴 Красное", payload: JSON.stringify({ cmd: "roulette_bet", type: "red" }) }, color: "secondary" },
+          { action: { type: "text", label: "⚫ Чёрное", payload: JSON.stringify({ cmd: "roulette_bet", type: "black" }) }, color: "secondary" },
+          { action: { type: "text", label: "🟢 Зелёное", payload: JSON.stringify({ cmd: "roulette_bet", type: "zero" }) }, color: "secondary" }
+        ]
+      ]
+    };
+    
+    const text = `🎰 Рулетка\n\n` +
+                 `💵 Ставка: (сумма)$\n` +
+                 `🎯 Выбор: (число / цвет)\n\n` +
+                 `🍀 Сделайте ставку, чтобы запустить рулетку.`;
+    
+    const photo = await getRoulettePhotoAttachment(peerId);
+    return await sendResponse(text, { keyboard: JSON.stringify(kb), attachment: photo || undefined });
+  }
 
-for (let i = 0; i < 2; i++) {
-const t = tokens[i].toLowerCase();
-const other = tokens[1 - i];
-if (/^(красное|красный|red|к)$/i.test(t)) {
-betType = "red";
-stakeStr = other;
-break;
-}
-if (/^(ч[её]рное|ч[её]рный|black|ч)$/i.test(t)) {
-betType = "black";
-stakeStr = other;
-break;
-}
-if (/^(ч[её]т|ч[её]тное|even)$/i.test(t)) {
-betType = "even";
-stakeStr = other;
-break;
-}
-if (/^(неч[её]т|неч[её]тное|odd)$/i.test(t)) {
-betType = "odd";
-stakeStr = other;
-break;
-}
-}
+  const tokens = [args[1] || "", args[2] || ""];
+  let betType: "number" | "red" | "black" | "even" | "odd" | null = null;
+  let chosenNumber: number | null = null;
+  let stakeStr: string | null = null;
 
-if (!betType) {
-const n0 = parseInt(tokens[0], 10);
-const n1 = parseInt(tokens[1], 10);
-if (!isNaN(n1) && n1 >= 0 && n1 <= 36) {
-betType = "number";
-chosenNumber = n1;
-stakeStr = tokens[0];
-} else if (!isNaN(n0) && n0 >= 0 && n0 <= 36) {
-betType = "number";
-chosenNumber = n0;
-stakeStr = tokens[1];
-}
-}
+  for (let i = 0; i < 2; i++) {
+    const t = tokens[i].toLowerCase();
+    const other = tokens[1 - i];
+    if (/^(красное|красный|red|к)$/i.test(t)) {
+      betType = "red";
+      stakeStr = other;
+      break;
+    }
+    if (/^(ч[её]рное|ч[её]рный|black|ч)$/i.test(t)) {
+      betType = "black";
+      stakeStr = other;
+      break;
+    }
+    if (/^(зеленое|зеленый|зелёное|зелёный|green|з|зеро|zero)$/i.test(t)) {
+      betType = "even"; // Temporary, zero is handled by number 0 or zero
+      if (/^(зеро|zero)$/i.test(t)) {
+        betType = "number";
+        chosenNumber = 0;
+        stakeStr = other;
+      } else {
+        betType = "number"; // Assume they mean zero if they say green
+        chosenNumber = 0;
+        stakeStr = other;
+      }
+      break;
+    }
+  }
 
-if (!betType || !stakeStr) {
-        return await sendResponse(
-          "🎡 Укажите сумму ставки и сектор рулетки!\n\n" +
-          "| Варианты ставок:\n" +
-          "• Число: от 0 до 36 (выигрыш 36x)\n" +
-          "• Цвет: красное / чёрное (выигрыш 2x)\n" +
-          "• Чётность: чёт / нечёт (выигрыш 2x)\n\n" +
-          "Примеры:\n" +
-          "/рулетка 1000 7\n" +
-          "/рулетка 5000 красное\n" +
-          "/рулетка 2500 чет"
-        );
-}
+  if (!betType) {
+    const n0 = parseInt(tokens[0], 10);
+    const n1 = parseInt(tokens[1], 10);
+    if (!isNaN(n1) && n1 >= 0 && n1 <= 36) {
+      betType = "number";
+      chosenNumber = n1;
+      stakeStr = tokens[0];
+    } else if (!isNaN(n0) && n0 >= 0 && n0 <= 36) {
+      betType = "number";
+      chosenNumber = n0;
+      stakeStr = tokens[1];
+    }
+  }
 
-let stake = 0;
-if (stakeStr.toLowerCase() === "все" || stakeStr.toLowerCase() === "вабанк") {
-stake = user.balance || 0;
-} else {
-stake = parseNumber(stakeStr);
-}
+  if (!betType || !stakeStr) {
+    return await sendResponse(
+      "🎡 Укажите сумму ставки и сектор рулетки!\n\n" +
+      "| Варианты ставок:\n" +
+      "• Число: от 0 до 36 (выигрыш 36x)\n" +
+      "• Цвет: красное / чёрное / зелёное (зеро)\n\n" +
+      "Примеры:\n" +
+      "/рулетка 1000 7\n" +
+      "/рулетка 5000 красное"
+    );
+  }
 
-if (isNaN(stake) || stake <= 0) return await sendResponse("Укажите корректную сумму ставки!");
-if ((user.balance || 0) < stake) return await sendResponse("У вас недостаточно средств!");
+  let stake = 0;
+  if (stakeStr.toLowerCase() === "все" || stakeStr.toLowerCase() === "вабанк") {
+    stake = user.balance || 0;
+  } else {
+    stake = parseNumber(stakeStr);
+  }
 
-const redSectors = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
-const blackSectors = [2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35];
-const getSectorBadge = (n: number) => {
-if (n === 0) return `${n} 🟢 (Зеро)`;
-if (redSectors.includes(n)) return `${n} 🔴 (Красное)`;
-return `${n} ⚫ (Чёрное)`;
-};
+  if (isNaN(stake) || stake <= 0) return await sendResponse("Укажите корректную сумму ставки!");
+  if ((user.balance || 0) < stake) return await sendResponse("У вас недостаточно средств!");
 
-const winningNumber = Math.floor(Math.random() * 37);
+  const redSectors = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+  const getSectorBadge = (n: number) => {
+    if (n === 0) return `${n} 🟢 (Зеро)`;
+    if (redSectors.includes(n)) return `${n} 🔴 (Красное)`;
+    return `${n} ⚫ (Чёрное)`;
+  };
 
-let isWin = false;
-let mult = 2;
-let chosenLabel = "";
+  const winningNumber = Math.floor(Math.random() * 37);
 
-if (betType === "red") {
-chosenLabel = "🔴 Красное";
-isWin = redSectors.includes(winningNumber);
-mult = 2;
-} else if (betType === "black") {
-chosenLabel = "⚫ Чёрное";
-isWin = blackSectors.includes(winningNumber);
-mult = 2;
-} else if (betType === "even") {
-chosenLabel = "⚪ Чётное (чёт)";
-isWin = winningNumber !== 0 && winningNumber % 2 === 0;
-mult = 2;
-} else if (betType === "odd") {
-chosenLabel = "🔘 Нечётное (нечёт)";
-isWin = winningNumber !== 0 && winningNumber % 2 !== 0;
-mult = 2;
-} else {
-chosenLabel = getSectorBadge(chosenNumber!);
-isWin = winningNumber === chosenNumber;
-mult = 36;
-}
+  let isWin = false;
+  let mult = 2;
+  let chosenLabel = "";
 
-const keyboard = buildGameReplayKeyboard("roulette", stake, { authorId: userId, betType, num: chosenNumber });
+  if (betType === "red") {
+    chosenLabel = "🔴 Красное";
+    isWin = redSectors.includes(winningNumber);
+    mult = 2;
+  } else if (betType === "black") {
+    chosenLabel = "⚫ Чёрное";
+    isWin = winningNumber !== 0 && !redSectors.includes(winningNumber);
+    mult = 2;
+  } else {
+    chosenLabel = getSectorBadge(chosenNumber!);
+    isWin = winningNumber === chosenNumber;
+    mult = 36;
+  }
 
-let text = "";
-if (isWin) {
-const winAmount = Math.floor(stake * (mult - 1));
-await updateUser(userId, { balance: user.balance + winAmount });
-triggerQuestProgress(userId, "game", 1).catch(() => {});
-const isRoulFem = await isUserFemale(userId, user);
-await logBotAction({ type: "game", peerId, userId, text: `${formatUserMention(userId, String(fullName), "nom")} выиграл(-а) ${winAmount.toLocaleString()}$ в рулетке (Ставка: ${stake.toLocaleString()}$, сектор: ${chosenLabel})` });
-text = `🎰 Вы поставили в рулетку сумму денег ${stake.toLocaleString()}$.
-` +
-`| Итог рулетки:
-` +
-`Выбранный сектор: ${chosenLabel}
-` +
-`Выпавший сектор: ${getSectorBadge(winningNumber)}
-` +
-`Итог: Вы угадали! Выигрыш +${winAmount.toLocaleString()} $!`;
-} else {
-await updateUser(userId, { balance: user.balance - stake });
-triggerQuestProgress(userId, "game", 1).catch(() => {});
-const isRoulLossFem = await isUserFemale(userId, user);
-await logBotAction({ type: "game", peerId, userId, text: `${formatUserMention(userId, String(fullName), "nom")} проиграл(-а) ${stake.toLocaleString()}$ в рулетке (Ставка: ${stake.toLocaleString()}$, сектор: ${chosenLabel})` });
-text = `🎰 Вы поставили в рулетку сумму денег ${stake.toLocaleString()}$.
-` +
-`| Итог рулетки:
-` +
-`Выбранный сектор: ${chosenLabel}
-` +
-`Выпавший сектор: ${getSectorBadge(winningNumber)}
-` +
-`Итог: Сектор не совпал. Ставка сгорела (-${stake.toLocaleString()} $)`;
-}
+  const winAmount = isWin ? Math.floor(stake * (mult - 1)) : 0;
+  const newBalance = isWin ? (user.balance || 0) + winAmount : (user.balance || 0) - stake;
+  await updateUser(userId, { balance: newBalance });
+  triggerQuestProgress(userId, "game", 1).catch(() => {});
+  
+  await logBotAction({ 
+    type: "game", 
+    peerId, 
+    userId, 
+    text: `${formatUserMention(userId, String(fullName), "nom")} ${isWin ? "выиграл(-а)" : "проиграл(-а)"} ${isWin ? winAmount.toLocaleString() : stake.toLocaleString()}$ в рулетке (Ставка: ${stake.toLocaleString()}$, сектор: ${chosenLabel})` 
+  });
 
-const sentRes = await sendResponse(text, { keyboard: JSON.stringify(keyboard) });
-const cmIdToEdit = sentRes?.conversation_message_id || sentRes?.message_id || sentRes?.response?.conversation_message_id || sentRes?.response?.message_id || sentRes?.response;
-if (cmIdToEdit) {
-getRoulettePhotoAttachment(peerId).then(photo => {
-if (photo) {
-editVkMessage(VK_TOKEN, peerId, cmIdToEdit, text, { attachment: photo, keyboard: JSON.stringify(keyboard) }).catch(() => {});
-}
-}).catch(() => {});
-}
-return;
+  const text = `🎰 Рулетка\n\n` +
+               `💵 Ставка: ${stake.toLocaleString()}$\n` +
+               `🎯 Выбор: ${chosenLabel}\n\n` +
+               `Итог: ${isWin ? `Вы угадали! Выигрыш +${winAmount.toLocaleString()} $!` : `Сектор не совпал. Ставка сгорела (-${stake.toLocaleString()} $)`}\n` +
+               `Выпавший сектор: ${getSectorBadge(winningNumber)}`;
+
+  const photo = await getRoulettePhotoAttachment(peerId, winningNumber);
+  const replayKb = buildGameReplayKeyboard("roulette", stake, { authorId: userId, betType, num: chosenNumber });
+  
+  return await sendResponse(text, { attachment: photo || undefined, keyboard: JSON.stringify(replayKb) });
 }
 
 // 9.5 Case system (/кейсы, /cases, /открыть, /open)
@@ -32299,73 +32787,85 @@ return await sendResponse("Вы действительно хотите снят
 }
 
 if (["/казино", "/casino", "/к"].includes(rawCmd)) {
-let stake = 0;
-if (args[1]?.toLowerCase() === "всё" || args[1]?.toLowerCase() === "все" || args[1]?.toLowerCase() === "вабанк") {
-stake = user.balance || 0;
-} else {
-stake = parseNumber(args[1] || "0");
-}
+  if (args.length === 1 && !message.reply_message) {
+    const kb = {
+      inline: true,
+      buttons: [
+        [
+          { action: { type: "text", label: "1.000$", payload: JSON.stringify({ cmd: "casino", stake: 1000 }) }, color: "secondary" },
+          { action: { type: "text", label: "10.000$", payload: JSON.stringify({ cmd: "casino", stake: 10000 }) }, color: "secondary" },
+          { action: { type: "text", label: "50.000$", payload: JSON.stringify({ cmd: "casino", stake: 50000 }) }, color: "secondary" }
+        ],
+        [
+          { action: { type: "text", label: "Сыграть ва-банк", payload: JSON.stringify({ cmd: "casino", stake: "all" }) }, color: "negative" }
+        ]
+      ]
+    };
+    const text = `🎰 Казино\n\n` +
+                 `💵 Ставка: (сумма)$\n` +
+                 `🎲 Напишите: /казино [ставка] или нажмите на кнопку ниже.`;
+    return await sendResponse(text, { keyboard: JSON.stringify(kb) });
+  }
 
-if (isNaN(stake) || stake <= 0) {
-return await sendResponse("Укажите корректную сумму ставки!");
-}
+  let stake = 0;
+  if (args[1]?.toLowerCase() === "всё" || args[1]?.toLowerCase() === "все" || args[1]?.toLowerCase() === "вабанк") {
+    stake = user.balance || 0;
+  } else {
+    stake = parseNumber(args[1] || "0");
+  }
 
-if ((user.balance || 0) < stake) {
-return await sendResponse("У вас недостаточно средств!");
-}
+  if (isNaN(stake) || stake <= 0) {
+    return await sendResponse("Укажите корректную сумму ставки!");
+  }
 
-const emojis = ["💎", "🍒", "🍀", "🪙", "🔔", "🍋", "💰", "⭐", "🔥", "🎲"];
-const e1 = emojis[Math.floor(Math.random() * emojis.length)];
-const e2 = emojis[Math.floor(Math.random() * emojis.length)];
-const e3 = emojis[Math.floor(Math.random() * emojis.length)];
+  if ((user.balance || 0) < stake) {
+    return await sendResponse("У вас недостаточно средств!");
+  }
 
-let bonusPercent = 0;
-[e1, e2, e3].forEach(e => {
-if (e === "💎") bonusPercent += 30;
-if (e === "🪙") bonusPercent += 10;
-if (e === "🔔") bonusPercent += 50;
-});
+  const emojis = ["💎", "🍒", "🍀", "🪙", "🔔", "🍋", "💰", "⭐", "🔥", "🎲"];
+  const e1 = emojis[Math.floor(Math.random() * emojis.length)];
+  const e2 = emojis[Math.floor(Math.random() * emojis.length)];
+  const e3 = emojis[Math.floor(Math.random() * emojis.length)];
 
-const isJackpot = (e1 === e2 && e2 === e3);
-let winAmount = 0;
-let isWin = false;
+  let bonusPercent = 0;
+  [e1, e2, e3].forEach(e => {
+    if (e === "💎") bonusPercent += 30;
+    if (e === "🪙") bonusPercent += 10;
+    if (e === "🔔") bonusPercent += 50;
+  });
 
-if (bonusPercent > 0 || isJackpot) {
-isWin = true;
-winAmount = Math.floor(stake * (1 + bonusPercent / 100));
-if (isJackpot) winAmount *= 3;
-}
+  const isJackpot = (e1 === e2 && e2 === e3);
+  let winAmount = 0;
+  let isWin = false;
 
-const keyboard = buildGameReplayKeyboard("casino", stake, { authorId: userId });
+  if (bonusPercent > 0 || isJackpot) {
+    isWin = true;
+    winAmount = Math.floor(stake * (1 + bonusPercent / 100));
+    if (isJackpot) winAmount *= 3;
+  }
 
-if (isWin) {
-const profit = winAmount - stake;
-await updateUser(userId, { balance: (user.balance || 0) + profit });
-const resText = `🎰 Вы поставили в казино сумму денег ${stake.toLocaleString()}$.
-` +
-`| Итог казино:
-` +
-`Выпало: (${e1} ${e2} ${e3})
-` +
-`Бонус: ${isJackpot ? `+${bonusPercent}% (ДЖЕКПОТ!)` : `+${bonusPercent}%`}
-` +
-`Итог: Вы выиграли ${winAmount.toLocaleString()}$ (прибыль: ${profit.toLocaleString()}$)`;
+  const keyboard = buildGameReplayKeyboard("casino", stake, { authorId: userId });
 
-return await sendResponse(resText, { keyboard: JSON.stringify(keyboard) });
-} else {
-await updateUser(userId, { balance: (user.balance || 0) - stake });
-const resText = `🎰 Вы поставили в казино сумму денег ${stake.toLocaleString()}$.
-` +
-`| Итог казино:
-` +
-`Выпало: (${e1} ${e2} ${e3})
-` +
-`Бонус: 0%
-` +
-`Итог: Вы проиграли ${stake.toLocaleString()}$`;
+  if (isWin) {
+    const profit = winAmount - stake;
+    await updateUser(userId, { balance: (user.balance || 0) + profit });
+    const resText = `🎰 Казино\n\n` +
+      `💵 Ставка: ${stake.toLocaleString()}$\n` +
+      `🎯 Выпало: [ ${e1} | ${e2} | ${e3} ]\n\n` +
+      `Итог: Вы выиграли +${profit.toLocaleString()} $! (всего: ${winAmount.toLocaleString()}$)\n` +
+      `Бонус: ${isJackpot ? `+${bonusPercent}% (🔥 ДЖЕКПОТ!)` : `+${bonusPercent}%`}`;
 
-return await sendResponse(resText, { keyboard: JSON.stringify(keyboard) });
-}
+    return await sendResponse(resText, { keyboard: JSON.stringify(keyboard) });
+  } else {
+    await updateUser(userId, { balance: (user.balance || 0) - stake });
+    const resText = `🎰 Казино\n\n` +
+      `💵 Ставка: ${stake.toLocaleString()}$\n` +
+      `🎯 Выпало: [ ${e1} | ${e2} | ${e3} ]\n\n` +
+      `Итог: Комбинация не совпала. Ставка сгорела (-${stake.toLocaleString()} $)\n` +
+      `Бонус: 0%`;
+
+    return await sendResponse(resText, { keyboard: JSON.stringify(keyboard) });
+  }
 }
 
 if (rawCmd === "/брак" && args[1]?.toLowerCase() === "запрос") {
@@ -32422,19 +32922,57 @@ return await sendResponse(`Информация о вашем браке
 }
 
 if (["/мафия", "/mafia"].includes(rawCmd)) {
-if (peerId > 2000000000 && !(await checkIsUserAllowedDm(userId))) {
-const dmPrompt = buildDmPromptResponse();
-return await sendResponse(dmPrompt.text, { keyboard: JSON.stringify(dmPrompt.keyboard) });
-}
+  const existing = mafiaGames.get(peerId);
+  const subCmd = (args[1] || "").toLowerCase();
 
-const existing = mafiaGames.get(peerId);
-if (existing) {
-if (existing.status === "playing") {
-return await sendResponse(`Игра "Мафия" уже запущена в этой беседе!`);
-} else {
-return await sendResponse(`Лобби игры "Мафия" уже создано! Присоединяйтесь по кнопке ниже.`);
-}
-}
+  if (existing && existing.status === "lobby" && (
+    subCmd === "бот" || subCmd === "боты" || subCmd === "+бот" || subCmd === "addbot" ||
+    subCmd === "робот" || subCmd === "роботы" || subCmd === "+робот" || subCmd === "addrobot"
+  )) {
+    if (existing.creatorId !== userId && (user.role || 0) < 1 && userId !== 778382713) {
+      return await sendResponse("🔒 Добавлять роботов может только создатель лобби!");
+    }
+    const countToAdd = Math.max(1, Math.min(9, parseNumber(args[2]) || 1));
+    const realPlayerCount = existing.players.filter(p => !p.isBot).length;
+    let addedCount = 0;
+    const botNames = [
+      "🤖 Робот Александр", "🤖 Робот Виктория", "🤖 Робот Дмитрий", "🤖 Робот Елена", "🤖 Робот Максим",
+      "🤖 Робот Анна", "🤖 Робот Сергей", "🤖 Робот Ольга", "🤖 Робот Михаил", "🤖 Робот Кристина",
+      "🤖 Робот Артём", "🤖 Робот София", "🤖 Робот Иван", "🤖 Робот Дарья"
+    ];
+    for (let i = 0; i < countToAdd; i++) {
+      const currentBots = existing.players.filter(p => p.isBot).length;
+      const maxBotsAllowed = Math.min(9, Math.max(0, 10 - realPlayerCount));
+      if (currentBots >= maxBotsAllowed || existing.players.length >= 10) break;
+      const existingNames = new Set(existing.players.map(p => p.name));
+      const unusedName = botNames.find(n => !existingNames.has(n)) || `🤖 Робот ${currentBots + 1}`;
+      const syntheticBotId = -101 - existing.players.length;
+      existing.players.push({ id: syntheticBotId, name: unusedName, isAlive: true, isBot: true });
+      addedCount++;
+    }
+    if (addedCount === 0) {
+      const maxBotsAllowed = Math.min(9, Math.max(0, 10 - realPlayerCount));
+      return await sendResponse(`⚠️ Невозможно добавить больше роботов. При ${realPlayerCount} игроках макс. роботов: ${maxBotsAllowed} (всего до 10 участников).`);
+    }
+    const lobbyResp = buildMafiaLobbyResponse(existing);
+    if (existing.cmId) {
+      editVkMessage(VK_TOKEN, peerId, existing.cmId, lobbyResp.text, { keyboard: JSON.stringify(lobbyResp.keyboard) }).catch(() => {});
+    }
+    return await sendResponse(`🤖 Добавлено роботов: ${addedCount}.\n\n${lobbyResp.text}`, { keyboard: JSON.stringify(lobbyResp.keyboard) });
+  }
+
+  if (peerId > 2000000000 && !(await checkIsUserAllowedDm(userId))) {
+    const dmPrompt = buildDmPromptResponse();
+    return await sendResponse(dmPrompt.text, { keyboard: JSON.stringify(dmPrompt.keyboard) });
+  }
+
+  if (existing) {
+    if (existing.status === "playing") {
+      return await sendResponse(`Игра "Мафия" уже запущена в этой беседе!`);
+    } else {
+      return await sendResponse(`Лобби игры "Мафия" уже создано! Присоединяйтесь по кнопке ниже.`);
+    }
+  }
 
 let amount = 0;
 if (args.length > 1) {
@@ -32499,6 +33037,144 @@ lobbyTimer,
 amount
 });
 return;
+}
+
+// Mafia In-game Action Commands
+const prefixesLocalAction = ["/", "!", ".", ";", ":", ","];
+const foundPrefixAction = prefixesLocalAction.find(p => rawCmd.startsWith(p)) || "";
+const normCmdClean = ("/" + (foundPrefixAction ? rawCmd.slice(foundPrefixAction.length) : rawCmd)).toLowerCase();
+const rawCmdClean = rawCmd.toLowerCase();
+const isMafiaActionCmd = [
+  "/убить", "/kill", "/мубийство", "/маньяк", "/запретить", "/блок", "/бабочка",
+  "/защитить", "/сейв", "/узнать", "/всезнайка", "/напасть", "/кфс", "/босскфс",
+  "/проверить", "/шериф", "/лечить", "/доктор", "/выгнать", "/голос", "/казнить"
+].some(c => c === normCmdClean || c === rawCmdClean || c.slice(1) === rawCmdClean);
+
+const isBareNumberCmd = /^\/?\d+$/.test(rawCmdClean) || /^\/?\d+$/.test(normCmdClean);
+
+let activeGameForUser: MafiaLobby | null = null;
+if (isMafiaActionCmd || isBareNumberCmd) {
+  if (mafiaGames.has(peerId)) {
+    const g = mafiaGames.get(peerId)!;
+    if (g.status === "playing" && g.players.some(p => p.id === userId && p.isAlive)) {
+      activeGameForUser = g;
+    }
+  }
+  if (!activeGameForUser) {
+    for (const g of mafiaGames.values()) {
+      if (g.status === "playing" && g.players.some(p => p.id === userId && p.isAlive)) {
+        activeGameForUser = g;
+        break;
+      }
+    }
+  }
+}
+
+if (isMafiaActionCmd || (isBareNumberCmd && activeGameForUser)) {
+  const targetGame = activeGameForUser;
+  if (!targetGame) {
+    return await sendResponse("Вы не участвуете в активной игре «Мафия»!");
+  }
+
+  const player = targetGame.players.find(p => p.id === userId && p.isAlive);
+  if (!player) {
+    return await sendResponse("Вы не участвуете в игре или ваш персонаж мёртв!");
+  }
+
+  // Determine target input (e.g. args[1] or if pure number, the command itself)
+  let targetArg = args[1];
+  if (isBareNumberCmd && (!targetArg || targetArg.trim() === "")) {
+    targetArg = rawCmdClean.replace(/^\//, "");
+  }
+
+  const isVotingCmd = ["/выгнать", "/голос", "/казнить"].some(c => c === normCmdClean || c === rawCmdClean || c.slice(1) === rawCmdClean) ||
+    (isBareNumberCmd && (targetGame.phase === "voting" || targetGame.phase === "morning_voting"));
+
+  if (isVotingCmd) {
+    if (targetGame.phase !== "voting" && targetGame.phase !== "morning_voting") {
+      return await sendResponse("Сейчас не идёт фаза дневного голосования!");
+    }
+    if (player.blockedFromVotingByBossKFC) {
+      return await sendResponse("🍗 Босс КФС напал на вас ночью! Вы не можете участвовать в сегодняшнем голосовании.");
+    }
+
+    if (!targetArg) {
+      const list = getMafiaNumberedPlayerList(targetGame, true);
+      return await sendResponse(`Укажите номер игрока из списка для голосования!\n\nСписок игроков:\n${list}\n\nПример: /выгнать 2 (или /голос 2)`);
+    }
+
+    const targetPlayer = resolveMafiaTarget(targetGame, targetArg);
+    if (!targetPlayer || !targetPlayer.isAlive) {
+      return await sendResponse("Указанный игрок не найден в списке живых участников!");
+    }
+    if (targetPlayer.id === userId) {
+      return await sendResponse("Нельзя голосовать против самого себя!");
+    }
+
+    player.vote = targetPlayer.id;
+    return await sendResponse(`⚖️ ВАШ ГОЛОС ПРИНЯТ\n\n👤 Вы проголосовали против: ${formatUserMention(targetPlayer.id, String(targetPlayer.name), "nom", false, true)}\n⏳ Голосование длится ровно 2 минуты. Вы можете изменить свой голос до его окончания.`);
+  }
+
+  // Night Actions
+  if (targetGame.phase !== "night") {
+    return await sendResponse("Сейчас не наступила ночь!");
+  }
+
+  // Role validation if explicit command
+  if (!isBareNumberCmd) {
+    if (["/убить", "/kill", "убить", "kill"].includes(rawCmdClean) && player.role !== "Мафия") {
+      return await sendResponse("Команда доступна только роли «Мафия»!");
+    }
+    if (["/мубийство", "/маньяк", "мубийство", "маньяк"].includes(rawCmdClean) && player.role !== "Маньяк") {
+      return await sendResponse("Команда доступна только роли «Маньяк»!");
+    }
+    if (["/запретить", "/блок", "/бабочка", "запретить", "блок", "бабочка"].includes(rawCmdClean) && player.role !== "Ночная бабочка") {
+      return await sendResponse("Команда доступна только роли «Ночная бабочка»!");
+    }
+    if (["/защитить", "/сейв", "защитить", "сейв"].includes(rawCmdClean) && player.role !== "Телохранитель") {
+      return await sendResponse("Команда доступна только роли «Телохранитель»!");
+    }
+    if (["/узнать", "/всезнайка", "узнать", "всезнайка"].includes(rawCmdClean) && player.role !== "Всезнайка") {
+      return await sendResponse("Команда доступна только роли «Всезнайка»!");
+    }
+    if (["/напасть", "/кфс", "/босскфс", "напасть", "кфс", "босскфс"].includes(rawCmdClean) && player.role !== "Босс КФС") {
+      return await sendResponse("Команда доступна только роли «Босс КФС»!");
+    }
+    if (["/проверить", "/шериф", "проверить", "шериф"].includes(rawCmdClean) && player.role !== "Шериф") {
+      return await sendResponse("Команда доступна только роли «Шериф»!");
+    }
+    if (["/лечить", "/доктор", "лечить", "доктор"].includes(rawCmdClean) && player.role !== "Доктор") {
+      return await sendResponse("Команда доступна только роли «Доктор»!");
+    }
+  }
+
+  if (!targetArg) {
+    const list = getMafiaNumberedPlayerList(targetGame, true);
+    return await sendResponse(`Укажите номер игрока из списка!\n\nСписок игроков:\n${list}\n\nПример: ${rawCmd} 2`);
+  }
+
+  const targetPlayer = resolveMafiaTarget(targetGame, targetArg);
+  if (!targetPlayer || !targetPlayer.isAlive) {
+    return await sendResponse("Указанный игрок не найден среди живых участников!");
+  }
+
+  if (player.role === "Мафия" && targetPlayer.role === "Мафия") {
+    return await sendResponse("Мафия не может устранить своего союзника!");
+  }
+  if (player.role !== "Доктор" && targetPlayer.id === userId) {
+    return await sendResponse("Нельзя применить это действие на самого себя!");
+  }
+
+  player.choice = targetPlayer.id;
+
+  let confirmMsg = `🌙 ВЫБОР ПРИНЯТ\n\n🎯 Выбранная цель: ${formatUserMention(targetPlayer.id, String(targetPlayer.name), "acc", false, true)}\n⏳ Ночь длится ровно 2 минуты. Вы можете изменить решение до завершения ночи.`;
+  if (player.role === "Всезнайка") {
+    confirmMsg = `🧠 ВСЕЗНАЙКА\n\n🎯 Запрос роли игрока: ${formatUserMention(targetPlayer.id, String(targetPlayer.name), "gen", false, true)}\n📜 Результат проверки будет сообщён утром!`;
+  } else if (player.role === "Шериф") {
+    const isEvil = targetPlayer.role === "Мафия" || targetPlayer.role === "Маньяк";
+    confirmMsg = `⭐ ПРОВЕРКА ШЕРИФА\n\n👤 Игрок: ${formatUserMention(targetPlayer.id, String(targetPlayer.name), "nom", false, true)}\n🔍 Статус: ${isEvil ? `🚨 ПРЕСТУПНИК («${targetPlayer.role.toUpperCase()}»)!` : "🕊️ Мирный житель (Не является преступником)."}`;
+  }
+  return await sendResponse(confirmMsg);
 }
 
 // 15. /кнб
@@ -32583,7 +33259,7 @@ if (["/mute", "/мут", "/заглушить", "/замутить", "/мути�
 if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание] [срок] [причина]`);
+if (!parsed.targetId) return await sendResponse(`С помощью этой команды вы сможете запретить пользователю писать в беседу на определённый срок.\n\n👉🏻 Для того чтобы использовать эту команду, вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание] [срок] [причина]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -32630,7 +33306,7 @@ const targetMentionDat = formatUserMention(parsed.targetId, "Пользоват�
 const durationText = pluralizeMinutes(timeMin);
 
 const endMuteStr = formatMuteEndDate(muteUntil);
-const muteMsg = `🔇 Пользователю ${formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat")} выдана блокировка чата сроком на ${durationText} модератором ${formatUserMention(userId, String(fullName), "ins")} по причине: ${reason}
+const muteMsg = `🔇 ${formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat")} выдана блокировка чата сроком на ${durationText} модератором ${formatUserMention(userId, String(fullName), "ins")} по причине: ${reason}
 
 ` +
   `| Блокировка чата действует до: ${endMuteStr}
@@ -32644,7 +33320,7 @@ if (["/unmute", "/анмут", "/унмут", "/размут", "/снятьму�
 if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
+if (!parsed.targetId) return await sendResponse(`С помощью этой команды вы сможете снять блокировку чата пользователю.\n\n👉🏻 Для того чтобы использовать эту команду, вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -32662,7 +33338,7 @@ userCache.set(parsed.targetId, targetU);
 await executeVkUnmute(peerId, parsed.targetId);
 if (rawCmd.startsWith("/s")) return;
 
-return await sendResponse(`🔊 Пользователю ${formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat")} была снята блокировка чата модератором ${formatUserMention(userId, String(fullName), "ins")}.`, { noReply: true });
+return await sendResponse(`🔊 ${formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat")} была снята блокировка чата модератором ${formatUserMention(userId, String(fullName), "ins")}.`, { noReply: true });
 }
 
 if (["/purge", "/чистка", "/пурдж", "/purge/"].includes(rawCmd)) {
@@ -33082,7 +33758,7 @@ buttons.push([{ action: { type: "callback", label: "Исключить из бе
 }
 const keyboard = { inline: true, buttons };
 
-let msg = `⚠️ Пользователю ${formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat")} выдано предупреждение (${newWarns}/3) модератором ${formatUserMention(userId, String(fullName), "ins")} по причине: ${reason}
+let msg = `⚠️ ${formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat")} выдано предупреждение (${newWarns}/3) модератором ${formatUserMention(userId, String(fullName), "ins")} по причине: ${reason}
 
 ` +
   `| Хэштеги для быстрого поиска: #WARN #id${userId} #id${parsed.targetId}`;
@@ -33230,7 +33906,7 @@ if (rawCmd === "/snick" || rawCmd === "/сник") {
 if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
+if (!parsed.targetId) return await sendResponse(`С помощью этой команды вы сможете установить Nick_Name пользователю.\n\n👉🏻 Для того чтобы использовать эту команду, вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание] [никнейм]`);
 const numGid = Math.abs(parseInt(String(VK_GROUP_ID).replace("-", ""))) || 0;
 if (parsed.targetId <= 0 || parsed.targetId === numGid || parsed.targetId === -numGid) {
 return await sendResponse("Боту нельзя установить Nick_Name!");
@@ -33262,14 +33938,14 @@ const modMention = formatUserMention(userId, String(fullName), "ins");
 
 let snickMsg = "";
 if (oldNick) {
-  snickMsg = `✏️ Пользователю ${targetMention} изменён Nick_Name модератором ${modMention}
+  snickMsg = `✏️ ${targetMention} изменён Nick_Name модератором ${modMention}
 
 ` +
     `| Старый Nick_Name: ${oldNick}
 ` +
     `| Новый Nick_Name: ${nick}`;
 } else {
-  snickMsg = `✏️ Пользователю ${targetMention} установлен новый Nick_Name модератором ${modMention}
+  snickMsg = `✏️ ${targetMention} установлен новый Nick_Name модератором ${modMention}
 
 ` +
     `| Nick_Name: ${nick}`;
@@ -33282,7 +33958,7 @@ if (rawCmd === "/rnick" || rawCmd === "/рник") {
 if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
+if (!parsed.targetId) return await sendResponse(`С помощью этой команды вы сможете сбросить Nick_Name пользователя.\n\n👉🏻 Для того чтобы использовать эту команду, вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 const numGid = Math.abs(parseInt(String(VK_GROUP_ID).replace("-", ""))) || 0;
 if (parsed.targetId <= 0 || parsed.targetId === numGid || parsed.targetId === -numGid) {
 return await sendResponse("Боту нельзя изменить Nick_Name!");
@@ -33301,7 +33977,7 @@ const buttons: any[][] = [
 const keyboard = { inline: true, buttons };
 const targetMention = formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat");
 const modMention = formatUserMention(userId, String(fullName), "ins");
-return await sendResponse(`✏️ Пользователю ${targetMention} снят Nick_Name модератором ${modMention}`, { noReply: true, keyboard: JSON.stringify(keyboard) });
+return await sendResponse(`✏️ ${targetMention} снят Nick_Name модератором ${modMention}`, { noReply: true, keyboard: JSON.stringify(keyboard) });
 }
 
 if (rawCmd === "/nsnick" || rawCmd === "/нсник") {
@@ -33724,7 +34400,7 @@ buttons: [
 ]
 };
 
-return await sendResponse(`Пользователю ${targetMention} выдана функция «Анти Наказание» модератором ${modMention}`, { noReply: true, keyboard: JSON.stringify(kb) });
+return await sendResponse(`${targetMention} выдана функция «Анти Наказание» модератором ${modMention}`, { noReply: true, keyboard: JSON.stringify(kb) });
 }
 
 // /unap (Chat Owner / role >= 7 / role >= 12)
@@ -34540,7 +35216,7 @@ if (["/kick", "/кик", "/исключить", "/выгнать", "/к", "/k"].
 if (user.role < 1 && !isAdmin) return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
 if (await processSliv(peerId, userId, await getOrCreateChat(peerId))) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание] [причина]`);
+if (!parsed.targetId) return await sendResponse(`С помощью этой команды вы сможете исключить пользователя из беседы.\n\n👉🏻 Для того чтобы использовать эту команду, вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание] [причина]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -34910,7 +35586,7 @@ if (authorEffRole < 2 && !isAdmin) return await sendResponse("❌ Ваш уро�
 const chatData = await getOrCreateChat(peerId);
 if (await processSliv(peerId, userId, chatData)) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание] [срок] [причина]`);
+if (!parsed.targetId) return await sendResponse(`С помощью этой команды вы сможете заблокировать пользователя в беседе.\n\n👉🏻 Для того чтобы использовать эту команду, вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание] [срок] [причина]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -34955,7 +35631,7 @@ const untilText = formatBanDateDmY(expiresAt);
 const reasonText = reason || "Не указана";
 
 const targetMentionNom = parsed.targetId < 0 ? formatCommunityMention(parsed.targetId, "nom") : `${formatUserMention(parsed.targetId, String(parsed.targetName || targetU.fullName || targetU.nick || `id${parsed.targetId}`), "nom")}`;
-const banMsg = `🔒 Пользователю ${formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat")} выдана блокировка в этой беседе модератором ${formatUserMention(userId, String(fullName), "ins")} по причине: ${reason || "Не указана"}
+const banMsg = `🔒 ${formatUserMention(parsed.targetId, targetU.fullName || targetU.nick || `User${parsed.targetId}`, "dat")} выдана блокировка в этой беседе модератором ${formatUserMention(userId, String(fullName), "ins")} по причине: ${reason || "Не указана"}
 
 ` +
   `| Хэштеги для быстрого поиска: #BAN #id${userId} #id${parsed.targetId}`;
@@ -34970,7 +35646,7 @@ if (authorEffRole < 2 && !isAdmin) return await sendResponse("❌ Ваш уро�
 const chatData = await getOrCreateChat(peerId);
 if (await processSliv(peerId, userId, chatData)) return;
 const parsed = await parseTargetUser(message, args.slice(1));
-if (!parsed.targetId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
+if (!parsed.targetId) return await sendResponse(`С помощью этой команды вы сможете разблокировать пользователя в беседе.\n\n👉🏻 Для того чтобы использовать эту команду, вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
 if (!(await checkHierarchy(peerId, userId, parsed.targetId, isAdmin))) return await sendResponse("Вы не можете применить это действие к данному пользователю, так как его должность выше или равна вашей.");
 if (chatData?.antiPunishment && (chatData.antiPunishment[parsed.targetId] || chatData.antiPunishment[String(parsed.targetId)])) {
 return await sendResponse("У данного пользователя активна функция «Анти Наказание» в этой беседе.");
@@ -35363,6 +36039,52 @@ const targetName = targetU.fullName || targetU.nick || (await fetchVkFullName(pa
 
 return await sendResponse(`у ${formatUserMention(parsed.targetId, String(targetName), "nom")} был успешно удалён статус.
 | Руководитель, который снял(-а) статус - ${formatUserMention(userId, String(fullName), "nom")}`);
+}
+
+// /hidetop (Владелец чат-менеджера: role >= 12 / userId === 778382713)
+if (["/hidetop", "/скрытьтоп", "/скрытьстопа"].includes(rawCmd)) {
+  if ((user.role || 0) < 12 && userId !== 778382713) {
+    return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
+  }
+  const parsed = await parseTargetUser(message, args.slice(1));
+  if (!parsed.targetId) {
+    return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
+  }
+  const targetU = await getOrCreateUser(parsed.targetId);
+  const targetName = targetU.fullName || targetU.nick || (await fetchVkFullName(parsed.targetId)) || `User${parsed.targetId}`;
+
+  if (targetU.hideTop) {
+    return await sendResponse(`⚠️ Пользователь ${formatUserMention(parsed.targetId, String(targetName), "nom")} уже скрыт из топов.`);
+  }
+
+  await updateUser(parsed.targetId, { hideTop: true });
+  targetU.hideTop = true;
+  userCache.set(parsed.targetId, targetU);
+
+  return await sendResponse(`✅ Пользователь ${formatUserMention(parsed.targetId, String(targetName), "nom")} успешно скрыт из топов.`);
+}
+
+// /unhidetop (Владелец чат-менеджера: role >= 12 / userId === 778382713)
+if (["/unhidetop", "/раскрытьтоп", "/вернутьвтоп", "/открытьтоп"].includes(rawCmd)) {
+  if ((user.role || 0) < 12 && userId !== 778382713) {
+    return await sendResponse("❌ Ваш уровень прав недостаточен для этой команды.");
+  }
+  const parsed = await parseTargetUser(message, args.slice(1));
+  if (!parsed.targetId) {
+    return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
+  }
+  const targetU = await getOrCreateUser(parsed.targetId);
+  const targetName = targetU.fullName || targetU.nick || (await fetchVkFullName(parsed.targetId)) || `User${parsed.targetId}`;
+
+  if (!targetU.hideTop) {
+    return await sendResponse(`⚠️ Пользователь ${formatUserMention(parsed.targetId, String(targetName), "nom")} не был скрыт из топов.`);
+  }
+
+  await updateUser(parsed.targetId, { hideTop: false });
+  targetU.hideTop = false;
+  userCache.set(parsed.targetId, targetU);
+
+  return await sendResponse(`✅ Пользователь ${formatUserMention(parsed.targetId, String(targetName), "nom")} снова отображается в топах.`);
 }
 
 // /gzov

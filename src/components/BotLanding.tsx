@@ -101,14 +101,14 @@ export default function BotLanding({
             onClick={() => changeView('landing')}
             className="flex items-center hover:opacity-80 transition-opacity cursor-pointer group shrink-0 z-20"
           >
-            <div className="w-10 h-10 rounded-xl overflow-hidden border border-violet-500/20 bg-neutral-950 flex items-center justify-center shrink-0">
-              <img src="/ming.jpg" alt="Logo" className="w-full h-full object-cover" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden border border-violet-500/20 bg-black flex items-center justify-center shrink-0">
+              <img src="/mint.jpg" alt="Logo" className="w-full h-full object-cover" />
             </div>
             <span className={`ml-3 text-lg font-black tracking-tight ${isLight ? 'text-neutral-900' : 'text-white'}`}>Mint</span>
           </button>
 
-          {/* Centered Nav Links - Hidden only on small mobile */}
-          <nav className="hidden md:flex items-center gap-1 p-1 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 z-10">
+          {/* Centered Nav Links - Hidden on smaller screens to prevent overlap */}
+          <nav className="hidden lg:flex items-center gap-1 p-1 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 z-10">
             {[
               { id: 'landing', label: 'Главная' },
               { id: 'commands', label: 'Команды' },
@@ -281,8 +281,8 @@ export default function BotLanding({
       <footer className={`border-t py-12 mt-auto transition-colors ${isLight ? 'bg-white border-neutral-200' : 'bg-black border-white/5'}`}>
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/10">
-               <img src="/ming.jpg" alt="Mint" className="w-full h-full object-cover" />
+            <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/10 bg-black">
+               <img src="/mint.jpg" alt="Mint" className="w-full h-full object-cover" />
             </div>
             <div className="text-left">
               <div className={`text-lg font-black ${isLight ? 'text-neutral-900' : 'text-white'}`}>Mint</div>
