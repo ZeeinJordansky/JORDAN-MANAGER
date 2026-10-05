@@ -17,21 +17,44 @@ export default function OrbBackground({ theme = 'dark' }: OrbBackgroundProps) {
     let width = 0;
     let height = 0;
     let angle = 0;
+    let lastRenderTime = 0;
+    let isTabVisible = !document.hidden;
+
+    const handleVisibilityChange = () => {
+      isTabVisible = !document.hidden;
+      if (isTabVisible) {
+        lastRenderTime = performance.now();
+        animationFrameId = requestAnimationFrame(render);
+      } else {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
 
     const handleResize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      // Cap DPR at 1.0 to significantly reduce canvas memory buffer and GPU/RAM footprint
+      const dpr = 1;
       width = window.innerWidth;
       height = window.innerHeight;
       canvas.width = Math.floor(width * dpr);
       canvas.height = Math.floor(height * dpr);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.scale(dpr, dpr);
     };
 
     handleResize();
     window.addEventListener('resize', handleResize, { passive: true });
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    const render = () => {
+    const render = (currentTime: number = performance.now()) => {
+      if (!isTabVisible) return;
+
+      // Throttle rendering to ~30 FPS to cut RAM/CPU/GPU usage by > 60%
+      const delta = currentTime - lastRenderTime;
+      if (delta < 32) {
+        animationFrameId = requestAnimationFrame(render);
+        return;
+      }
+      lastRenderTime = currentTime;
+
       angle += 0.007; // smooth dynamic orbit rotation
       ctx.clearRect(0, 0, width, height);
 
@@ -181,6 +204,7 @@ export default function OrbBackground({ theme = 'dark' }: OrbBackgroundProps) {
     return () => {
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [theme]);
 

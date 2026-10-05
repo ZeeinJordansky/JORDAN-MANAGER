@@ -19,18 +19,18 @@ export class SqlitePromiseDb {
   private initPragmas() {
     this.db.run("PRAGMA journal_mode = WAL;");
     this.db.run("PRAGMA synchronous = NORMAL;");
-    this.db.run("PRAGMA cache_size = -32000;"); // Increase cache to ~32MB
+    this.db.run("PRAGMA cache_size = -16000;"); // Lean 16MB cache per DB
     this.db.run("PRAGMA temp_store = MEMORY;");
     this.db.run("PRAGMA foreign_keys = ON;");
     // Limit WAL growth so it does not consume unnecessary space
-    this.db.run("PRAGMA wal_autocheckpoint = 20;");
-    this.db.run("PRAGMA journal_size_limit = 32768;");
+    this.db.run("PRAGMA wal_autocheckpoint = 25;");
+    this.db.run("PRAGMA journal_size_limit = 65536;");
     this.db.run("PRAGMA auto_vacuum = INCREMENTAL;");
     this.db.run("PRAGMA secure_delete = FAST;");
-    this.db.run("PRAGMA mmap_size = 268435456;"); // 256MB mmap
+    this.db.run("PRAGMA mmap_size = 134217728;"); // 128MB mmap
     this.db.run("PRAGMA page_size = 4096;");
     this.db.run("PRAGMA busy_timeout = 5000;");
-    this.db.run("PRAGMA threads = 4;");
+    this.db.run("PRAGMA threads = 2;");
     this.db.run("CREATE TABLE IF NOT EXISTS firestore_collections (collection TEXT, id TEXT, data TEXT, PRIMARY KEY (collection, id));");
     this.db.run("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, chat_id INTEGER, date TEXT, UNIQUE(user_id, chat_id));");
   }
@@ -246,15 +246,17 @@ export function scheduleSync(collectionName?: string) {
   }
 }
 
-// Фоновый интервал очистки/сжатия WAL каждые 30 секунд
+// Фоновый интервал очистки/сжатия WAL каждые 60 секунд + инкрементальный вакуум
 setInterval(() => {
   if (sqliteDb) {
     sqliteDb.run("PRAGMA wal_checkpoint(TRUNCATE);").catch(() => {});
+    sqliteDb.run("PRAGMA incremental_vacuum(50);").catch(() => {});
   }
   if (logsDb) {
     logsDb.run("PRAGMA wal_checkpoint(TRUNCATE);").catch(() => {});
+    logsDb.run("PRAGMA incremental_vacuum(50);").catch(() => {});
   }
-}, 30 * 1000);
+}, 60 * 1000);
 
 // Фоновый интервал отправки в HuggingFace раз в 15 минут
 setInterval(() => {
@@ -495,15 +497,20 @@ async function initDatabase() {
   const downloadedSize = downloadedBuf ? downloadedBuf.byteLength : 0;
   const localSize = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0;
   
-  if (downloadedBuf && downloadedSize > 50000) {
-    if (fs.existsSync(dbPath + "-wal")) try { fs.unlinkSync(dbPath + "-wal"); } catch (e) {}
-    if (fs.existsSync(dbPath + "-shm")) try { fs.unlinkSync(dbPath + "-shm"); } catch (e) {}
-    fs.writeFileSync(dbPath, downloadedBuf);
-    console.log(`>>> [Database] Успешно загружена и применена база с HF (${downloadedSize} байт)!`);
-  } else if (localSize > 50000) {
-    console.log(`>>> [Database] Используется локальный файл базы данных (${localSize} байт).`);
+  if (!fs.existsSync(dbPath) || fs.statSync(dbPath).size < 50000) {
+    if (downloadedBuf && downloadedSize > 50000) {
+      if (fs.existsSync(dbPath + "-wal")) try { fs.unlinkSync(dbPath + "-wal"); } catch (e) {}
+      if (fs.existsSync(dbPath + "-shm")) try { fs.unlinkSync(dbPath + "-shm"); } catch (e) {}
+      fs.writeFileSync(dbPath, downloadedBuf);
+      console.log(`>>> [Database] Успешно загружена и применена база с HF (${downloadedSize} байт)!`);
+    } else {
+      console.warn(">>> [Database] ВНИМАНИЕ: Не удалось загрузить базу данных ни из HF, ни из локального файла!");
+    }
   } else {
-    console.warn(">>> [Database] ВНИМАНИЕ: Не удалось загрузить базу данных ни из HF, ни из локального файла!");
+    console.log(`>>> [Database] Используется локальный оптимизированный файл базы данных (${localSize} байт).`);
+    // Ensure clean optimized DB is backed up to HF
+    isDirty = true;
+    setTimeout(() => { performHFSync().catch(() => {}); }, 10000);
   }
 
   // 1b. Скачивание базы данных логов из HF (LOGSBASE Dataset)

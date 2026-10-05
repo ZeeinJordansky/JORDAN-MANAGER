@@ -201,17 +201,12 @@ export async function fastVkCall(method: string, params: Record<string, any> = {
   }
 }
 
-// ⚡ 500-Socket Multi-Lane Warmer: Keep 500 parallel HTTP sockets to api.vk.com warm to maintain ultra-low latency (<2ms)
-const warmers: Promise<any>[] = [];
+// ⚡ Keep-alive socket warmer: light ping every 15 seconds keeps TLS connection warm without consuming excessive CPU
 setInterval(() => {
   if (process.env.VK_TOKEN) {
-    warmers.length = 0;
-    for (let i = 0; i < 10; i++) {
-      warmers.push(fastVkCall("utils.getServerTime", {}, true, 1));
-    }
-    Promise.all(warmers).catch(() => {});
+    fastVkCall("utils.getServerTime", {}, true, 1).catch(() => {});
   }
-}, 1500);
+}, 15000);
 
 export const CROCODILE_WORDS: string[] = russianWordsJson as string[];
 export const RUSSIAN_WORDS: string[] = russianWordsJson as string[];
