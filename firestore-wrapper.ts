@@ -71,7 +71,37 @@ export class SqlitePromiseDb {
     return msg.includes("malformed") || msg.includes("CORRUPT") || msg.includes("disk image");
   }
 
+  private queryCache = new Map<string, { value: any; expiresAt: number }>();
+  private readonly maxCacheSize = 2000;
+
+  public clearCache() {
+    this.queryCache.clear();
+  }
+
+  private isCacheable(sql: string): boolean {
+    const s = sql.trim().toUpperCase();
+    return s.startsWith("SELECT") || s.startsWith("PRAGMA") || s.startsWith("WITH");
+  }
+
+  private makeCacheKey(prefix: string, sql: string, params: any[] = []): string {
+    return `${prefix}:${sql}:::${JSON.stringify(params)}`;
+  }
+
+  private pruneCacheIfNeeded() {
+    if (this.queryCache.size > this.maxCacheSize) {
+      const now = Date.now();
+      for (const [k, v] of this.queryCache.entries()) {
+        if (now > v.expiresAt || this.queryCache.size > this.maxCacheSize * 0.7) {
+          this.queryCache.delete(k);
+        }
+      }
+    }
+  }
+
   run(sql: string, params: any[] = []): Promise<void> {
+    // Invalidate cached reads on any write operation
+    this.queryCache.clear();
+
     return new Promise((resolve, reject) => {
       this.db.run(sql, params, (err) => {
         if (err) {
@@ -91,7 +121,17 @@ export class SqlitePromiseDb {
     });
   }
 
-  get(sql: string, params: any[] = []): Promise<any> {
+  get(sql: string, params: any[] = [], ttlMs: number = 2500): Promise<any> {
+    const cacheable = this.isCacheable(sql);
+    const key = cacheable ? this.makeCacheKey("GET", sql, params) : "";
+
+    if (cacheable) {
+      const cached = this.queryCache.get(key);
+      if (cached && Date.now() < cached.expiresAt) {
+        return Promise.resolve(cached.value);
+      }
+    }
+
     return new Promise((resolve, reject) => {
       this.db.get(sql, params, (err, row) => {
         if (err) {
@@ -104,12 +144,28 @@ export class SqlitePromiseDb {
             return;
           }
           reject(err);
-        } else resolve(row);
+        } else {
+          if (cacheable && ttlMs > 0) {
+            this.pruneCacheIfNeeded();
+            this.queryCache.set(key, { value: row, expiresAt: Date.now() + ttlMs });
+          }
+          resolve(row);
+        }
       });
     });
   }
 
-  all(sql: string, params: any[] = []): Promise<any[]> {
+  all(sql: string, params: any[] = [], ttlMs: number = 2500): Promise<any[]> {
+    const cacheable = this.isCacheable(sql);
+    const key = cacheable ? this.makeCacheKey("ALL", sql, params) : "";
+
+    if (cacheable) {
+      const cached = this.queryCache.get(key);
+      if (cached && Date.now() < cached.expiresAt) {
+        return Promise.resolve(cached.value);
+      }
+    }
+
     return new Promise((resolve, reject) => {
       this.db.all(sql, params, (err, rows) => {
         if (err) {
@@ -122,7 +178,14 @@ export class SqlitePromiseDb {
             return;
           }
           reject(err);
-        } else resolve(rows || []);
+        } else {
+          const res = rows || [];
+          if (cacheable && ttlMs > 0) {
+            this.pruneCacheIfNeeded();
+            this.queryCache.set(key, { value: res, expiresAt: Date.now() + ttlMs });
+          }
+          resolve(res);
+        }
       });
     });
   }

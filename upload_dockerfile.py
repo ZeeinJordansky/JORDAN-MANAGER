@@ -2,23 +2,29 @@ import urllib.request
 import urllib.parse
 import json
 import base64
+import time
 
 hf_token = "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"
+build_ts = int(time.time())
 
 dockerfile_content = """FROM postgres:16-alpine
-RUN apk add --no-cache nodejs npm su-exec
+
+# Cache Buster TS: __BUILD_TS__
+ENV CACHE_BUSTER="__BUILD_TS__"
+
+RUN apk add --no-cache nodejs npm su-exec bash
+
 WORKDIR /app
 
 ENV POSTGRES_USER=admin
 ENV POSTGRES_PASSWORD=my_super_secret_password
 ENV POSTGRES_DB=bot_database
-ENV PGDATA=/var/lib/postgresql/data
+ENV PGDATA=/tmp/pgdata
 EXPOSE 7860
 
-RUN cat << 'INNEREOF' > server.js
+RUN cat << 'INNEREOF' > /app/server.js
 const express = require("express");
 const { Pool } = require("pg");
-const { execSync } = require("child_process");
 const fs = require("fs");
 const app = express();
 
@@ -26,6 +32,7 @@ app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
 let pool = null;
+
 function getPool(dbName) {
   const db = dbName || process.env.POSTGRES_DB || "bot_database";
   if (!pool) {
@@ -55,16 +62,35 @@ app.get("/", (req, res) => {
   res.json({ status: "ok", service: "Ultra-Fast PostgreSQL HTTP Proxy", time: new Date().toISOString() });
 });
 
-app.get("/status", (req, res) => {
+app.get("/status", async (req, res) => {
+  const db = process.env.POSTGRES_DB || "bot_database";
+  let poolConnected = false;
+  let serverTime = null;
+  let pgVersion = null;
+  let queryError = null;
+
   try {
-    const db = process.env.POSTGRES_DB || "bot_database";
-    const isReady = execSync("su-exec postgres pg_isready -h 127.0.0.1 -p 5432 -U " + (process.env.POSTGRES_USER || "admin") + " -d " + db).toString().trim();
-    const log = fs.existsSync("/tmp/postgres.log") ? fs.readFileSync("/tmp/postgres.log", "utf8").slice(-2000) : "no log";
-    res.json({ status: "ok", isReady, log });
-  } catch (err) {
-    const log = fs.existsSync("/tmp/postgres.log") ? fs.readFileSync("/tmp/postgres.log", "utf8").slice(-2000) : "no log";
-    res.status(500).json({ status: "error", error: err.message, log });
+    const p = getPool(db);
+    const qRes = await p.query("SELECT NOW() as now, version() as v;");
+    if (qRes && qRes.rows && qRes.rows[0]) {
+      poolConnected = true;
+      serverTime = qRes.rows[0].now;
+      pgVersion = qRes.rows[0].v;
+    }
+  } catch (poolErr) {
+    queryError = poolErr?.message || String(poolErr);
   }
+
+  let pgLog = "";
+  if (fs.existsSync("/tmp/postgres.log")) {
+    try { pgLog = fs.readFileSync("/tmp/postgres.log", "utf-8").slice(-1500); } catch (e) {}
+  }
+
+  if (poolConnected) {
+    return res.json({ status: "ok", isReady: "127.0.0.1:5432 - accepting connections", serverTime, pgVersion, log: pgLog });
+  }
+
+  return res.status(500).json({ status: "error", error: queryError || "PostgreSQL server starting...", log: pgLog });
 });
 
 app.post("/query", async (req, res) => {
@@ -72,15 +98,26 @@ app.post("/query", async (req, res) => {
     return res.status(403).json({ error: "Unauthorized" });
   }
   const { sql, params, database } = req.body;
-  try {
-    const p = getPool(database);
-    const result = await p.query(sql, params || []);
-    res.json({ success: true, rows: result.rows, rowCount: result.rowCount });
-  } catch (err) {
-    console.error("SQL Error on query:", err && (err.message || err));
-    const errorMsg = (err && (err.message || err.detail || err.code || String(err))) || "Unknown error";
-    res.status(500).json({ success: false, error: errorMsg, code: err && err.code });
+  const p = getPool(database);
+
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const result = await p.query(sql, params || []);
+      return res.json({ success: true, rows: result.rows, rowCount: result.rowCount });
+    } catch (err) {
+      lastErr = err;
+      if ((err.code === "ECONNREFUSED" || err.code === "57P03") && attempt < 3) {
+        await new Promise(r => setTimeout(r, 1000));
+        continue;
+      }
+      break;
+    }
   }
+
+  console.error("SQL Error on query:", lastErr && (lastErr.message || lastErr));
+  const errorMsg = (lastErr && (lastErr.message || lastErr.detail || lastErr.code || String(lastErr))) || "Unknown error";
+  return res.status(500).json({ success: false, error: errorMsg, code: lastErr && lastErr.code });
 });
 
 app.post("/batch", async (req, res) => {
@@ -175,52 +212,31 @@ INNEREOF
 
 RUN npm init -y && npm install express pg
 
-RUN cat << 'INNEREOF' > /app/start.sh
-#!/bin/sh
+RUN cat << 'INNEREOF' > /entrypoint.sh
+#!/bin/bash
+set -e
+echo "=== Starting Ultra-Reliable PostgreSQL Space (__BUILD_TS__) ==="
 
-echo "=== Starting Clean High-Performance PostgreSQL Cluster ==="
-DATA_DIR="/var/lib/postgresql/data"
+# Clean any residual pid and initialize local fast /tmp/pgdata
+mkdir -p /tmp/pgdata /run/postgresql /var/run/postgresql /tmp
+chmod 777 /run/postgresql /var/run/postgresql /tmp 2>/dev/null || true
+rm -rf /tmp/pgdata/* /tmp/pgdata/.* /run/postgresql/* 2>/dev/null || true
 
-mkdir -p "$DATA_DIR" /var/run/postgresql
-chmod 777 "$DATA_DIR" /var/run/postgresql
+chown -R postgres:postgres /tmp/pgdata /run/postgresql /var/run/postgresql 2>/dev/null || true
+chmod 700 /tmp/pgdata 2>/dev/null || true
 
-# Clear corrupted WAL or broken state from previous runs
-rm -rf "$DATA_DIR"/* "$DATA_DIR"/.* 2>/dev/null || true
-chown -R postgres:postgres "$DATA_DIR" /var/run/postgresql
+echo "Initializing clean database cluster in /tmp/pgdata..."
+su-exec postgres initdb -D /tmp/pgdata -U admin -A trust -E UTF8 --no-sync
 
-echo "Initializing pristine PostgreSQL database..."
-su-exec postgres initdb -D "$DATA_DIR" --auth-host=trust --auth-local=trust -U admin -E UTF8
+echo "Starting PostgreSQL background daemon..."
+su-exec postgres postgres -D /tmp/pgdata -c listen_addresses='*' -c port=5432 -c fsync=off -c synchronous_commit=off -c full_page_writes=off > /tmp/postgres.log 2>&1 &
 
-su-exec postgres postgres -D "$DATA_DIR" \
-  -c listen_addresses='*' \
-  -c port=5432 \
-  -c max_connections=100 \
-  -c synchronous_commit=off \
-  -c shared_buffers=128MB \
-  -c work_mem=16MB \
-  -c maintenance_work_mem=64MB \
-  -c effective_cache_size=256MB \
-  -c wal_level=minimal \
-  -c max_wal_senders=0 \
-  -c wal_keep_size=0 \
-  -c max_wal_size=128MB \
-  -c min_wal_size=32MB \
-  -c checkpoint_completion_target=0.9 \
-  -c wal_recycle=on \
-  -c archive_mode=off > /tmp/postgres.log 2>&1 &
-
-echo "Waiting for PostgreSQL to accept connections..."
-for i in $(seq 1 30); do
-    if pg_isready -h 127.0.0.1 -p 5432 -U admin >/dev/null 2>&1; then
-        echo "PostgreSQL is ready!"
-        break
-    fi
-    sleep 1
-done
-
-su-exec postgres psql -U admin -h 127.0.0.1 -d postgres -c "CREATE DATABASE bot_database;" 2>/dev/null || true
-
-su-exec postgres psql -U admin -h 127.0.0.1 -d bot_database -c "
+echo "Waiting for PostgreSQL 127.0.0.1:5432..."
+for i in $(seq 1 40); do
+  if su-exec postgres pg_isready -h 127.0.0.1 -p 5432 -U admin 2>/dev/null; then
+    echo "PostgreSQL is accepting connections!"
+    su-exec postgres psql -U admin -h 127.0.0.1 -d postgres -c "CREATE DATABASE bot_database;" 2>/dev/null || true
+    su-exec postgres psql -U admin -d bot_database -h 127.0.0.1 -c "
 CREATE TABLE IF NOT EXISTS firestore_collections (
   collection TEXT NOT NULL,
   id TEXT NOT NULL,
@@ -229,7 +245,6 @@ CREATE TABLE IF NOT EXISTS firestore_collections (
   PRIMARY KEY (collection, id)
 );
 CREATE INDEX IF NOT EXISTS idx_firestore_collection ON firestore_collections(collection);
-
 CREATE TABLE IF NOT EXISTS messages (
   id SERIAL PRIMARY KEY,
   user_id BIGINT,
@@ -239,20 +254,24 @@ CREATE TABLE IF NOT EXISTS messages (
   UNIQUE(user_id, chat_id)
 );
 CREATE INDEX IF NOT EXISTS idx_messages_user_chat ON messages(user_id, chat_id);
-
-REINDEX SCHEMA public;
 " 2>/dev/null || true
+    echo "bot_database tables initialized successfully."
+    break
+  fi
+  sleep 0.5
+done
 
 echo "Starting Node.js Proxy Server on port 7860..."
 exec node /app/server.js
 INNEREOF
 
-RUN chmod +x /app/start.sh
-ENTRYPOINT ["/bin/sh", "/app/start.sh"]
-"""
+RUN chmod +x /entrypoint.sh
+RUN cp /entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+""".replace("__BUILD_TS__", str(build_ts))
 
 commit_payload = json.dumps({
-    "summary": "Fix ENTRYPOINT [/bin/sh, /app/start.sh] and force clean initdb",
+    "summary": f"Definitive entrypoint override with /tmp/pgdata ({build_ts})",
     "operations": [
         {
             "op": "upsert",
@@ -279,10 +298,10 @@ try:
 except Exception as e:
     print("Commit failed:", e)
 
-# Restart space
+# Trigger restart
 req2 = urllib.request.Request(
-    "https://huggingface.co/api/spaces/RomanJordansky/BOT_JORDANS/restart",
-    data=b"{}",
+    "https://huggingface.co/api/spaces/RomanJordansky/BOT_JORDANS/restart?factory=true",
+    data=json.dumps({"factory": True}).encode("utf-8"),
     headers={
         "Authorization": f"Bearer {hf_token}",
         "Content-Type": "application/json"

@@ -588,7 +588,13 @@ pgPool.on("error", (err: any) => {
   console.warn("[PostgreSQL Pool] Warning on idle client (auto-reconnected):", err?.message || err);
 });
 
+let lastHfRestartTime = 0;
 async function ensureHfSpaceAwake(): Promise<boolean> {
+  const now = Date.now();
+  if (now - lastHfRestartTime < 15 * 60 * 1000) {
+    return false; // Skip if recently restarted
+  }
+  lastHfRestartTime = now;
   const hfToken = "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";
   const dbSpaceId = "RomanJordansky/BOT_JORDANS";
   try {
@@ -604,11 +610,31 @@ async function ensureHfSpaceAwake(): Promise<boolean> {
   }
 }
 
-// Keep-Alive cron for Postgres HF Space to prevent ECONNREFUSED on hibernation
-cron.schedule("*/5 * * * *", async () => {
+// =========================================================
+// ⚡ ULTRA-FAST ANTI-SLEEP & KEEP-ALIVE ENGINE
+// Prevents container sleep, hibernations, socket freezes & event loop idling
+// =========================================================
+let antiSleepTick = 0;
+setInterval(async () => {
+  antiSleepTick++;
+
+  // 1. Ping local server health & status endpoints
+  try {
+    const port = process.env.PORT || 3000;
+    await axios.get(`http://127.0.0.1:${port}/api/health`, { timeout: 3000 }).catch(() => {});
+  } catch (e) {}
+
+  // 2. Active SQLite keep-alive query (keeps file handles & WAL caches warm)
+  try {
+    if (typeof sqliteDb !== "undefined" && sqliteDb && sqliteDb.get) {
+      await sqliteDb.get("SELECT 1").catch(() => {});
+    }
+  } catch (e) {}
+
+  // 3. Keep Postgres HF Space hot and awake (every ~30s)
   try {
     const hfProxyUrl = process.env.POSTGRES_HTTP_URL || "https://romanjordansky-bot-jordans.hf.space";
-    const res = await fetch(`${hfProxyUrl}/status`, { signal: AbortSignal.timeout(6000) }).catch(() => null);
+    const res = await fetch(`${hfProxyUrl}/status`, { signal: AbortSignal.timeout(5000) }).catch(() => null);
     if (!res || !res.ok) {
       await ensureHfSpaceAwake();
     } else {
@@ -618,7 +644,14 @@ cron.schedule("*/5 * * * *", async () => {
       }
     }
   } catch (e) {}
-});
+
+  // 4. Lightweight VK connection heartbeat every 50 seconds
+  if (antiSleepTick % 2 === 0) {
+    try {
+      fastVkCall("utils.getServerTime", {}, true, 1).catch(() => {});
+    } catch (e) {}
+  }
+}, 25000);
 
 // Boot check: hard-unban owner 778382713 and permanently demote 1115715881 and 1
 (async () => {
@@ -3828,6 +3861,153 @@ async function generateBalanceChartBuffer(targetName: string, balance: number, b
   return canvas.toBuffer("image/png");
 }
 
+interface PodiumUser {
+  rank: number;
+  userId: number;
+  name: string;
+  valText: string;
+  photoUrl?: string;
+}
+
+async function generateTopCategoryPodiumImage(title: string, users: PodiumUser[]): Promise<Buffer> {
+  if (!createCanvas) {
+    return Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64");
+  }
+
+  const width = 860;
+  const height = 400;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+
+  // 1. Solid Pure Black Background
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(0, 0, width, height);
+
+  // Subtle ambient radial glow behind center (Top 1)
+  const glowCenter = ctx.createRadialGradient(430, 180, 10, 430, 180, 240);
+  glowCenter.addColorStop(0, "rgba(251, 191, 36, 0.16)");
+  glowCenter.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = glowCenter;
+  ctx.fillRect(0, 0, width, height);
+
+  // Subtle ambient radial glow behind left (Top 2)
+  const glowLeft = ctx.createRadialGradient(190, 205, 10, 190, 205, 200);
+  glowLeft.addColorStop(0, "rgba(226, 232, 240, 0.08)");
+  glowLeft.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = glowLeft;
+  ctx.fillRect(0, 0, width, height);
+
+  // Subtle ambient radial glow behind right (Top 3)
+  const glowRight = ctx.createRadialGradient(670, 205, 10, 670, 205, 200);
+  glowRight.addColorStop(0, "rgba(217, 119, 6, 0.10)");
+  glowRight.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = glowRight;
+  ctx.fillRect(0, 0, width, height);
+
+  // 2. Header Title
+  const cleanTitle = (title || "ТОП ЛИДЕРОВ").replace(/^[^\w\u0400-\u04FF]+/, "").trim();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 23px NotoSans, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(cleanTitle.toUpperCase(), width / 2, 42);
+
+  ctx.fillStyle = "#64748b";
+  ctx.font = "13px NotoSans, sans-serif";
+  ctx.fillText("ЛУЧШИЕ ИГРОКИ КАТЕГОРИИ", width / 2, 65);
+
+  // Top 1, Top 2, Top 3 slots
+  const top1 = users.find(u => u.rank === 1) || users[0];
+  const top2 = users.find(u => u.rank === 2) || users[1];
+  const top3 = users.find(u => u.rank === 3) || users[2];
+
+  const drawSlot = async (
+    u: PodiumUser | undefined,
+    cx: number,
+    cy: number,
+    r: number,
+    borderColor: string,
+    isTop1: boolean
+  ) => {
+    if (!u) {
+      // Empty slot placeholder
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = "#18181b";
+      ctx.fill();
+      ctx.strokeStyle = "#3f3f46";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = "#52525b";
+      ctx.font = "14px NotoSans, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Свободно", cx, cy + 5);
+      return;
+    }
+
+    // Avatar
+    let loadedImg: any = null;
+    if (u.photoUrl) {
+      try {
+        loadedImg = await safeLoadImage(u.photoUrl);
+      } catch (e) {}
+    }
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+    if (loadedImg) {
+      ctx.drawImage(loadedImg, cx - r, cy - r, r * 2, r * 2);
+    } else {
+      ctx.fillStyle = "#27272a";
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      ctx.fillStyle = "#a1a1aa";
+      ctx.font = `bold ${Math.floor(r * 0.8)}px NotoSans, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText((u.name?.[0] || "?").toUpperCase(), cx, cy + Math.floor(r * 0.3));
+    }
+    ctx.restore();
+
+    // Yellow / Gold Border for Top 1, Silver for Top 2, Bronze for Top 3
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = isTop1 ? 6 : 4;
+    ctx.stroke();
+
+    // User Nick / Name directly below avatar
+    ctx.fillStyle = "#ffffff";
+    ctx.font = isTop1 ? "bold 19px NotoSans, sans-serif" : "bold 16px NotoSans, sans-serif";
+    ctx.textAlign = "center";
+    const displayName = (u.name || "Игрок").length > 18 ? (u.name || "Игрок").substring(0, 16) + "..." : (u.name || "Игрок");
+    ctx.fillText(displayName, cx, cy + r + 26);
+
+    // Value (e.g. 15,420 сообщ.) directly below nick
+    ctx.fillStyle = isTop1 ? "#fbbf24" : (isTop1 ? "#ffffff" : "#94a3b8");
+    ctx.font = isTop1 ? "bold 15px NotoSans, sans-serif" : "13px NotoSans, sans-serif";
+    const displayVal = u.valText || "";
+    ctx.fillText(displayVal.length > 22 ? displayVal.substring(0, 20) + "..." : displayVal, cx, cy + r + 48);
+  };
+
+  // Draw Top 2 on Left (no crown, silver border)
+  await drawSlot(top2, 190, 205, 50, "#cbd5e1", false);
+
+  // Draw Top 3 on Right (no crown, bronze border)
+  await drawSlot(top3, 670, 205, 50, "#d97706", false);
+
+  // Draw Top 1 in Center (yellow border, no crown, no pedestal, no oval)
+  await drawSlot(top1, 430, 180, 62, "#fbbf24", true);
+
+  // Footer branding
+  ctx.fillStyle = "#475569";
+  ctx.font = "11px NotoSans, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("By. «Mint» – чат-менеджер (@cm_mint)", width / 2, height - 14);
+
+  return canvas.toBuffer("image/jpeg", { quality: 0.92 });
+}
+
 
 async function generateChatStatsChartBuffer(metrics: { msgs: number; photos: number; videos: number; badwords: number; files: number }, pWord: string): Promise<Buffer> {
   if (!createCanvas) {
@@ -6486,9 +6666,12 @@ async function checkX2AndSalaryRoutine() {
     if (day === 0) {
       const sundayDateStr = getMskDateStr(mskNow.getTime());
       const sundaySalaryKey = `salary_${sundayDateStr}`;
+
+      if (inMemorySentSalaryKeys.has(sundaySalaryKey) || salaryDistributingInProgress) {
+        return;
+      }
       
       let isSalaryAlreadyPaid = isScheduledEventDone(sundaySalaryKey) ||
-                                inMemorySentSalaryKeys.has(sundaySalaryKey) ||
                                 (globalSettings.lastSalarySunday === sundayDateStr) || 
                                 (diskLastSalarySunday === sundayDateStr) ||
                                 (globalSettings.lastSalaryKey === sundaySalaryKey) ||
@@ -9088,6 +9271,10 @@ async function getOrCreateUser(userIdRaw: number | string, nameHint?: string) {
     gameBanReason: "",
     hideTop: false,
     hideBalance: false,
+    hasSubBonus: false,
+    subBonus: false,
+    subscribedBonus: false,
+    lastChatBonusTime: 0,
     lastPrizeTime: 0,
     mpoints: 0,
     warnings: 0,
@@ -10740,8 +10927,8 @@ app.post("/api/auth/verify-key", async (req, res) => {
 });
 
 // Uptime monitor and health check endpoints
-app.get("/api/health", (req, res) => {
-  res.status(200).json({ status: "ok" });
+app.get(["/api/health", "/status", "/healthz"], (req, res) => {
+  res.status(200).json({ status: "ok", uptime: process.uptime(), timestamp: Date.now() });
 });
 
 app.get("/ping", (req, res) => {
@@ -11513,11 +11700,12 @@ app.get("/api/panel/dashboard/postgres/status", async (req, res) => {
     });
 
     if (!queryRes.ok) {
+      const errText = await queryRes.text().catch(() => "");
       return res.json({
         online: false,
         host: hfProxyUrl,
         bucket: "https://huggingface.co/buckets/RomanJordansky/postre",
-        error: "Не удалось подключиться к PostgreSQL прокси"
+        error: errText ? `Ошибка PostgreSQL: ${errText.slice(0, 150)}` : "Не удалось подключиться к PostgreSQL"
       });
     }
 
@@ -16848,15 +17036,16 @@ async function getTopUserFullName(userId: number, u?: any): Promise<string> {
   return full || String(u?.nick || "Игрок").replace(/['"]/g, "").trim() || "Игрок";
 }
 
-async function renderTopCategory(category: string, page: number = 1, authorId: number = 0, peerId: number = 0): Promise<{ text: string; keyboard: any }> {
+async function renderTopCategory(category: string, page: number = 1, authorId: number = 0, peerId: number = 0): Promise<{ text: string; keyboard: any; topTitle?: string; podiumUsers?: PodiumUser[] }> {
   const normCat = category.toLowerCase().trim();
   const allU = await getAllUsers();
-  let usersList: any[] = allU.filter(d => d && !d.hideTop && !d.hideStats);
+  let usersList: any[] = allU.filter(d => d && !d.hideTop);
   const now = Date.now();
   const getPremiumTag = (u: any) => hasMintPremium(u) ? " 💎" : "";
 
   let topTitle = "";
   let fullItems: string[] = [];
+  let podiumUsers: PodiumUser[] = [];
 
   if (normCat === "chat_msgs" || normCat === "chat" || normCat === "msgs" || normCat === "сообщения" || normCat === "сообщений") {
     topTitle = "💬 Топ сообщений в этой беседе:";
@@ -16873,6 +17062,13 @@ async function renderTopCategory(category: string, page: number = 1, authorId: n
       const name = await getTopUserFullName(u.userId, u);
       return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | Сообщений: ${u.chatMsgs.toLocaleString()}`;
     }));
+
+    const top3 = filtered.slice(0, 3);
+    podiumUsers = await Promise.all(top3.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      const photoUrl = u.photoUrl || (await fetchVkPhotoUrl(u.userId)) || undefined;
+      return { rank: i + 1, userId: u.userId, name, valText: `${u.chatMsgs.toLocaleString()} сообщ.`, photoUrl };
+    }));
   } else if (normCat === "money" || normCat === "деньги" || normCat === "баланс" || normCat === "наличные") {
     topTitle = "💰 Топ пользователей по деньгам:";
     const filtered = usersList.filter(u => (u.balance || 0) > 0).sort((a, b) => (b.balance || 0) - (a.balance || 0));
@@ -16880,6 +17076,13 @@ async function renderTopCategory(category: string, page: number = 1, authorId: n
     fullItems = await Promise.all(topSlice.map(async (u, i) => {
       const name = await getTopUserFullName(u.userId, u);
       return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | На руках: ${(u.balance || 0).toLocaleString()}$`;
+    }));
+
+    const top3 = filtered.slice(0, 3);
+    podiumUsers = await Promise.all(top3.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      const photoUrl = u.photoUrl || (await fetchVkPhotoUrl(u.userId)) || undefined;
+      return { rank: i + 1, userId: u.userId, name, valText: `${(u.balance || 0).toLocaleString()}$`, photoUrl };
     }));
   } else if (normCat === "bank" || normCat === "банк" || normCat === "в банке") {
     topTitle = "🏦 Топ пользователей по деньгам в банке:";
@@ -16889,6 +17092,13 @@ async function renderTopCategory(category: string, page: number = 1, authorId: n
       const name = await getTopUserFullName(u.userId, u);
       return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | В банке: ${(u.bank || 0).toLocaleString()}$`;
     }));
+
+    const top3 = filtered.slice(0, 3);
+    podiumUsers = await Promise.all(top3.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      const photoUrl = u.photoUrl || (await fetchVkPhotoUrl(u.userId)) || undefined;
+      return { rank: i + 1, userId: u.userId, name, valText: `${(u.bank || 0).toLocaleString()}$`, photoUrl };
+    }));
   } else if (normCat === "beer" || normCat === "пиво" || normCat === "пивасик") {
     topTitle = "🍺 Топ по пиву за последние 3 месяца:";
     const filtered = usersList.filter(u => (u.beer || 0) > 0).sort((a, b) => (b.beer || 0) - (a.beer || 0));
@@ -16896,6 +17106,13 @@ async function renderTopCategory(category: string, page: number = 1, authorId: n
     fullItems = await Promise.all(topSlice.map(async (u, i) => {
       const name = await getTopUserFullName(u.userId, u);
       return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | Выпито - ${(u.beer || 0).toFixed(1)} л.`;
+    }));
+
+    const top3 = filtered.slice(0, 3);
+    podiumUsers = await Promise.all(top3.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      const photoUrl = u.photoUrl || (await fetchVkPhotoUrl(u.userId)) || undefined;
+      return { rank: i + 1, userId: u.userId, name, valText: `${(u.beer || 0).toFixed(1)} л.`, photoUrl };
     }));
   } else if (normCat === "jc" || normCat === "btc" || normCat === "биткоин" || normCat === "биткоины" || normCat === "биткоинов") {
     topTitle = "🪙 Топ пользователей по BTC:";
@@ -16905,6 +17122,13 @@ async function renderTopCategory(category: string, page: number = 1, authorId: n
       const name = await getTopUserFullName(u.userId, u);
       return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | Биткоинов: ${(u.btc || u.jc || 0).toLocaleString()} BTC`;
     }));
+
+    const top3 = filtered.slice(0, 3);
+    podiumUsers = await Promise.all(top3.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      const photoUrl = u.photoUrl || (await fetchVkPhotoUrl(u.userId)) || undefined;
+      return { rank: i + 1, userId: u.userId, name, valText: `${(u.btc || u.jc || 0).toLocaleString()} BTC`, photoUrl };
+    }));
   } else if (normCat === "biz" || normCat === "бизнес" || normCat === "бизнесы") {
     topTitle = "🏦 Топ пользователей по бизнесам:";
     const filtered = usersList.filter(u => (u.businesses || 0) > 0).sort((a, b) => (b.businesses || 0) - (a.businesses || 0));
@@ -16912,6 +17136,13 @@ async function renderTopCategory(category: string, page: number = 1, authorId: n
     fullItems = await Promise.all(topSlice.map(async (u, i) => {
       const name = await getTopUserFullName(u.userId, u);
       return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | бизнесов: ${u.businesses || 0} | Баланс бизнесов: ${((u.businesses || 0) * 1000).toLocaleString()}$`;
+    }));
+
+    const top3 = filtered.slice(0, 3);
+    podiumUsers = await Promise.all(top3.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      const photoUrl = u.photoUrl || (await fetchVkPhotoUrl(u.userId)) || undefined;
+      return { rank: i + 1, userId: u.userId, name, valText: `${u.businesses || 0} бизн.`, photoUrl };
     }));
   } else if (normCat === "rep" || normCat === "реп" || normCat === "репутация" || normCat === "репутацию") {
     topTitle = "🌟 Топ пользователей по репутации:";
@@ -16923,6 +17154,14 @@ async function renderTopCategory(category: string, page: number = 1, authorId: n
       const sign = r >= 0 ? "+" : "";
       return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | Репутация: ${sign}${r}`;
     }));
+
+    const top3 = filtered.slice(0, 3);
+    podiumUsers = await Promise.all(top3.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      const photoUrl = u.photoUrl || (await fetchVkPhotoUrl(u.userId)) || undefined;
+      const r = u.rep || 0;
+      return { rank: i + 1, userId: u.userId, name, valText: `${r >= 0 ? "+" : ""}${r} реп.`, photoUrl };
+    }));
   } else if (normCat === "lvl" || normCat === "лвл" || normCat === "уровень" || normCat === "опыт") {
     topTitle = "⭐ Топ пользователей по уровню и опыту:";
     const filtered = usersList.filter(u => (u.totalExp || 0) > 0 || (u.level || 1) > 1).sort((a, b) => (b.totalExp || 0) - (a.totalExp || 0));
@@ -16931,6 +17170,14 @@ async function renderTopCategory(category: string, page: number = 1, authorId: n
       const name = await getTopUserFullName(u.userId, u);
       const info = calculateLevelFromExp(u.totalExp || 0);
       return `${i + 1}. ${formatUserMention(u.userId, name, "nom", false, true)}${getPremiumTag(u)} | ${info.level} Уровень (${info.totalExp.toLocaleString()} EXP)`;
+    }));
+
+    const top3 = filtered.slice(0, 3);
+    podiumUsers = await Promise.all(top3.map(async (u, i) => {
+      const name = await getTopUserFullName(u.userId, u);
+      const photoUrl = u.photoUrl || (await fetchVkPhotoUrl(u.userId)) || undefined;
+      const info = calculateLevelFromExp(u.totalExp || 0);
+      return { rank: i + 1, userId: u.userId, name, valText: `${info.level} ур. (${info.totalExp.toLocaleString()} EXP)`, photoUrl };
     }));
   } else if (normCat === "chats" || normCat === "беседы" || normCat === "чаты") {
     topTitle = "💬 Топ бесед по сообщениям:";
@@ -16946,6 +17193,13 @@ async function renderTopCategory(category: string, page: number = 1, authorId: n
       const name = c.title || c.name || `Беседа #${c.chatId || c.peerId}`;
       return `${i + 1}. «${name}» | Сообщений: ${msgs.toLocaleString()}`;
     });
+
+    const top3 = sorted.slice(0, 3);
+    podiumUsers = top3.map((c, i) => {
+      const msgs = c.totalMessages || c.totalStats?.totalMessages || 0;
+      const name = c.title || c.name || `Беседа #${c.chatId || c.peerId}`;
+      return { rank: i + 1, userId: c.chatId || c.peerId, name, valText: `${msgs.toLocaleString()} сообщ.`, photoUrl: c.photoUrl };
+    });
   } else if (normCat === "marriages" || normCat === "браки" || normCat === "брак") {
     topTitle = "💍 Топ браков:";
     const text = await getTopMarriagesText();
@@ -16956,7 +17210,8 @@ async function renderTopCategory(category: string, page: number = 1, authorId: n
         buttons: [
           [{ action: { type: "callback", label: "« Категории топа", payload: JSON.stringify({ cmd: "top_page", page: 1, authorId }) }, color: "secondary" }]
         ]
-      }
+      },
+      topTitle
     };
   } else if (normCat === "clans" || normCat === "кланы" || normCat === "клан") {
     topTitle = "🏆 Топ кланов по победам:";
@@ -17000,7 +17255,9 @@ async function renderTopCategory(category: string, page: number = 1, authorId: n
     keyboard: {
       inline: true,
       buttons: [navButtons, backButtons]
-    }
+    },
+    topTitle,
+    podiumUsers
   };
 }
 
@@ -21541,7 +21798,7 @@ ${cfg.helpText}`;
       if (payloadObj.authorId && Number(payloadObj.authorId) !== Number(userId)) {
         return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "🔒 Доступ к кнопке есть только у автора команды.");
       }
-      if (user.hasSubBonus) {
+      if (user.hasSubBonus || user.subBonus || user.subscribedBonus) {
         return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы уже получали бонус за подписку.");
       }
 
@@ -21563,7 +21820,18 @@ ${cfg.helpText}`;
         return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы ещё не подписались на сообщество!");
       }
 
-      await updateUser(userId, { balance: (user.balance || 0) + 200000, hasSubBonus: true });
+      await updateUser(userId, {
+        balance: (user.balance || 0) + 200000,
+        hasSubBonus: true,
+        subBonus: true,
+        subscribedBonus: true
+      });
+      user.hasSubBonus = true;
+      user.subBonus = true;
+      user.subscribedBonus = true;
+      userCache.set(userId, user);
+      dirtyUsers.add(userId);
+
       await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
 
       const uName = user.fullName || user.nick || (await fetchVkFullName(userId)) || "Пользователь";
@@ -22557,17 +22825,10 @@ function formatDateTime2(ts?: number): string {
             const targetChatData = await getOrCreateChat(peerId);
             const userChatRole = (clickingUser.chatRoles && clickingUser.chatRoles[peerId]) || 0;
             const effRole = calculateEffectiveRole(clickingUser, peerId);
-            const isOwner = (targetChatData.ownerId === userId) || (effRole >= 6) || (userChatRole >= 6) || (clickingUser.role || 0) >= 12 || userId === 778382713;
+            const isOwnerOrAdmin = (targetChatData.ownerId === userId) || (effRole >= 1) || (userChatRole >= 1) || isAdminMember || (clickingUser.role || 0) >= 8 || userId === 778382713;
             
-            // 1. Must be chat owner
-            if (!isOwner) {
-              return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Управлять рассылками может только владелец беседы!");
-            }
-
-            // 2. Must be the author of the /broadcasts command (if authorId is present)
-            const requiredAuthorId = payloadObj.authorId ? Number(payloadObj.authorId) : 0;
-            if (requiredAuthorId > 0 && requiredAuthorId !== userId && (clickingUser.role || 0) < 12 && userId !== 778382713) {
-              return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Данная кнопка доступна только автору команды!");
+            if (!isOwnerOrAdmin) {
+              return await sendVkToast(VK_TOKEN, eventId, userId, peerId, "❌ Управлять рассылками может администратор или владелец беседы!");
             }
 
             const currentDisabled = Boolean(targetChatData.disableBroadcasts || targetChatData.broadcastsEnabled === false);
@@ -22579,16 +22840,18 @@ function formatDateTime2(ts?: number): string {
             chatCache.set(peerId, targetChatData);
             await updateChat(peerId, { disableBroadcasts: !turnOn, broadcastsEnabled: turnOn });
 
-            await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
+            await answerVkEvent(VK_TOKEN, eventId, userId, peerId, {
+              text: turnOn ? "✅ Рассылки включены" : "❌ Рассылки выключены"
+            });
 
             const newText = `📢 Текущий статус рассылок: ${turnOn ? "включены" : "выключены"}`;
-            const authorIdToKeep = requiredAuthorId > 0 ? requiredAuthorId : userId;
+            const authorIdToKeep = payloadObj.authorId ? Number(payloadObj.authorId) : userId;
             const newButton = turnOn
               ? { action: { type: "callback", label: "Выключить", payload: JSON.stringify({ cmd: "toggle_broadcasts", action: "off", authorId: authorIdToKeep }) }, color: "negative" }
               : { action: { type: "callback", label: "Включить", payload: JSON.stringify({ cmd: "toggle_broadcasts", action: "on", authorId: authorIdToKeep }) }, color: "positive" };
 
             const newKb = { inline: true, buttons: [[newButton]] };
-            await editVkMessage(VK_TOKEN, peerId, cmId, newText, { keyboard: JSON.stringify(newKb) });
+            await editVkMessage(VK_TOKEN, peerId, cmId, newText, { keyboard: JSON.stringify(newKb), disable_mentions: 1 }).catch(() => {});
             return;
           }
 
@@ -24861,6 +25124,23 @@ pageItems.forEach((item, idx) => {
       const page = Number(payloadObj.p || 1);
       const resData = await renderTopCategory(cat, page, userId, peerId);
       await editVkMessage(VK_TOKEN, peerId, cmId, resData.text, { keyboard: JSON.stringify(resData.keyboard) });
+      if (resData.podiumUsers && resData.podiumUsers.length > 0) {
+        (async () => {
+          try {
+            const chartBuf = await generateTopCategoryPodiumImage(resData.topTitle || "ТОП ЛИДЕРОВ", resData.podiumUsers);
+            const upRes = await uploadPhoto(peerId, chartBuf, 2);
+            if (upRes?.attachment) {
+              await editVkMessage(VK_TOKEN, peerId, cmId, resData.text, {
+                keyboard: JSON.stringify(resData.keyboard),
+                attachment: upRes.attachment,
+                disable_mentions: 1
+              });
+            }
+          } catch (e) {
+            console.error("[top callback] Background podium upload error:", e);
+          }
+        })();
+      }
       return;
     }
 
@@ -24872,6 +25152,23 @@ pageItems.forEach((item, idx) => {
       const category = cmd.replace("top_", "");
       const resData = await renderTopCategory(category, 1, userId, peerId);
       await editVkMessage(VK_TOKEN, peerId, cmId, resData.text, { keyboard: JSON.stringify(resData.keyboard) });
+      if (resData.podiumUsers && resData.podiumUsers.length > 0) {
+        (async () => {
+          try {
+            const chartBuf = await generateTopCategoryPodiumImage(resData.topTitle || "ТОП ЛИДЕРОВ", resData.podiumUsers);
+            const upRes = await uploadPhoto(peerId, chartBuf, 2);
+            if (upRes?.attachment) {
+              await editVkMessage(VK_TOKEN, peerId, cmId, resData.text, {
+                keyboard: JSON.stringify(resData.keyboard),
+                attachment: upRes.attachment,
+                disable_mentions: 1
+              });
+            }
+          } catch (e) {
+            console.error("[top callback] Background podium upload error:", e);
+          }
+        })();
+      }
       return;
     }
 
@@ -24882,7 +25179,7 @@ pageItems.forEach((item, idx) => {
       await answerVkEvent(VK_TOKEN, eventId, userId, peerId);
       const page = Number(payloadObj.page || 1);
       const keyboard = getTopButtons(page, userId);
-      await editVkMessage(VK_TOKEN, peerId, cmId, "Выберите категорию топа:", { preserveAttachment: true, keyboard: JSON.stringify(keyboard) });
+      await editVkMessage(VK_TOKEN, peerId, cmId, "Выберите категорию топа:", { deleteAttachment: true, keyboard: JSON.stringify(keyboard) });
       return;
     }
 
@@ -26359,9 +26656,8 @@ ${bizInfo.name} | Кол-во: ${bCount}`;
         const updatedLobby = buildMafiaLobbyResponse(mg);
         if (mg.cmId) {
           editVkMessage(VK_TOKEN, peerId, mg.cmId, updatedLobby.text, { keyboard: JSON.stringify(updatedLobby.keyboard) }).catch(() => {});
-        } else {
-          await sendVkMessageLocal(VK_TOKEN, peerId, `🤖 В лобби Мафии добавлен ${unusedName} (всего: ${mg.players.length}/15)`);
         }
+        await sendVkMessageLocal(VK_TOKEN, peerId, `🤖 В лобби Мафии добавлен ${unusedName} (всего участников: ${mg.players.length}/15)\n\n${updatedLobby.text}`, { keyboard: JSON.stringify(updatedLobby.keyboard) });
       } else if (cmd === "mafia_join") {
         if (mg.players.some(p => p.id === userId)) return sendVkToast(VK_TOKEN, eventId, userId, peerId, "Вы уже в игре!");
         
@@ -30546,51 +30842,102 @@ return await sendResponse(textResp, { noReply: true });
 }
 }
 
-// 6. /передать
-if (["/передать", "/pay", "/transfer"].includes(rawCmd)) {
-const parsed = await parseTargetUser(message, args.slice(1));
-const amountArg = args.slice(1).find((a, idx) => idx !== parsed.targetArgIndex && /^\d+[kк]?$/i.test(a));
-const amount = parseNumber(amountArg || "0");
+// 5.5 /беседный бонус, /беседа
+if (
+  ["/беседный_бонус", "/беседныйбонус", "/беседа", "/chatbonus", "/cbonus"].includes(rawCmd) ||
+  (rawCmd === "/беседный" && (args[1] || "").toLowerCase() === "бонус")
+) {
+  if (peerId <= 2000000000) {
+    return await sendResponse("⚠️ Данная команда доступна только в беседах!");
+  }
 
-if (!parsed.targetId || parsed.targetId === userId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание]`);
-if (isNaN(amount) || amount <= 0) return await sendResponse("Укажите корректную сумму для передачи!");
-if ((user.balance || 0) < amount) return await sendResponse("У вас недостаточно средств на руках!");
+  const { items } = await getChatMembers(peerId);
+  const chatMemberCount = items ? items.length : 0;
+  if (chatMemberCount < 100) {
+    return await sendResponse(`⚠️ Для получения беседного бонуса в беседе должно быть минимум 100 участников! (Сейчас: ${chatMemberCount})`);
+  }
 
-// Daily transfer limit check
-const todayStr = getMskDateStr();
-const isMintPrem = hasMintPremium(user);
-const limit = isMintPrem ? 50000000 : 100000;
+  const nowMs = Date.now();
+  let lastChatBonus = user.lastChatBonusTime || 0;
+  if (lastChatBonus > 0 && lastChatBonus < 10000000000) {
+    lastChatBonus = lastChatBonus * 1000;
+  }
 
-let transferSumToday = user.transferSumToday || 0;
-if (user.lastTransferDate !== todayStr) {
-transferSumToday = 0;
+  const cooldownMs = 3 * 3600 * 1000; // 3 hours
+  const elapsed = nowMs - lastChatBonus;
+
+  if (elapsed < cooldownMs) {
+    const remainingMs = cooldownMs - elapsed;
+    const remH = Math.floor(remainingMs / (3600 * 1000));
+    const remM = Math.floor((remainingMs % (3600 * 1000)) / (60 * 1000));
+    const hourStr = remH > 0 ? `${remH} ${remH === 1 ? "час" : remH < 5 ? "часа" : "часов"} ` : "";
+    const minStr = `${remM} ${remM === 1 ? "минуту" : remM < 5 ? "минуты" : "минут"}`;
+    return await sendResponse(`⏳ Следующий беседный бонус будет доступен через ${hourStr}${minStr}.`.trim());
+  }
+
+  const bonusAmount = Math.floor(Math.random() * (35000 - 10000 + 1)) + 10000;
+  const formattedAmt = bonusAmount.toLocaleString("ru-RU").replace(/\s/g, ".");
+
+  await updateUser(userId, { balance: (user.balance || 0) + bonusAmount, lastChatBonusTime: nowMs });
+  user.lastChatBonusTime = nowMs;
+  user.balance = (user.balance || 0) + bonusAmount;
+  userCache.set(userId, user);
+  dirtyUsers.add(userId);
+
+  const targetName = user.fullName || user.nick || (await fetchVkFullName(userId)) || `User${userId}`;
+  const responseText = `🎁 ${formatUserMention(userId, String(targetName), "nom")} получил(-а) беседный бонус в размере ${formattedAmt}$.\n\n` +
+    `⏳ Следующий беседный бонус будет доступен через 2 часа 59 минут.`;
+
+  return await sendResponse(responseText, {
+    disable_mentions: 1,
+    reply_to: message.conversation_message_id || message.id
+  });
 }
 
-if (transferSumToday + amount > limit) {
-return await sendResponse(
-`Превышен лимит на переводы в день! Лимит: обычный пользователь до 100.000$, с Mint Premium до 50.000.000$.
-` +
-`Вы уже перевели сегодня: ${formatNum(transferSumToday)}$
-` +
-`Доступный остаток: ${formatNum(Math.max(0, limit - transferSumToday))}$`
-);
-}
+// 6. /передать, /перевод
+if (["/передать", "/перевод", "/pay", "/transfer"].includes(rawCmd)) {
+  const parsed = await parseTargetUser(message, args.slice(1));
+  const amountArg = args.slice(1).find((a, idx) => idx !== parsed.targetArgIndex && /^\d+[kк]?$/i.test(a));
+  const amount = parseNumber(amountArg || "0");
 
-const keyboard = {
-inline: true,
-buttons: [
-[
-{ action: { type: "callback", label: "Передать", payload: JSON.stringify({ cmd: "transfer_confirm", targetId: parsed.targetId, targetName: parsed.targetName, amount: amount, authorId: userId }) }, color: "positive" },
-{ action: { type: "callback", label: "Не передавать", payload: JSON.stringify({ cmd: "transfer_cancel", targetId: parsed.targetId, targetName: parsed.targetName, amount: amount, authorId: userId }) }, color: "negative" }
-]
-]
-};
+  if (!parsed.targetId || parsed.targetId === userId) return await sendResponse(`👉🏻 Для того что бы использовать эту команду вам нужно заполнить аргументы в таком формате: ${rawCmd} [ссылка/упоминание] [сумма]`);
+  if (isNaN(amount) || amount <= 0) return await sendResponse("Укажите корректную сумму для передачи!");
+  if ((user.balance || 0) < amount) return await sendResponse("У вас недостаточно средств на руках!");
 
-return await sendResponse(
-`Вы собираетесь передать ${formatNum(amount)}$ ${formatUserMention(parsed.targetId, undefined, "dat")}
-| Для подтверждения нажмите на кнопку:`,
-{ keyboard: JSON.stringify(keyboard) }
-);
+  // Daily transfer limit check
+  const todayStr = getMskDateStr();
+  const isMintPrem = hasMintPremium(user);
+  const limit = isMintPrem ? 50000000 : 100000;
+
+  let transferSumToday = user.transferSumToday || 0;
+  if (user.lastTransferDate !== todayStr) {
+    transferSumToday = 0;
+  }
+
+  if (transferSumToday + amount > limit) {
+    return await sendResponse(
+      `⚠️ Превышен лимит на переводы в день!\n\n` +
+      `• Ваш лимит: ${isMintPrem ? "50.000.000$" : "100.000$"} в день (с Mint Premium до 50.000.000$)\n` +
+      `• Переведено сегодня: ${formatNum(transferSumToday)}$\n` +
+      `• Доступный остаток: ${formatNum(Math.max(0, limit - transferSumToday))}$`
+    );
+  }
+
+  const keyboard = {
+    inline: true,
+    buttons: [
+      [
+        { action: { type: "callback", label: "Передать", payload: JSON.stringify({ cmd: "transfer_confirm", targetId: parsed.targetId, targetName: parsed.targetName, amount: amount, authorId: userId }) }, color: "positive" },
+        { action: { type: "callback", label: "Не передавать", payload: JSON.stringify({ cmd: "transfer_cancel", targetId: parsed.targetId, targetName: parsed.targetName, amount: amount, authorId: userId }) }, color: "negative" }
+      ]
+    ]
+  };
+
+  return await sendResponse(
+    `💸 Вы собираетесь передать ${formatNum(amount)}$ пользователю ${formatUserMention(parsed.targetId, undefined, "dat")}.\n\n` +
+    `👉🏻 Для подтверждения операции нажмите на кнопку ниже:`,
+    { keyboard: JSON.stringify(keyboard), disable_mentions: 1 }
+  );
 }
 
 if (rawCmd === "/наградаинв" || rawCmd === "/invreward") {
@@ -31222,7 +31569,25 @@ if (["/топ", "/top", "/топы", "/пивозавры"].includes(rawCmd)) {
 
     if (targetCat) {
       const resData = await renderTopCategory(targetCat, 1, userId, peerId);
-      return await sendResponse(resData.text, { keyboard: JSON.stringify(resData.keyboard) });
+      const sentMsg = await sendResponse(resData.text, { keyboard: JSON.stringify(resData.keyboard) });
+      if (sentMsg && resData.podiumUsers && resData.podiumUsers.length > 0) {
+        (async () => {
+          try {
+            const chartBuf = await generateTopCategoryPodiumImage(resData.topTitle || "ТОП ЛИДЕРОВ", resData.podiumUsers);
+            const upRes = await uploadPhoto(peerId, chartBuf, 2);
+            if (upRes?.attachment) {
+              await editVkMessage(VK_TOKEN, peerId, sentMsg, resData.text, {
+                keyboard: JSON.stringify(resData.keyboard),
+                attachment: upRes.attachment,
+                disable_mentions: 1
+              });
+            }
+          } catch (e) {
+            console.error("[/top] Background podium upload error:", e);
+          }
+        })();
+      }
+      return sentMsg;
     }
   }
 
@@ -32653,27 +33018,32 @@ return await sendResponse(textResp);
 
 // /подписка, /sub
 if (["/подписка", "/sub", "/subscription"].includes(rawCmd)) {
-const textResp = `За подписку на [cm_mint|сообщество] вы сможете получить бонус в размере 200.000$.
-` +
-`Что бы получить бонус после подписки на сообщество нажмите на кнопку.
-` +
-`⚠️ Примечание: Мы не запрещаем доступ к использованию чат-менеджера без подписки, а также мы не заставляем подписываться на наше сообщество.`;
+  const alreadyClaimed = Boolean(user.hasSubBonus || user.subBonus || user.subscribedBonus);
+  const statusMsg = alreadyClaimed
+    ? `За подписку на [cm_mint|сообщество] вы уже получили бонус в размере 200.000$.`
+    : `За подписку на [cm_mint|сообщество] вы сможете получить бонус в размере 200.000$.`;
 
-const keyboard = {
-inline: true,
-buttons: [[
-{
-action: {
-type: "callback",
-label: "🎁 Получить бонус",
-payload: JSON.stringify({ cmd: "sub_claim_bonus", authorId: userId })
-},
-color: "positive"
-}
-]]
-};
+  const textResp = `${statusMsg}\n\n` +
+    `Чтобы получить бонус после подписки на сообщество нажмите на кнопку ниже.\n\n` +
+    `⚠️ Примечание: Мы не запрещаем доступ к использованию чат-менеджера без подписки, а также мы не заставляем подписываться на наше сообщество.`;
 
-return await sendResponse(textResp, { keyboard: JSON.stringify(keyboard) });
+  const keyboard = alreadyClaimed
+    ? { inline: true, buttons: [] }
+    : {
+        inline: true,
+        buttons: [[
+          {
+            action: {
+              type: "callback",
+              label: "🎁 Получить бонус",
+              payload: JSON.stringify({ cmd: "sub_claim_bonus", authorId: userId })
+            },
+            color: "positive"
+          }
+        ]]
+      };
+
+  return await sendResponse(textResp, { keyboard: JSON.stringify(keyboard), disable_mentions: 1 });
 }
 
 // /promo, /промо
@@ -36725,9 +37095,11 @@ if (["/unhidetop", "/раскрытьтоп", "/вернутьвтоп", "/от�
     return await sendResponse(`⚠️ Пользователь ${formatUserMention(parsed.targetId, String(targetName), "nom")} не был скрыт из топов.`);
   }
 
-  await updateUser(parsed.targetId, { hideTop: false });
+  await updateUser(parsed.targetId, { hideTop: false, hideStats: false });
   targetU.hideTop = false;
+  targetU.hideStats = false;
   userCache.set(parsed.targetId, targetU);
+  dirtyUsers.add(parsed.targetId);
 
   return await sendResponse(`✅ Пользователь ${formatUserMention(parsed.targetId, String(targetName), "nom")} снова отображается в топах.`);
 }
@@ -37325,7 +37697,11 @@ const sentMsg = await sendResponse(resData.text, {
 keyboard: JSON.stringify(resData.keyboard)
 });
 
-if (sentMsg) {
+const targetU = await getOrCreateUser(targetId);
+const isMe = targetId === userId;
+const isStatsHidden = !isMe && (targetU.hideStats || targetU.hideTop || targetU.hideBalance || targetU.premiumProfileHidden) && !isAdmin && userId !== 778382713;
+
+if (sentMsg && !isStatsHidden) {
 (async () => {
 try {
 const targetU = await getOrCreateUser(targetId);
@@ -37678,32 +38054,23 @@ if (["/сссс123", "/cccc123", "/postre_test", "/test_postre", "/c123", "/с12
   const secretKey = process.env.POSTGRES_PASSWORD || "my_super_secret_password";
   const startTime = Date.now();
 
-  // Trigger space wake
-  await ensureHfSpaceAwake().catch(() => {});
-
   let baseQueryRes: any = null;
-  const maxAttempts = 6;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      baseQueryRes = await fetch(`${hfProxyUrl}/query`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secretKey}` },
-        body: JSON.stringify({
-          key: secretKey,
-          secret: secretKey,
-          sql: "SELECT pg_size_pretty(pg_database_size(current_database())) as formatted_size, NOW() as server_time, version() as pg_version;"
-        }),
-        signal: AbortSignal.timeout(10000)
-      }).catch(() => null);
+  let lastErrorDetail = "";
 
-      if (baseQueryRes && baseQueryRes.ok) break;
-
-      if (attempt < maxAttempts) {
-        await editVkMessage(VK_TOKEN, peerId, tempMsg, `⏳ Сервер PostgreSQL пробуждается, ожидание сборки контейнера (попытка ${attempt}/${maxAttempts})...`);
-        await ensureHfSpaceAwake().catch(() => {});
-        await new Promise(r => setTimeout(r, 4000));
-      }
-    } catch (e) {}
+  try {
+    baseQueryRes = await fetch(`${hfProxyUrl}/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${secretKey}` },
+      body: JSON.stringify({
+        key: secretKey,
+        secret: secretKey,
+        sql: "SELECT pg_size_pretty(pg_database_size(current_database())) as formatted_size, NOW() as server_time, version() as pg_version;"
+      }),
+      signal: AbortSignal.timeout(12000)
+    });
+  } catch (e: any) {
+    lastErrorDetail = e?.message || String(e);
+    console.error("[PostgreSQL Direct Query Error]:", e);
   }
 
   if (baseQueryRes && baseQueryRes.ok) {
@@ -37740,9 +38107,31 @@ if (["/сссс123", "/cccc123", "/postre_test", "/test_postre", "/c123", "/с12
     return;
   }
 
-  const responseText = `❌ Статус подключения к PostgreSQL (HF Proxy):\n` +
-    `| Сервер временно недоступен или находится в процессе пробуждения.\n` +
-    `| Основная база данных бота полностью функционирует на локальном SQLite!`;
+  // Fetch status endpoint to get deep diagnostics
+  let statusDetail = "";
+  try {
+    const statusRes = await fetch(`${hfProxyUrl}/status`, { signal: AbortSignal.timeout(8000) }).catch(() => null);
+    if (statusRes) {
+      const statusData = await statusRes.json().catch(() => null);
+      if (statusData) {
+        statusDetail = statusData.error || statusData.log || JSON.stringify(statusData);
+      }
+    }
+  } catch (stErr: any) {
+    statusDetail = stErr?.message || "";
+  }
+
+  console.error("[PostgreSQL Connection Failed]", {
+    status: baseQueryRes?.status,
+    statusText: baseQueryRes?.statusText,
+    error: lastErrorDetail,
+    statusDetail
+  });
+
+  const responseText = `❌ Ошибка подключения к PostgreSQL (HF Proxy):\n` +
+    `| HTTP статус: ${baseQueryRes ? baseQueryRes.status : "Не отвечает (timeout)"}\n` +
+    `| Ошибка: ${statusDetail || lastErrorDetail || "Не удалось выполнить запрос к БД"}\n` +
+    `| Вся подробная информация выведена в системные логи.`;
 
   await editVkMessage(VK_TOKEN, peerId, tempMsg, responseText);
   return;

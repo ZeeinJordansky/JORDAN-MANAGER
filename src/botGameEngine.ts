@@ -568,6 +568,7 @@ export async function editVkMessage(vkToken: string, peerId: number, idOrCmId?: 
       keep_forward_messages: 1,
       keep_snippets: 0,
       dont_parse_links: 1,
+      disable_mentions: 1,
       ...cleanExtra
     };
 
