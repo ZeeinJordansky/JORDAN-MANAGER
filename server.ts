@@ -38611,3 +38611,4 @@ startBotsLongPoll(); // 🛡️ Anti-Sleep Active: LongPoll fallback & keep-aliv
 });
 }
 startServer();
+export { app };

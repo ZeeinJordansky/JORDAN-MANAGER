@@ -365,14 +365,18 @@ export async function performHFSync() {
 
     const blob = new Blob([fileContent]);
 
-    // 1. Попытка отправки в основной Bucket (RomanJordansky/DATABASE-ORION-MANAGER)
+    const hfToken = process.env.HF_TOKEN || "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";
+    const hfBucketRepo = process.env.HF_BUCKET_REPO || "RomanJordansky/DATABASE-ORION-MANAGER";
+    const hfDatasetRepo = process.env.HF_DATASET_REPO || "RomanJordansky/BOT_JORDANS-storage";
+
+    // 1. Попытка отправки в основной Bucket
     let uploadedSuccessfully = false;
     try {
       await uploadFiles({
-        accessToken: "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",
+        accessToken: hfToken,
         repo: {
           type: "bucket",
-          name: "RomanJordansky/DATABASE-ORION-MANAGER",
+          name: hfBucketRepo,
         },
         files: [
           {
@@ -381,7 +385,7 @@ export async function performHFSync() {
           },
         ],
       });
-      console.log(">>> [HuggingFace Sync] Файл bot_database.db успешно сохранен в основной Bucket (DATABASE-ORION-MANAGER)!");
+      console.log(`>>> [HuggingFace Sync] Файл bot_database.db успешно сохранен в основной Bucket (${hfBucketRepo})!`);
       uploadedSuccessfully = true;
     } catch (bErr: any) {
       console.warn(">>> [HuggingFace Sync] Ошибка записи в основной Bucket, пробую резервный Dataset:", bErr.message);
@@ -391,10 +395,10 @@ export async function performHFSync() {
     if (!uploadedSuccessfully) {
       try {
         await uploadFiles({
-          accessToken: "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",
+          accessToken: hfToken,
           repo: {
             type: "dataset",
-            name: "RomanJordansky/BOT_JORDANS-storage",
+            name: hfDatasetRepo,
           },
           files: [
             {
@@ -403,7 +407,7 @@ export async function performHFSync() {
             },
           ],
         });
-        console.log(">>> [HuggingFace Sync] Файл bot_database.db сохранен в резервный Dataset BOT_JORDANS-storage!");
+        console.log(`>>> [HuggingFace Sync] Файл bot_database.db сохранен в резервный Dataset ${hfDatasetRepo}!`);
       } catch (dErr: any) {
         console.warn(">>> [HuggingFace Sync] Ошибка сохранения в резервный Dataset:", dErr.message);
       }
@@ -445,11 +449,14 @@ export async function performLogsSync() {
     const fileContent = await fs.promises.readFile(dbPath);
     const blob = new Blob([fileContent]);
 
+    const hfToken = process.env.HF_TOKEN || "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";
+    const hfLogsRepo = process.env.HF_LOGS_REPO || "RomanJordansky/LOGSBASE";
+
     await uploadFiles({
-      accessToken: "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",
+      accessToken: hfToken,
       repo: {
         type: "dataset",
-        name: "RomanJordansky/LOGSBASE",
+        name: hfLogsRepo,
       },
       files: [
         {
@@ -458,7 +465,7 @@ export async function performLogsSync() {
         },
       ],
     });
-    console.log(">>> [HuggingFace Logs Sync] Файл bot_logs.db успешно сохранен в LOGSBASE!");
+    console.log(`>>> [HuggingFace Logs Sync] Файл bot_logs.db успешно сохранен в ${hfLogsRepo}!`);
     isLogsDirty = false;
   } catch (err: any) {
     handleHFError(err);
@@ -511,13 +518,18 @@ async function initDatabase() {
   const dbPath = path.join(process.cwd(), "bot_database.db");
   const logsPath = path.join(process.cwd(), "bot_logs.db");
   
-  // 1. Скачивание базы данных из HF Bucket (Primary Source: DATABASE-ORION-MANAGER)
+  const hfToken = process.env.HF_TOKEN || "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";
+  const hfBucketRepo = process.env.HF_BUCKET_REPO || "RomanJordansky/DATABASE-ORION-MANAGER";
+  const hfDatasetRepo = process.env.HF_DATASET_REPO || "RomanJordansky/BOT_JORDANS-storage";
+  const hfLogsRepo = process.env.HF_LOGS_REPO || "RomanJordansky/LOGSBASE";
+
+  // 1. Скачивание базы данных из HF Bucket
   let downloadedBuf: Buffer | null = null;
   try {
-    console.log(">>> [Database] Загрузка bot_database.db из Hugging Face Bucket (DATABASE-ORION-MANAGER)...");
+    console.log(`>>> [Database] Загрузка bot_database.db из Hugging Face Bucket (${hfBucketRepo})...`);
     const bucketFile = await downloadFile({
-      accessToken: "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",
-      repo: { type: "bucket", name: "RomanJordansky/DATABASE-ORION-MANAGER" },
+      accessToken: hfToken,
+      repo: { type: "bucket", name: hfBucketRepo },
       path: "bot_data/bot_database.db",
     });
     if (bucketFile) {
@@ -536,10 +548,10 @@ async function initDatabase() {
 
   if (!downloadedBuf) {
     try {
-      console.log(">>> [Database] Загрузка bot_database.db из Hugging Face Dataset (BOT_JORDANS-storage)...");
-      const url = "https://huggingface.co/datasets/RomanJordansky/BOT_JORDANS-storage/resolve/main/bot_data/bot_database.db";
+      console.log(`>>> [Database] Загрузка bot_database.db из Hugging Face Dataset (${hfDatasetRepo})...`);
+      const url = `https://huggingface.co/datasets/${hfDatasetRepo}/resolve/main/bot_data/bot_database.db`;
       const res = await axios.get(url, {
-        headers: { Authorization: "Bearer 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" },
+        headers: { Authorization: `Bearer ${hfToken}` },
         responseType: "arraybuffer",
         timeout: 20000,
       });
@@ -576,12 +588,12 @@ async function initDatabase() {
     setTimeout(() => { performHFSync().catch(() => {}); }, 10000);
   }
 
-  // 1b. Скачивание базы данных логов из HF (LOGSBASE Dataset)
+  // 1b. Скачивание базы данных логов из HF
   try {
-    console.log(">>> [Database] Загрузка bot_logs.db из Hugging Face Dataset (LOGSBASE)...");
-    const url = "https://huggingface.co/datasets/RomanJordansky/LOGSBASE/resolve/main/bot_logs/bot_logs.db";
+    console.log(`>>> [Database] Загрузка bot_logs.db из Hugging Face Dataset (${hfLogsRepo})...`);
+    const url = `https://huggingface.co/datasets/${hfLogsRepo}/resolve/main/bot_logs/bot_logs.db`;
     const res = await axios.get(url, {
-      headers: { Authorization: "Bearer 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" },
+      headers: { Authorization: `Bearer ${hfToken}` },
       responseType: "arraybuffer",
     });
     if (res.data && res.data.byteLength > 1000) {
