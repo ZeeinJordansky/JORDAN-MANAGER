@@ -2,3 +2,7 @@ name = "jordan-manager"
 compatibility_date = "2026-03-01"
 pages_build_output_dir = "dist"
 compatibility_flags = ["nodejs_compat"]
+
+[build]
+command = "npm run build"
+
